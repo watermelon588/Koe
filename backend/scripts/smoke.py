@@ -17,10 +17,10 @@ from pathlib import Path
 import httpx
 
 from koe.config import settings
+from koe.voice_call import LIVE_MODEL
 
 # Verified 2026-10-12 on https://ai.google.dev/gemini-api/docs/models (both stable, free tier).
 TEXT_MODEL = "gemini-3.8-flash"
-LIVE_MODEL = "gemini-3.8-live"
 
 
 class Skip(Exception):

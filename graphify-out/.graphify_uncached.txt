@@ -1,0 +1,14 @@
+C:\Users\Rohit Maity\Desktop\coding\Webdev\project\Koe (声)\CLAUDE.md
+C:\Users\Rohit Maity\Desktop\coding\Webdev\project\Koe (声)\README.md
+C:\Users\Rohit Maity\Desktop\coding\Webdev\project\Koe (声)\docs\ARCHITECTURE.md
+C:\Users\Rohit Maity\Desktop\coding\Webdev\project\Koe (声)\docs\BUILD_LOG.md
+C:\Users\Rohit Maity\Desktop\coding\Webdev\project\Koe (声)\docs\DECISIONS.md
+C:\Users\Rohit Maity\Desktop\coding\Webdev\project\Koe (声)\docs\PLAN.md
+C:\Users\Rohit Maity\Desktop\coding\Webdev\project\Koe (声)\docs\PROBLEM_STATEMENT.md
+C:\Users\Rohit Maity\Desktop\coding\Webdev\project\Koe (声)\docs\RESEARCH_SOURCES.md
+C:\Users\Rohit Maity\Desktop\coding\Webdev\project\Koe (声)\docs\SERVICES_AND_COSTS.md
+C:\Users\Rohit Maity\Desktop\coding\Webdev\project\Koe (声)\docs\SKILLS.md
+C:\Users\Rohit Maity\Desktop\coding\Webdev\project\Koe (声)\docs\SPEC.md
+C:\Users\Rohit Maity\Desktop\coding\Webdev\project\Koe (声)\docs\TECH_STACK.md
+C:\Users\Rohit Maity\Desktop\coding\Webdev\project\Koe (声)\frontend\index.html
+C:\Users\Rohit Maity\Desktop\coding\Webdev\project\Koe (声)\frontend\public\favicon.svg

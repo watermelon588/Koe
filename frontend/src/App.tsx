@@ -7,15 +7,14 @@ export default function App() {
   const hangUp = useRef<(() => void) | null>(null)
 
   async function call() {
-    // Slice 2 echo test: the backend sends our 16 kHz mic audio straight back, so play it at 16 kHz.
-    const player = createPlayer(16000) // created on click: browsers only allow audio after a user gesture
+    const player = createPlayer() // 24 kHz, Gemini's output rate. Created on click: browsers only allow audio after a user gesture
     const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws/call`)
     ws.binaryType = 'arraybuffer'
     ws.onmessage = (e) => player.play(e.data)
     ws.onerror = () => setStatus('error: is the backend running on :8000?')
-    ws.onclose = () => {
+    ws.onclose = (e) => {
       hangUp.current?.() // server closed: release the mic too
-      setStatus((s) => (s.startsWith('error') ? s : 'ended'))
+      setStatus((s) => (e.reason ? `error: ${e.reason}` : s.startsWith('error') ? s : 'ended'))
     }
     ws.onopen = async () => {
       try {
@@ -26,7 +25,7 @@ export default function App() {
           player.ctx.close()
           hangUp.current = null
         }
-        setStatus('connected: speak, you should hear yourself')
+        setStatus('connected: say hi to Koe')
       } catch (err) {
         setStatus(`mic error: ${err}`)
         ws.close()

@@ -47,7 +47,7 @@ The project folder name contains `声` and parentheses: `Koe (声)`. Always quot
 ```bash
 # backend (from backend/)
 uv sync
-uv run uvicorn koe.main:app --reload --timeout-graceful-shutdown 2 --port 8000
+uv run uvicorn koe.main:app --reload --port 8000
 uv run pytest -q
 # frontend (from frontend/)
 npm install

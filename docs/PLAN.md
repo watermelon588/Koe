@@ -29,9 +29,9 @@
 **Done when:** all smoke scripts pass (`uv run python -m scripts.smoke` from backend/).
 
 ## Phase 1: live voice call (no tools)
-- [ ] Frontend: mic permission → `AudioWorklet` → 16 kHz PCM16 chunks → `/ws/call`.
-- [ ] Backend: `/ws/call` ⇄ Gemini Live session (system prompt only); relay audio both ways.
-- [ ] Frontend playback: queue 24 kHz PCM chunks → speaker without gaps.
+- [x] Frontend: mic permission → `AudioWorklet` → 16 kHz PCM16 chunks → `/ws/call`.
+- [x] Backend: `/ws/call` ⇄ Gemini Live session (system prompt only); relay audio both ways.
+- [x] Frontend playback: queue 24 kHz PCM chunks → speaker without gaps.
 - [ ] Barge-in: on Gemini "interrupted", flush the playback queue.
 - [ ] Latency: timestamp speech-end and first-audio-out; print p50/p95 per call.
 - [ ] Session resumption when Gemini sends a GoAway.
