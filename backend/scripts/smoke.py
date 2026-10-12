@@ -132,11 +132,11 @@ def calendar():
 
 def whatsapp():
     # The test number can only start a chat with a template; hello_world is pre-approved.
-    # https://developers.facebook.com/documentation/business-messaging/whatsapp/get-started (Graph v23.0)
+    # https://developers.facebook.com/documentation/business-messaging/whatsapp/get-started (Graph v25.0, as shown in the app dashboard 2026-10-12)
     to = settings.allowed_whatsapp_numbers.split(",")[0].strip()
     need(settings.whatsapp_token, settings.whatsapp_phone_number_id, to)
     r = httpx.post(
-        f"https://graph.facebook.com/v23.0/{settings.whatsapp_phone_number_id}/messages",
+        f"https://graph.facebook.com/v25.0/{settings.whatsapp_phone_number_id}/messages",
         headers={"Authorization": f"Bearer {settings.whatsapp_token}"},
         json={
             "messaging_product": "whatsapp",
