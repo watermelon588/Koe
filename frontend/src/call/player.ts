@@ -7,6 +7,7 @@ export function createPlayer(sampleRate = 24000) {
   // https://developer.mozilla.org/en-US/docs/Web/API/AudioContext/AudioContext
   const ctx = new AudioContext({ sampleRate })
   let nextStart = 0
+  const queued = new Set<AudioBufferSourceNode>() // scheduled or playing
 
   function play(chunk: ArrayBuffer) {
     const view = new DataView(chunk)
@@ -21,7 +22,17 @@ export function createPlayer(sampleRate = 24000) {
     nextStart = Math.max(nextStart, ctx.currentTime) // if we fell behind, start now
     src.start(nextStart)
     nextStart += buffer.duration
+    queued.add(src)
+    src.onended = () => queued.delete(src)
   }
 
-  return { ctx, play }
+  // Barge-in: the user started talking, so drop everything not yet heard.
+  // https://developer.mozilla.org/en-US/docs/Web/API/AudioScheduledSourceNode/stop
+  function flush() {
+    queued.forEach((src) => src.stop())
+    queued.clear()
+    nextStart = 0
+  }
+
+  return { ctx, play, flush }
 }

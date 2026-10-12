@@ -40,6 +40,10 @@ async def _gemini_to_browser(ws: WebSocket, session):
     while True:  # session.receive() ends after each model turn, so loop for the next one
         async for msg in session.receive():
             sc = msg.server_content
+            if sc and sc.interrupted:
+                # User talked over Koe: tell the browser to drop queued audio (barge-in).
+                # https://ai.google.dev/gemini-api/docs/live-api/capabilities
+                await ws.send_json({"type": "interrupted"})
             if sc and sc.model_turn:
                 for part in sc.model_turn.parts:
                     if part.inline_data:

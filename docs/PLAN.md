@@ -32,7 +32,7 @@
 - [x] Frontend: mic permission → `AudioWorklet` → 16 kHz PCM16 chunks → `/ws/call`.
 - [x] Backend: `/ws/call` ⇄ Gemini Live session (system prompt only); relay audio both ways.
 - [x] Frontend playback: queue 24 kHz PCM chunks → speaker without gaps.
-- [ ] Barge-in: on Gemini "interrupted", flush the playback queue.
+- [x] Barge-in: on Gemini "interrupted", flush the playback queue.
 - [ ] Latency: timestamp speech-end and first-audio-out; print p50/p95 per call.
 - [ ] Session resumption when Gemini sends a GoAway.
 **Done when:** a 3-minute natural conversation, interruptions work, p50 latency measured and written in BUILD_LOG.

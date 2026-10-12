@@ -10,7 +10,11 @@ export default function App() {
     const player = createPlayer() // 24 kHz, Gemini's output rate. Created on click: browsers only allow audio after a user gesture
     const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws/call`)
     ws.binaryType = 'arraybuffer'
-    ws.onmessage = (e) => player.play(e.data)
+    // Binary frames = Koe's audio; text frames = control events (JSON).
+    ws.onmessage = (e) => {
+      if (typeof e.data !== 'string') return player.play(e.data)
+      if (JSON.parse(e.data).type === 'interrupted') player.flush()
+    }
     ws.onerror = () => setStatus('error: is the backend running on :8000?')
     ws.onclose = (e) => {
       hangUp.current?.() // server closed: release the mic too
