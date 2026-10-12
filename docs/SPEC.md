@@ -30,6 +30,8 @@ A single-user, voice-first agent for a developer founder. It works across GitHub
   |---|---|---|
   | `{"type":"interrupted"}` | User talked over Koe (barge-in) | Stop and drop all queued audio at once |
   | `{"type":"latency","ms":1650}` | This turn's "you stopped speaking → Koe's first audio", measured at the backend | Show it (latency readout) |
+  | `{"type":"tool","name":"github_my_prs","phase":"start"}` | Koe started a tool | Show "thinking" (mascot state, panel highlight) |
+  | `{"type":"tool","name":"github_my_prs","phase":"end","ms":640,"ok":true}` | Tool finished (`ok:false` = it returned an error) | Back to speaking / show error |
 - **Close codes:** normal hang-up = 1000. `1011` with a `reason` such as `"Gemini error: …"` = the call failed; show the reason.
 - Unknown event types must be ignored (more come in Phase 2/3: thinking, tool calls, transcripts).
 

@@ -41,7 +41,7 @@ A chain waits at each step: speech-to-text, then the LLM, then text-to-speech. D
 ## Integrations
 | Service | API | Auth |
 |---|---|---|
-| GitHub | REST API v3 (PRs, reviews, checks, commits, comments) + **webhooks** | Fine-grained personal access token; webhook secret (HMAC) |
+| GitHub | **GraphQL** search for PR lists (CI, reviews, conflicts, size in one request) + REST API v3 (diffs, commits, comments) + **webhooks** | Fine-grained personal access token; webhook secret (HMAC) |
 | Google Calendar | Calendar API v3 (freeBusy, events) | OAuth 2.0 (Desktop app, Testing mode, your account only) |
 | Google Sheets | Sheets API v4 (append values) | Same OAuth |
 | Notion | Notion API (pages/blocks in one database) | Internal integration token, shared with the target database |

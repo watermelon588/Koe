@@ -25,4 +25,5 @@ Add a row for every decision that changes scope, stack or behavior. Newest at th
 | 2026-10-12 | Keep **WhatsApp**; Rohit adds funds to Meta (exception to "no card" for this one service) | User choice over Telegram / web-only | Telegram bot, web app only |
 | 2026-10-12 | ⚠️ Funds added (₹100), but WhatsApp still blocked: Meta requires **business verification** | Evidence in SERVICES_AND_COSTS.md. Next step pending a user decision; doesn't block Phases 1–4 | — |
 | 2026-10-12 | **WhatsApp parked**; continue Phase 1 | User will sort out Meta business verification (or switch to Telegram) later. Phases 1–4 don't need it | Block on WhatsApp now |
+| 2026-10-12 | GitHub PR-list tools use **GraphQL search** with one reused `httpx` client | One request instead of ~3 per PR; reusing the TLS connection cut a tool call from 3.1–4.3 s to 0.8–1.7 s (measured) | REST per-PR calls; new client per call |
 | _pending_ | Mascot design + name | Decide at the start of Phase 3 | — |

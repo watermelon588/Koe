@@ -49,18 +49,24 @@ class FakeBrowser:
         return await asyncio.wait_for(self.to_browser.get(), 2)
 
 
-def msg(server_content=None, go_away=None, handle=None):
+def msg(server_content=None, go_away=None, handle=None, tool_call=None):
     update = SimpleNamespace(resumable=True, new_handle=handle) if handle else None
-    return SimpleNamespace(server_content=server_content, go_away=go_away, session_resumption_update=update)
+    return SimpleNamespace(server_content=server_content, go_away=go_away,
+                           session_resumption_update=update, tool_call=tool_call)
 
 
 class FakeSession:
     """A Gemini Live connection. Each mic chunk gets a reply turn:
     b'BARGE' -> interrupted, b'GOAWAY' -> resume handle + GoAway,
-    b'DROP' -> resume handle, then the connection breaks, else -> audio b'reply:' + chunk."""
+    b'DROP' -> resume handle, then the connection breaks, b'TOOL' -> asks for github_my_prs and
+    speaks once the tool result arrives, else -> audio b'reply:' + chunk."""
 
     def __init__(self, name):
-        self.name, self.sent, self.replies = name, [], asyncio.Queue()
+        self.name, self.sent, self.replies, self.tool_responses = name, [], asyncio.Queue(), []
+
+    async def send_tool_response(self, function_responses):
+        self.tool_responses.extend(function_responses)
+        await self.replies.put(b"after-tool")
 
     async def send_realtime_input(self, audio):
         self.sent.append(audio)
@@ -73,6 +79,9 @@ class FakeSession:
         elif data == b"GOAWAY":
             yield msg(handle=f"handle-from-{self.name}")
             yield msg(go_away=SimpleNamespace(time_left="5s"))
+        elif data == b"TOOL":
+            call = SimpleNamespace(id="call-1", name="github_my_prs", args={"state": "open"})
+            yield msg(tool_call=SimpleNamespace(function_calls=[call]))
         elif data == b"DROP":
             yield msg(handle=f"handle-from-{self.name}")
             raise errors.APIError(1006, {"message": "abnormal closure"})
@@ -140,6 +149,30 @@ def test_call_relays_audio_reports_latency_and_barge_in(monkeypatch):
     assert config["response_modalities"] == ["AUDIO"]
     assert config["session_resumption"].handle is None  # resumption on from the first connection
     assert {a.mime_type for a in session.sent} == {"audio/pcm;rate=16000"}
+
+
+def test_tool_call_runs_the_tool_and_returns_its_result_to_gemini(monkeypatch):
+    connections = fake_gemini(monkeypatch)
+
+    async def fake_my_prs(state="open"):
+        return {"count": 1, "prs": [{"number": 42, "ci": "failing"}]}
+
+    monkeypatch.setitem(voice_call.agent.TOOLS, "github_my_prs",
+                        voice_call.agent.TOOLS["github_my_prs"]._replace(fn=fake_my_prs))
+
+    async def scenario(browser):
+        browser.says(b"TOOL")
+        assert await browser.hears() == {"type": "tool", "name": "github_my_prs", "phase": "start"}
+        end = await browser.hears()
+        assert end["phase"] == "end" and end["ok"] is True and end["ms"] >= 0
+        assert await browser.hears() == b"reply:after-tool"  # Gemini speaks after getting the result
+
+    run_call(scenario)
+    (response,) = connections[0][1].tool_responses
+    assert (response.id, response.name) == ("call-1", "github_my_prs")
+    assert response.response == {"count": 1, "prs": [{"number": 42, "ci": "failing"}]}
+    declared = connections[0][0]["tools"][0]["function_declarations"]
+    assert {d["name"] for d in declared} == set(voice_call.agent.TOOLS)
 
 
 def test_goaway_resumes_on_new_connection_with_latest_handle(monkeypatch):

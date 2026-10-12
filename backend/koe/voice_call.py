@@ -7,6 +7,8 @@ Live API (Python SDK): https://ai.google.dev/gemini-api/docs/live-api/get-starte
 Messages to the browser: binary = Koe's audio; text = JSON control events:
   {"type": "interrupted"}        user talked over Koe: drop queued audio
   {"type": "latency", "ms": 1093} you stopped speaking -> Koe's first audio, per turn
+  {"type": "tool", "name": "github_my_prs", "phase": "start"}           a tool began (Koe is "thinking")
+  {"type": "tool", "name": "github_my_prs", "phase": "end", "ms": 640, "ok": true}
 """
 import asyncio
 import contextlib
@@ -20,6 +22,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from google import genai
 from google.genai import errors, types
 
+from koe import agent
 from koe.config import settings
 
 router = APIRouter()
@@ -28,16 +31,11 @@ log = logging.getLogger("uvicorn.error")
 # Verified 2026-10-12 on https://ai.google.dev/gemini-api/docs/models (stable, free tier).
 LIVE_MODEL = "gemini-3.8-live"
 
-# ponytail: prompt lives here until Phase 2 moves it into agent.py with the tools.
-SYSTEM_PROMPT = (
-    "You are Koe (声, 'voice'), a warm, upbeat voice assistant for Rohit, a developer founder "
-    "in India (timezone Asia/Kolkata). This is a live voice call: answer in one to three short "
-    "spoken sentences, no lists or markdown. You have no tools yet, so if asked to check GitHub, "
-    "the calendar or Notion, say that's coming soon."
-)
 CONFIG = {
     "response_modalities": ["AUDIO"],
-    "system_instruction": SYSTEM_PROMPT,
+    "system_instruction": agent.SYSTEM_PROMPT,
+    # Same tool registry as every other channel. https://ai.google.dev/gemini-api/docs/live-api/tools
+    "tools": [{"function_declarations": agent.declarations()}],
     # Lifts the 15 min audio-session cap: old context is trimmed instead of ending the session.
     # https://ai.google.dev/gemini-api/docs/live-api/session-management
     "context_window_compression": types.ContextWindowCompressionConfig(sliding_window=types.SlidingWindow()),
@@ -99,6 +97,8 @@ async def _gemini_to_browser(ws: WebSocket, session, state: CallState):
             if msg.go_away:
                 log.info("Gemini GoAway (time left %s): resuming on a new connection", msg.go_away.time_left)
                 return
+            if msg.tool_call:
+                await _run_tools(ws, session, msg.tool_call.function_calls)
             sc = msg.server_content
             if sc and sc.interrupted:
                 # User talked over Koe: tell the browser to drop queued audio (barge-in).
@@ -115,6 +115,21 @@ async def _gemini_to_browser(ws: WebSocket, session, state: CallState):
                             log.info("turn latency: speech end -> first audio %d ms", ms)
                             await ws.send_json({"type": "latency", "ms": ms})
                         first_audio = False
+
+
+async def _run_tools(ws: WebSocket, session, calls):
+    """Gemini asked for tools. Calls are blocking by default: it waits for our answer.
+    ponytail: runs them one after another; gather() them if Gemini starts asking for several at once."""
+    responses = []
+    for fc in calls:
+        await ws.send_json({"type": "tool", "name": fc.name, "phase": "start"})
+        t = time.perf_counter()
+        result = await agent.run_tool(fc.name, fc.args)
+        ms, ok = round((time.perf_counter() - t) * 1000), "error" not in result
+        log.info("tool %s(%s) %d ms ok=%s", fc.name, fc.args or "", ms, ok)
+        await ws.send_json({"type": "tool", "name": fc.name, "phase": "end", "ms": ms, "ok": ok})
+        responses.append(types.FunctionResponse(id=fc.id, name=fc.name, response=result))
+    await session.send_tool_response(function_responses=responses)
 
 
 async def _relay_gemini(ws: WebSocket, mic: asyncio.Queue, state: CallState, client):

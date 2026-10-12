@@ -39,9 +39,9 @@
 **Risk:** audio format bugs (sample rate, endianness) cause chipmunk or static sound. Test with a known sine wave first.
 
 ## Phase 2: agent core + GitHub read + Calendar
-- [ ] `agent.py`: tool registry (schema + `needs_approval`), system prompt (persona, timezone, working hours, rules).
+- [x] `agent.py`: tool registry (schema + `needs_approval`), system prompt (persona, timezone, working hours, rules).
 - [ ] `store.py`: SQLite tables (ARCHITECTURE §6).
-- [ ] Tools: `github_review_queue`, `github_my_prs`, `calendar_list`, `calendar_find_free`, `calendar_upsert_event`.
+- [ ] Tools: ~~`github_review_queue`, `github_my_prs`~~ ✅ (wired into the voice call) · `calendar_list`, `calendar_find_free`, `calendar_upsert_event` (need Google `credentials.json`).
 - [ ] Approval gate: write → pending → spoken confirm → execute. Tests prove no bypass.
 - [ ] Double-booking re-check + timezone tests.
 - [ ] Text-mode agent loop (used later by WhatsApp + evals) and a tiny CLI to chat in text.
