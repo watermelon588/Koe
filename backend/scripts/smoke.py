@@ -135,9 +135,18 @@ def whatsapp():
     # https://developers.facebook.com/documentation/business-messaging/whatsapp/get-started (Graph v25.0, as shown in the app dashboard 2026-10-12)
     to = settings.allowed_whatsapp_numbers.split(",")[0].strip()
     need(settings.whatsapp_token, settings.whatsapp_phone_number_id, to)
+    url = f"https://graph.facebook.com/v25.0/{settings.whatsapp_phone_number_id}"
+    auth = {"Authorization": f"Bearer {settings.whatsapp_token}"}
+    # "accepted" by /messages does NOT mean delivered: Meta fails it later (seen: 131031).
+    # Health Status API tells us up front: https://developers.facebook.com/documentation/business-messaging/whatsapp/support/health-status
+    health = httpx.get(url, params={"fields": "health_status"}, headers=auth).json()["health_status"]
+    if health["can_send_message"] == "BLOCKED":
+        reasons = [f"{e['entity_type']} {x['error_code']}: {x['error_description']}"
+                   for e in health["entities"] if e["can_send_message"] == "BLOCKED" for x in e.get("errors", [])]
+        raise RuntimeError(f"Meta blocks sending: {reasons}")
     r = httpx.post(
-        f"https://graph.facebook.com/v25.0/{settings.whatsapp_phone_number_id}/messages",
-        headers={"Authorization": f"Bearer {settings.whatsapp_token}"},
+        f"{url}/messages",
+        headers=auth,
         json={
             "messaging_product": "whatsapp",
             "to": to,
@@ -146,7 +155,7 @@ def whatsapp():
         },
     )
     r.raise_for_status()
-    return f"sent hello_world to {to}: message id {r.json()['messages'][0]['id']}"
+    return f"accepted hello_world for {to} (check your phone; delivery is reported by webhook)"
 
 
 CHECKS = {"gemini": gemini, "live": live, "github": github, "notion": notion,
