@@ -385,3 +385,20 @@ Verified the original displacement before the fix, then long upward/downward dra
 **Try it yourself:** open Settings, pick a companion, scroll over her to zoom, drag to turn her, then press "Use …".
 **Measured:** 10 frontend tests and the production build pass. At 1280 px and 375 px: no sideways scroll; the toolbar stays on one 40 px row on a phone.
 **Interview line:** "I cut the settings viewer from ten scattered controls to one toolbar by moving zoom into a gesture and removing a mode the layout no longer needed."
+
+## Step 29: calmer skirts  (Phase 3 · 2026-10-13)
+**Files:** frontend/src/mascot/mascot.ts
+**What it does:** Kobashi's skirt (and every VRoid skirt) no longer floats up and flares when she turns, hops or shifts her weight; it sways a little and stays down.
+**Core concept:** *Spring bones.* Hair and clothes in a VRM hang on chains of "spring bones", tiny physics simulations. Each joint has a stiffness (how hard it springs back to its rest shape), a drag (damping: how fast motion dies out) and a gravity. Kobashi's export had drag 0.05 and no gravity, so the skirt kept swinging like it was underwater. At load time, every joint whose bone name contains "Skirt" gets 2.5× stiffness, drag ≥ 0.5 and gravity ≥ 0.4 (the `SKIRT` tuning knobs).
+**Try it yourself:** Settings → Kobashi → Full body → drag her round fast. Raise `SKIRT.drag` for even less movement.
+**Measured:** a fast 300 px drag spun her almost all the way round; mid-spin, the skirt stays in a closed bell shape. 10 frontend tests pass.
+**Interview line:** "Clothing on the avatar is spring-bone physics; damping the skirt chains at load time fixed it for every model without re-exporting anything."
+
+## Step 30: one layout, real icons, and a dashboard that fits on a screen  (Phase 3 · 2026-10-13)
+**Files:** frontend/src/App.tsx · frontend/src/index.css (rewritten) · frontend/src/dashboard/Dashboard.tsx (rewritten) · frontend/src/settings/{SettingsPage.tsx,settings.css} · frontend/package.json (+ `@phosphor-icons/react`) · docs/{TECH_STACK,SPEC,DECISIONS}.md
+**What it does:** Only the Engawa layout remains (she stands left, your day on the right). The header is a small pill of icon buttons: Home, Settings, theme (sun/moon). Call, Mute, End call, Send, Say hi and the Settings toolbar get icons too. The home dashboard is no longer six stacked sections: it's one card with four tabs (Today, GitHub, Approvals with a count, Activity with response time), a fixed height that scrolls inside, and a Live/Offline dot with a refresh icon. The access-token field became one Connect row that disappears once the dashboard is live.
+**Core concept:** *Progressive disclosure.* Show one thing at a time and let the user ask for more: tabs keep every piece of information one tap away without stacking it all on the page. The tabs follow the WAI-ARIA tabs pattern: `role="tablist"`/`tab`/`tabpanel`, only the selected tab is in the Tab order, and the arrow keys move between tabs. On phones the tab labels hide to save space, so each tab carries an `aria-label`. Icons come from one family in one weight (Phosphor, light) through a single `IconContext`, so they all look like they belong together.
+**How it connects:** `Dashboard` still reads the same `useDashboard` state and is reused in the call panel's Day view. `IconContext.Provider` in App sets size 18 and light weight for every icon.
+**Try it yourself:** open Home: everything fits one screen on a laptop. Click the tabs or use the arrow keys. Toggle the theme with the sun/moon.
+**Measured:** at 1280×800 the page is 797 px tall (fits); at 1440×900, 897 px. No sideways scroll at 375, 1280 or 1440 px. 10 frontend tests and the build pass; no console errors.
+**Interview line:** "I replaced a long stack of dashboard sections with an accessible tabbed card of fixed height, so the home screen fits a laptop window without hiding anything."

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { ArrowsClockwise, HandWaving, Person, UserFocus } from '@phosphor-icons/react'
 import { MASCOTS, mascotProfile, type MascotId } from '../mascot/catalog'
 import { MascotView, type LoadState, type MascotController } from '../mascot/MascotView'
 import type { Shot } from '../mascot/mascot'
@@ -71,11 +72,11 @@ export function SettingsPage({ selected, onSelect }: Props) {
         <MascotView model={preview} controller={controller} shot={shot} onStatus={setStatus} inspection zoom={zoom} spinning={spinning} />
         <div className="viewer-bar">
           <div className="seg" role="group" aria-label="Framing">
-            <button aria-pressed={shot === 'bust'} onClick={() => { setShot('bust'); setZoom(1) }}>Portrait</button>
-            <button aria-pressed={shot === 'full'} onClick={() => { setShot('full'); setZoom(1) }}>Full body</button>
+            <button aria-pressed={shot === 'bust'} onClick={() => { setShot('bust'); setZoom(1) }}><UserFocus size={15} />Portrait</button>
+            <button aria-pressed={shot === 'full'} onClick={() => { setShot('full'); setZoom(1) }}><Person size={15} />Full body</button>
           </div>
-          <button className="chip" disabled={!ready} onClick={() => controller.current?.gesture('wave')}>Say hi</button>
-          <button className="chip" disabled={!ready} aria-pressed={spinning} onClick={() => setSpinning(!spinning)}>Rotate</button>
+          <button className="chip" disabled={!ready} onClick={() => controller.current?.gesture('wave')}><HandWaving size={15} />Say hi</button>
+          <button className="chip" disabled={!ready} aria-pressed={spinning} onClick={() => setSpinning(!spinning)}><ArrowsClockwise size={15} />Rotate</button>
         </div>
         <p className="viewer-hint" aria-hidden="true">Drag to turn · Scroll to zoom</p>
       </section>

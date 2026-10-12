@@ -110,3 +110,6 @@ Built on top of this handoff; nothing above was reverted.
 
 ## Settings redesign (13 October, mascot UI session)
 Rohit asked for a slick, minimal Settings page. SettingsPage.tsx and settings.css were rewritten: companion list left (round portraits, "Current" tag, one "Use …" button), flat viewer right with one toolbar (Portrait / Full body, Say hi, Rotate). Zoom is now the scroll wheel (native non-passive listener); expanded mode and `useExpandedPreview.ts` were removed. Selection contract (`onSelect`, `koe-mascot`, preview-only browsing) is unchanged; `MascotView`, `catalog.ts` and inspection framing are untouched.
+
+## Engawa only, Phosphor icons, tabbed dashboard (13 October, mascot UI session)
+Shoji and the layout switch are gone (`?ui=` is stripped from the URL). Header nav is icon buttons (`House`, `GearSix`, `Sun`/`Moon`) via `@phosphor-icons/react` (new dependency, approved by Rohit). `Dashboard.tsx` was rewritten as one tabbed card with the same props and the same `useDashboard` state; `.block`/`.dashboard` styles were replaced by `.dash*`. The token input is now a single Connect row on Home that hides once connected. Settings toolbar buttons gained icons; old `.page-nav` styles were removed.

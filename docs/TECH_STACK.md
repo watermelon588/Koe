@@ -12,6 +12,7 @@ Everything here is free and needs no credit card. Adding anything not on this pa
 | **Web Audio API**: `AnalyserNode` | Mascot mouth/scale from voice volume | Built in, no library |
 | **Native `WebSocket`** | `/ws/call` (audio) + `/ws/events` (JSON) | Built into browsers |
 | **three.js** + **`@pixiv/three-vrm`** (MIT) | 3D anime mascot (VRM model: mouth shapes, blink, gaze, expressions built in) | Standard for anime avatars; ~1.2 ms per frame measured; lazy-loaded chunk (186 kB gzip) |
+| **`@phosphor-icons/react`** (MIT) | UI icons (header, call controls, dashboard tabs) | Light weight matches the light type; tree-shaken, only used icons ship. Added 2026-10-13 with Rohit's OK |
 | **VRoid Studio** (desktop app, free) | Making the mascot's VRM model | Free, commercial use allowed, exports VRM |
 
 ## Backend

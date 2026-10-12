@@ -20,6 +20,10 @@ const SOFTEN = {
   toony: 0.6, // max shadingToonyFactor: lower = smoother light→shadow gradient
   shadeToLit: 0.45, // pull the (often saturated pink) shade colour this far toward the lit colour
 }
+// Skirt physics: VRoid's defaults (stiffness ~0.45, dragForce 0.05, no gravity) let a skirt float and flare
+// on every turn or hop. Stiffer, heavily damped and pulled down, it sways a little and stays modest.
+// Tuning knobs; spring bone parameters: https://vrm.dev/en/vrm1/springbone/
+const SKIRT = { stiffness: 2.5, drag: 0.5, gravity: 0.4 } // stiffness is a multiplier; drag and gravity are minimums
 const SHOT_SECS = 0.9 // camera move between the half and full figure
 const IDLE_EVERY: [number, number] = [6, 12] // seconds between idle routines (random in this range)
 // Share of the canvas height hidden by the desk card in the half-figure shot: she's framed so her waist
@@ -168,6 +172,13 @@ export function createMascot(canvas: HTMLCanvasElement, url = '/mascot/kami.vrm'
       for (const m of Array.isArray(mats) ? mats : mats ? [mats] : []) soften(m as MToonMaterial)
     })
     if (vrm.lookAt) vrm.lookAt.target = gaze
+    for (const j of vrm.springBoneManager?.joints ?? []) {
+      if (!/skirt/i.test(j.bone.name)) continue // VRoid names them J_Sec_*Skirt*
+      j.settings.stiffness *= SKIRT.stiffness
+      j.settings.dragForce = Math.max(j.settings.dragForce, SKIRT.drag)
+      j.settings.gravityPower = Math.max(j.settings.gravityPower, SKIRT.gravity)
+      j.settings.gravityDir.set(0, -1, 0)
+    }
     // Relaxed hands: a slight curl in every finger (z folds a finger toward the palm; mirrored per side).
     for (const side of ['left', 'right'] as const) {
       const dir = side === 'left' ? -1 : 1
