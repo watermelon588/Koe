@@ -100,29 +100,15 @@ def notion():
 
 
 def calendar():
-    # Pattern from https://developers.google.com/workspace/calendar/api/quickstart/python
-    from google.auth.transport.requests import Request
-    from google.oauth2.credentials import Credentials
-    from google_auth_oauthlib.flow import InstalledAppFlow
+    # Reuse Phase 2 OAuth scopes and refresh behavior; never request broader scopes silently.
     from googleapiclient.discovery import build
+    from koe.google_auth import credentials
 
-    need(Path("credentials.json").exists())
-    # Scopes Koe will need (ARCHITECTURE §9). Changing them later = delete token.json and log in again.
-    scopes = [
-        "https://www.googleapis.com/auth/calendar.events",
-        "https://www.googleapis.com/auth/spreadsheets",
-    ]
-    creds = Credentials.from_authorized_user_file("token.json", scopes) if Path("token.json").exists() else None
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
-            creds = InstalledAppFlow.from_client_secrets_file("credentials.json", scopes).run_local_server(port=0)
-        Path("token.json").write_text(creds.to_json())
+    need(Path(settings.google_token_file).exists())
     events = (
-        build("calendar", "v3", credentials=creds)
+        build("calendar", "v3", credentials=credentials())
         .events()
-        .list(calendarId="primary", timeMin=datetime.now(timezone.utc).isoformat(),
+        .list(calendarId=settings.google_calendar_id, timeMin=datetime.now(timezone.utc).isoformat(),
               maxResults=3, singleEvents=True, orderBy="startTime")
         .execute()
         .get("items", [])

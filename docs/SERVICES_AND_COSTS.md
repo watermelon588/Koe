@@ -1,5 +1,10 @@
 # Services and costs: Koe (声)
 
+## Phase 2 storage update (2026-10-12)
+Supabase PostgreSQL replaces server-local SQLite by user request. The Free plan lists 500 MB database storage and 50,000 monthly active Auth users. Low-activity projects can pause after a week, and automatic backups are not included in Free. Use manual exports; no paid plan is required for the current development setup. Supabase Auth login is available for a later UI/auth slice; Phase 2 uses a private app token for browser calls. Database access uses the existing `httpx` library and a backend-only secret key, so no database password/connection string is required by the app.
+
+Sources checked: [Supabase pricing](https://supabase.com/pricing), [project pausing](https://supabase.com/docs/guides/platform/free-project-pausing), [API keys](https://supabase.com/docs/guides/getting-started/api-keys). Setup: [PHASE2_SETUP.md](PHASE2_SETUP.md).
+
 **Budget: ₹0. No credit card.** Every service below is free *and* needs no card. Figures were researched 2026-10-03 to 2026-10-12 and many come from third-party sources, so **re-verify on the official page when you first set each one up** and update this file.
 
 ## Summary

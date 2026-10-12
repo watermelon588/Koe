@@ -1,10 +1,17 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Koe 声</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@300..400&family=Geist+Mono:wght@300..400&display=swap" />
+    <script>
+      // Set the saved theme before the first paint, so light mode never flashes dark.
+      try { document.documentElement.dataset.theme = localStorage.getItem('koe-theme') || 'dark' } catch {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

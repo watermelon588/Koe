@@ -1,0 +1,66 @@
+"""A bounded Gemini text/tool loop shared by the CLI, future WhatsApp and evals.
+https://ai.google.dev/gemini-api/docs/function-calling
+"""
+from google import genai
+from google.genai import types
+
+from koe import agent, store
+from koe.config import settings
+
+MAX_TOOL_ROUNDS = 8
+
+
+def approval_text(result: dict) -> str:
+    if result.get("status") == "executed":
+        return f"Saved: {result.get('title', 'Approved action')}. {result.get('url', '')}".strip()
+    if result.get("status") == "rejected":
+        return "Cancelled. Nothing was changed."
+    error = result.get("error", {})
+    return f"{error.get('message', 'The action failed.')} {error.get('hint', '')}".strip()
+
+
+def _reply(text: str, context: agent.Conversation) -> dict:
+    if context.pending:
+        text += f"\nPending: {context.pending['summary']}. Confirm with yes or cancel with no."
+        context.approval_ready = True
+    return {"text": text, "pending_action": context.pending}
+
+
+async def chat(text: str, history: list, context: agent.Conversation, client: genai.Client) -> dict:
+    text = text.strip()[:2000]
+    if not text:
+        return {"text": "Please enter a message."}
+    history.append(types.Content(role="user", parts=[types.Part.from_text(text=text)]))
+    await store.record_best_effort(context.channel, context.session_id, "message", text, {"role": "user"})
+    decision = agent.confirmation(text)
+    if decision is not None and context.pending:
+        result = await agent.confirm(context, decision)
+        reply = approval_text(result)
+        history.append(types.Content(role="model", parts=[types.Part.from_text(text=reply)]))
+        return {"text": reply, "approval_result": result}
+    try:
+        for _ in range(MAX_TOOL_ROUNDS):
+            response = await client.aio.models.generate_content(
+                model=settings.gemini_text_model, contents=history,
+                config={"system_instruction": agent.system_prompt(),
+                        "tools": [{"function_declarations": agent.declarations()}],
+                        "automatic_function_calling": {"disable": True}})
+            content = response.candidates[0].content if response.candidates else None
+            if not content or not content.parts:
+                return _reply("The model returned no answer. Please try again.", context)
+            # Preserve the actual model Content, including thought signatures, across tool rounds.
+            history.append(content)
+            calls = [p.function_call for p in content.parts if p.function_call]
+            if not calls:
+                reply = "".join(p.text for p in content.parts if p.text and not p.thought) or "The model returned no answer."
+                result = _reply(reply, context)
+                await store.record_best_effort(context.channel, context.session_id, "message", result["text"], {"role": "koe"})
+                return result
+            parts = []
+            for fc in calls:
+                result = await agent.run_tool(fc.name, fc.args, context=context)
+                parts.append(types.Part(function_response=types.FunctionResponse(name=fc.name, id=fc.id, response=result)))
+            history.append(types.Content(role="user", parts=parts))
+    except Exception:
+        return _reply("The model could not complete this turn. No approval was inferred.", context)
+    return _reply("Stopped after eight tool rounds. Please narrow the request.", context)

@@ -8,6 +8,10 @@ export function createPlayer(sampleRate = 24000) {
   const ctx = new AudioContext({ sampleRate })
   let nextStart = 0
   const queued = new Set<AudioBufferSourceNode>() // scheduled or playing
+  // Every chunk passes through one analyser on its way to the speakers; the mascot reads
+  // its loudness to move the mouth. https://developer.mozilla.org/en-US/docs/Web/API/AnalyserNode
+  const analyser = ctx.createAnalyser()
+  analyser.connect(ctx.destination)
 
   function play(chunk: ArrayBuffer) {
     const view = new DataView(chunk)
@@ -18,7 +22,7 @@ export function createPlayer(sampleRate = 24000) {
 
     const src = ctx.createBufferSource()
     src.buffer = buffer
-    src.connect(ctx.destination)
+    src.connect(analyser)
     nextStart = Math.max(nextStart, ctx.currentTime) // if we fell behind, start now
     src.start(nextStart)
     nextStart += buffer.duration
@@ -34,5 +38,5 @@ export function createPlayer(sampleRate = 24000) {
     nextStart = 0
   }
 
-  return { ctx, play, flush }
+  return { ctx, analyser, play, flush }
 }

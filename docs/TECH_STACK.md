@@ -11,7 +11,8 @@ Everything here is free and needs no credit card. Adding anything not on this pa
 | **Web Audio API**: `AudioWorklet` | Mic capture → 16 kHz PCM16 chunks | Low-latency audio processing off the main thread; built into browsers |
 | **Web Audio API**: `AnalyserNode` | Mascot mouth/scale from voice volume | Built in, no library |
 | **Native `WebSocket`** | `/ws/call` (audio) + `/ws/events` (JSON) | Built into browsers |
-| **SVG + CSS animation** (optionally `blobatar`) | Anime mascot | Free, light, easy to animate per state |
+| **three.js** + **`@pixiv/three-vrm`** (MIT) | 3D anime mascot (VRM model: mouth shapes, blink, gaze, expressions built in) | Standard for anime avatars; ~1.2 ms per frame measured; lazy-loaded chunk (186 kB gzip) |
+| **VRoid Studio** (desktop app, free) | Making the mascot's VRM model | Free, commercial use allowed, exports VRM |
 
 ## Backend
 | Tech | Use | Why |
@@ -22,10 +23,11 @@ Everything here is free and needs no credit card. Adding anything not on this pa
 | **`httpx`** | Calls to GitHub, Notion, WhatsApp APIs | Async HTTP client; one client for all REST APIs |
 | **`google-api-python-client` + `google-auth-oauthlib`** | Google Calendar + Sheets | Official Google clients; OAuth installed-app flow |
 | **`pydantic-settings`** | Config from `.env` | Typed config, fails fast if a key is missing |
-| **`sqlite3`** (stdlib) | Activity, pending actions, memory | Single user, so no DB server is needed |
+| **Supabase PostgreSQL + existing `httpx`** | Activity, pending actions, memory | Managed hosting-independent storage; transactional approval claims via restricted REST RPC |
+| **`tzdata`** | IANA timezones on Windows | Python's `zoneinfo` needs timezone data; Windows does not ship the IANA database |
 | **`pytest` + `respx`** | Tests; fake HTTP APIs | Test logic without hitting real services |
 
-Notion is called with plain `httpx` against the Notion REST API (one or two endpoints). That's simpler than adding the `notion-client` SDK. Revisit if the calls grow.
+Notion is called with existing `httpx` against the current data sources, pages and blocks REST endpoints (API version 2026-03-11). This keeps Phase 4 free of new dependencies. Sheets uses existing Google OAuth credentials with `httpx` REST calls and RAW append values; Calendar consent remains the default when requesting credentials.
 
 ## AI models (IDs verified 2026-10-12; see SERVICES_AND_COSTS.md)
 | Need | Model | Why |
@@ -63,5 +65,5 @@ A chain waits at each step: speech-to-text, then the LLM, then text-to-speech. D
 | **WebRTC / Pipecat (for now)** | A WebSocket to our backend is simpler and good enough. **Plan B** if measured latency or audio quality is bad: Pipecat with SmallWebRTC |
 | **Twilio / phone numbers** | Costs money; no card |
 | **Render free (prod backend)** | Sleeps, wipes disk, loses webhooks (see SERVICES_AND_COSTS) |
-| **Vector DB / RAG** | Not needed; memory is a daily summary in SQLite |
+| **Vector DB / RAG** | Not needed; memory is a daily summary in Supabase PostgreSQL |
 | **Redux / heavy state libs** | One screen; React state + one event stream is enough |

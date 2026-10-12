@@ -2,6 +2,9 @@
 .env
 credentials.json
 token.json
+token.json.tmp
+.env.*
+!.env.example
 
 # runtime data
 koe.db
@@ -15,3 +18,15 @@ __pycache__/
 # node
 node_modules/
 dist/
+
+# mascot models (10-18 MB each) stay out of git until one is chosen; sample.vrm re-download: BUILD_LOG "Step 13: 3D mascot spike"
+frontend/public/mascot/*.vrm
+# These four runtime models ship with the mascot profile; other experiments stay ignored.
+!frontend/public/mascot/kami.vrm
+!frontend/public/mascot/miku.vrm
+!frontend/public/mascot/aoi.vrm
+!frontend/public/mascot/kobashi.vrm
+frontend/assets/mascot/*.vrm
+# VRoid design sources (large, change on every save; back up outside git)
+*.vroid
+*.xroid

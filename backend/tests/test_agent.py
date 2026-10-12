@@ -47,3 +47,9 @@ def test_write_tool_never_runs_without_the_approval_gate(monkeypatch):
 
 def test_no_merge_tool_exists():
     assert not any("merge" in name for name in agent.TOOLS)  # SPEC §3: the agent can't merge PRs
+
+
+def test_phase4_tool_count_and_write_policy():
+    assert len(agent.TOOLS) == 10
+    assert {name for name, t in agent.TOOLS.items() if t.needs_approval} == {
+        'calendar_upsert_event', 'github_comment', 'sheets_log_hours'}

@@ -2,7 +2,7 @@
 
 > *Koe* means "voice." A voice-first agent for developer founders: talk to an anime mascot on a live web call, or send a WhatsApp voice note on the move, and Koe handles your **GitHub** (review queue, PR status, PR summaries, what you shipped), **Google Calendar**, **Notion** and **Sheets**, with your approval for anything that matters.
 
-**Status:** planning complete, build not started. See [docs/PLAN.md](docs/PLAN.md).
+**Status:** live voice, mascot, authenticated dashboard and Phase 4 tools built. PR summaries, shipped history, Notion daily logs and approved PR comments/Sheets entries are verified locally with fake APIs. Live account acceptance awaits setup: [Phase 2](docs/PHASE2_SETUP.md), [Phase 4](docs/PHASE4_SETUP.md), [phase plan](docs/PLAN.md).
 
 ## Docs
 - [Problem statement](docs/PROBLEM_STATEMENT.md): who it's for, what it solves, what it doesn't

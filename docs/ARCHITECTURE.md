@@ -6,7 +6,7 @@ The **agent core** (system prompt, tool registry, approval gate, memory) is writ
 ```
 ┌──────────────────────── BROWSER (React, on Vercel) ────────────────────────┐
 │  ┌───────── Call panel ─────────┐   ┌─────────────── Dashboard ───────────┐ │
-│  │  Mascot (SVG, Web Audio)     │   │ Today: Calendar timeline            │ │
+│  │  Mascot (3D VRM, three.js)   │   │ Today: Calendar timeline            │ │
 │  │  🎙 mic → 16 kHz PCM16       │   │ GitHub: review queue · my PRs · CI  │ │
 │  │  🔊 speaker ← 24 kHz PCM16   │   │ Shipped today (→ Notion log)        │ │
 │  │  live transcript + latency   │   │ Activity feed + Approve/Reject      │ │
@@ -28,7 +28,7 @@ The **agent core** (system prompt, tool registry, approval gate, memory) is writ
 │                          │     agent.py       │  gate · context builder     │
 │                          └─────────┬──────────┘                             │
 │        tools/github.py  tools/calendar.py  tools/notion.py  tools/sheets.py │
-│        store.py (SQLite: activity, pending_actions, daily_notes)            │
+│        store.py (Supabase PostgreSQL via REST + restricted SQL functions)            │
 │        events.py (in-process pub/sub → /ws/events)                          │
 └─────────────────────────────────────────────────────────────────────────────┘
       ▲ HTTPS (dev: cloudflared tunnel · prod: Azure VM + Caddy)   │
@@ -43,13 +43,14 @@ The **agent core** (system prompt, tool registry, approval gate, memory) is writ
 |---|---|---|
 | App entry | `backend/koe/main.py` | FastAPI app, routes, startup (DB, config) |
 | Config | `backend/koe/config.py` | Loads `.env` (`pydantic-settings`): keys, allow-lists, timezone, working hours |
-| Agent core | `backend/koe/agent.py` | System prompt, **tool registry** (name → function + JSON schema + `needs_approval`), context builder (today's summary), text-mode agent loop for WhatsApp/evals |
+| Agent core | `backend/koe/agent.py` + `text_agent.py` | Shared prompt, tool registry, conversation-scoped approval; bounded text loop for CLI and future WhatsApp/evals. Cross-channel context builder is Phase 6. |
 | Approval gate | inside `agent.py` + `store.py` | Write tools → pending action → resolve on approve/reject/expiry |
 | Web call | `backend/koe/voice_call.py` | `/ws/call`: browser audio ⇄ Gemini Live; handles tool calls, barge-in, session resumption, latency timestamps |
 | WhatsApp | `backend/koe/whatsapp.py` | Webhook verify + receive, media download, background processing, send text/buttons/templates |
 | GitHub hooks | `backend/koe/github_hooks.py` | Verify signature, dedupe delivery, map events → alert rules |
 | Tools | `backend/koe/tools/*.py` | Thin, tested wrappers around each API; enforce timezone, double-booking and diff limits |
-| Store | `backend/koe/store.py` | SQLite via stdlib `sqlite3`: activity, pending_actions, daily_notes |
+| Phase 4 tools | `tools/github_work.py`, `tools/notion.py`, `tools/sheets.py` | Bounded tool-free Gemini PR analysis, authored history, append-only daily log and approved comment/hours writes. Existing proposal/claim/finish path protects Calendar, comments and every Sheets row; Notion follows the own-log exception. |
+| Store | `backend/koe/store.py` + `backend/migrations/001_phase2.sql` | Supabase REST RPC; PostgreSQL persists activity and atomically proposes/claims/finishes approvals. Tables are backend-only. |
 | Events | `backend/koe/events.py` | In-process pub/sub (`asyncio.Queue` per dashboard client) → `/ws/events` |
 | Evals | `backend/evals/` | Scripted requests → agent (text mode) → score tool choice, args, end state, latency |
 | Frontend | `frontend/src/` | Call panel (mic capture via AudioWorklet, playback queue), mascot, dashboard panels |
@@ -62,7 +63,7 @@ The **agent core** (system prompt, tool registry, approval gate, memory) is writ
 4. Gemini detects end of speech (server-side voice activity detection) and starts streaming 24 kHz audio back
      backend → WS → browser playback queue → speaker; analyser drives the mascot's mouth
 5. If Gemini emits tool_call(calendar_find_free …):
-     backend sends {"type":"thinking","tool":…} to /ws/events → mascot "thinking", panel highlights
+     backend sends {"type":"tool","name":…, "phase":"start"} on both event/call paths → mascot "thinking", panel highlights
      runs the tool (read: immediately · write: create pending action, Gemini asks the user aloud)
      returns the result to Gemini → Gemini continues speaking
 6. Barge-in: user speaks while Koe talks → Gemini signals "interrupted" → backend tells the browser
@@ -91,15 +92,20 @@ GitHub → POST /webhooks/github (event, delivery id, signature)
 ```
 No LLM in this path: it's fast, free and deterministic.
 
-## 6. Data model (SQLite)
+## 6. Data model (Supabase PostgreSQL)
 ```sql
-activity(id, ts, channel, kind, summary, payload_json, latency_json)
-   -- channel: web|whatsapp|github  kind: message|tool|alert|approval
-pending_actions(id, created_ts, expires_ts, channel, tool, args_json, status, result_json)
-   -- status: pending|approved|rejected|expired|executed|failed
-daily_notes(date, summary)            -- rolled-up context fed into new sessions
-github_deliveries(delivery_id, ts)    -- webhook dedupe
+koe_activity(id, owner_id, ts, session_id, channel, kind, summary, payload_json, latency_json)
+koe_pending_actions(id, owner_id, session_id, channel, created_ts, expires_ts,
+                    tool, args_json, summary, status, result_json)
+  -- status: pending|executing|rejected|expired|executed|failed
+koe_daily_notes(owner_id, date, summary)        -- Phase 6 roll-up
+koe_github_deliveries(owner_id, delivery_id, ts) -- reserved for Phase 5 persistent dedupe
 ```
+Migration: `backend/migrations/001_phase2.sql`. All four tables have RLS enabled and browser grants revoked. Restricted, security-invoker SQL functions atomically record proposals, claim approvals and record outcomes. The server fixes `owner_id` from configuration; a browser/model cannot select another owner. One active pending proposal is allowed per conversation, with a ten-minute expiry. A claim sets `executing` before Google is called, so concurrent confirmation cannot run it twice. External writes are not automatically retried if the outcome is uncertain.
+
+Supabase is independently hosted; deploying/restarting FastAPI does not remove this data. Its Free plan may pause after low activity and needs manual exports for backups. See SERVICES_AND_COSTS and PHASE2_SETUP. Supabase Auth login is a future UI/auth slice, not a prerequisite for the backend storage adapter. Phase 2 browser calls are protected by a private `KOE_ACCESS_TOKEN` sent in the first WebSocket frame.
+
+Google event writes use a final paginated overlap check and a one-process lock. Moving an event excludes its own old occurrence and uses If-Match to avoid overwriting a changed event. Google cannot atomically lock a free slot across other calendar clients. Actual voice latency remains to be remeasured with the hosted store; metadata logging uses a bounded background queue rather than blocking audio frames.
 
 ## 7. Repo layout
 ```
@@ -110,9 +116,11 @@ Koe (声)/
 │   ├── pyproject.toml
 │   ├── .env.example
 │   ├── koe/
-│   │   ├── main.py  config.py  agent.py  store.py  events.py
+│   │   ├── main.py  config.py  agent.py  text_agent.py  google_auth.py  store.py  events.py
 │   │   ├── voice_call.py  whatsapp.py  github_hooks.py
 │   │   └── tools/  github.py  calendar.py  notion.py  sheets.py
+│   ├── migrations/        # Supabase SQL, applied through SQL Editor
+│   ├── scripts/           # consent, setup check, text CLI, smoke tests
 │   ├── evals/             # cases.yaml + run.py
 │   └── tests/
 └── frontend/              # Vite + React + TS
@@ -126,10 +134,21 @@ Keep it flat. Split a file only when it passes about 400 lines, and log the spli
 | Dev (Phases 1–6) | Laptop, `uvicorn --reload` | `npm run dev` | `cloudflared` quick tunnel (URL changes per run; update Meta/GitHub webhook URLs) |
 | Prod (Phase 7) | **Azure for Students** small Linux VM: `uvicorn` under `systemd`, **Caddy** for automatic HTTPS on the free `*.cloudapp.azure.com` DNS name | **Vercel** free | The VM's HTTPS URL (stable) |
 
-Why not Render free: it sleeps after 15 min idle (about 1 min cold start), the filesystem is wiped on restart (SQLite lost), WebSocket support on free is disputed, and GitHub webhooks (10 s timeout, no auto-retry) would be lost. See SERVICES_AND_COSTS.md.
+Why not Render free: it sleeps after 15 min idle (about 1 min cold start), the filesystem is wiped on restart (local Google credential files would need secure reprovisioning), WebSocket support on free is disputed, and GitHub webhooks (10 s timeout, no auto-retry) would be lost. See SERVICES_AND_COSTS.md.
 
 ## 9. Security (minimal but real)
 - Webhook signature verification (Meta + GitHub).
 - WhatsApp sender allow-list.
-- The dashboard and `/ws/*` require a single shared secret (`KOE_ACCESS_TOKEN`) sent by the frontend. This is single-user, so no login system; it just stops strangers from using your agent once it's public.
+- `/ws/call` checks a shared secret (`KOE_ACCESS_TOKEN`) in its first frame when configured, and requires it when Supabase enables writes. `/ws/events` always requires that token before sending snapshots or reading services. This is single-user; Supabase Auth login is a later slice.
 - Least-privilege tokens: GitHub fine-grained token (read PRs/contents/checks on selected repos, write to issues/PR comments only); Google OAuth scopes limited to Calendar events and Sheets.
+
+
+## Dashboard implementation (Phase 3)
+
+`dashboard.py` exposes the read-only `/ws/events` socket. It subscribes each authenticated browser to `events.py`'s bounded queue, sends the cached snapshot immediately, then refreshes today's Calendar and the two GitHub read panels concurrently. A process-wide lock coalesces refreshes for 30 seconds; the server repeats the read cycle every 60 seconds while clients are connected. A background read cannot overwrite a more recent conversational tool result. Successful approved Calendar writes invalidate the cache for the next refresh.
+
+`agent.py` publishes tool start/end and proposal/claim/result events from the shared channel path. `voice_call.py` publishes measured turn latency and `github_hooks.py` publishes verified matched alerts. Publication uses nonblocking queue operations; a slow browser gets a current snapshot instead of holding up audio. The hub retains at most 100 activity/latency records and 100 pending display cards. It is process-local: run one Uvicorn worker until an external pub/sub service is deliberately introduced.
+
+Supabase hydration selects owner-scoped recent activity and pending display fields; stored arguments and backend credentials never go to the browser. Current-process activity takes precedence over saved rows from the same sessions to avoid showing the same operation twice. Without Supabase, live activity lasts only until server restart. Matched webhook alerts are currently process-local; durable webhook processing remains Phase 5.
+
+`frontend/src/dashboard/` owns snapshot/event reduction, reconnect backoff, panel rendering and nearest-rank latency percentiles. The home dashboard has no fictional fallback data. The call panel's Day/Chat switch shows the same panels while the audio conversation continues. Only a pending ID already present on that call's approval card gets controls; other conversation proposals are informational. `/ws/events` accepts refresh commands only, never approval or tool execution.

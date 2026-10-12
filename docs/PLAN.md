@@ -4,7 +4,11 @@
 **Difficulty:** about 7/10. Hardest parts: real-time audio streaming and barge-in, time/timezone correctness, Google OAuth quirks, Meta setup.
 **Rule:** every phase ends with a working, demoable slice, verified, logged in BUILD_LOG.md, and committed.
 
-> **Current phase: Phase 2 (started 2026-10-12).** Phase 1 done 2026-10-12 (latency p50 ≈ 1.7 s, over the 1.5 s target; see BUILD_LOG Steps 11–12). Phase 0 done 2026-10-12, except Google OAuth (carried over, needed before Phase 2). Update this line as you go.
+> **Current phase: Phase 2 implementation ready for live setup/verification (2026-10-12).** Supabase storage, Calendar tools, approval flow, and text CLI are implemented and tested locally. User must fill Supabase env values, apply the migration and complete Google OAuth; then verify one real approved booking before marking Phase 2 done. See [PHASE2_SETUP.md](PHASE2_SETUP.md). Phase 1 measured p50 ≈ 1.7 s, above the 1.5 s target.
+
+> **Next slice built: Phase 3 live dashboard (2026-10-12).** At the user's request, implementation continued while credentials are deferred. Authenticated events, real read panels, activity, original-call approval controls and measured latency display are implemented. Local tests and isolated browser fixtures verify the wiring; real account data and an approved booking still await Phase 2 setup.
+
+> **Phase 4 implementation built (2026-10-13).** PR summaries, shipped history, Notion daily log, approved PR comments and approved Sheets entries are implemented and tested with fake APIs. Live acceptance remains pending; credentials can be added later using [PHASE4_SETUP.md](PHASE4_SETUP.md).
 
 ## Overview
 | Phase | Week | Goal | Demo when done |
@@ -40,32 +44,38 @@
 
 ## Phase 2: agent core + GitHub read + Calendar
 - [x] `agent.py`: tool registry (schema + `needs_approval`), system prompt (persona, timezone, working hours, rules).
-- [ ] `store.py`: SQLite tables (ARCHITECTURE §6).
-- [ ] Tools: ~~`github_review_queue`, `github_my_prs`~~ ✅ (wired into the voice call) · `calendar_list`, `calendar_find_free`, `calendar_upsert_event` (need Google `credentials.json`).
-- [ ] Approval gate: write → pending → spoken confirm → execute. Tests prove no bypass.
-- [ ] Double-booking re-check + timezone tests.
-- [ ] Text-mode agent loop (used later by WhatsApp + evals) and a tiny CLI to chat in text.
+- [x] `store.py`: Supabase REST adapter and PostgreSQL migration with restricted atomic approval functions (replaces SQLite by user request).
+- [x] Tools: `github_review_queue`, `github_my_prs`, `calendar_list`, `calendar_find_free`, `calendar_upsert_event` wired to the registry; Calendar awaits real OAuth setup.
+- [x] Approval gate: persisted proposal → explicit spoken/typed/UI confirmation → atomic claim → execute. Safety tests cover expiry, rejection, ambiguity, replay and storage errors.
+- [x] Double-booking re-check + timezone, all-day event, pagination and event-move tests.
+- [x] Text-mode agent loop and `python -m scripts.chat` CLI.
+- [ ] Live verification: Supabase migration/key, Google consent, voice GitHub read and one approved booking on a test calendar.
 **Done when:** by voice, "what's waiting for my review?" is correct and "book 30 min with Rahul at 7" books after you say yes.
 
 ## Phase 3: dashboard + mascot
 - [ ] Decide the mascot design and name with the user (SPEC §6).
-- [ ] `/ws/events` + `events.py` pub/sub; every tool call, approval and alert emits an event.
-- [ ] Panels: Today (Calendar), GitHub (review queue, my PRs + CI), Activity (with Approve/Reject), Latency.
-- [ ] Mascot states: idle / listening / thinking / speaking / happy / error, driven by events + `AnalyserNode`.
-- [ ] Access token on `/ws/*` (ARCHITECTURE §9).
+- [x] `/ws/events` + `events.py` pub/sub; every registered tool call, approval and matched GitHub alert emits an event.
+- [x] Panels: Today (Calendar), GitHub (review queue, my PRs + CI), Activity (with Approve/Reject for the original active call), Latency. Day/Chat switch keeps them accessible during calls; no sample rows remain.
+- [x] Mascot states: idle / listening / thinking / speaking / happy / error, driven by call events + `AnalyserNode`; idle dashboard alerts trigger a brief reaction.
+- [x] Access token on `/ws/events` (ARCHITECTURE §9). `/ws/call` authentication was brought forward into Phase 2 to protect the new writer.
+- [ ] Live account verification: connected Calendar/GitHub panels update during a real call and an approved booking; requires deferred Phase 2 setup.
 **Done when:** while talking, the panels update live and the mascot reacts in sync.
 
 ## Phase 4: deeper GitHub + Notion + Sheets
-- [ ] `github_pr_summary` (diff truncation, risk notes), `github_shipped`, `github_comment` (approval).
-- [ ] `notion_log` (daily page in the "Koe Daily Log" database), `sheets_log_hours` (approval).
-- [ ] Confirm with the user whether Sheets is still wanted (SPEC open Q5).
+- [x] `github_pr_summary` (diff truncation, risk notes), `github_shipped`, `github_comment` (approval).
+- [x] `notion_log` (daily page in the "Koe Daily Log" database), `sheets_log_hours` (approval).
+- [x] Confirm Sheets: included, with approval before every entry (2026-10-13).
+
+Implementation is verified locally against simulated API boundaries; live acceptance still waits for credentials. See [PHASE4_SETUP.md](PHASE4_SETUP.md).
+- [ ] Live acceptance: real PR summary, shipped history → Notion, one intended approved comment and one approved timesheet entry.
 **Done when:** "What did I ship today?" gives a correct list and writes the Notion log; "Summarize #42" is accurate on a real PR.
 
 ## Phase 5: WhatsApp + GitHub alerts
-- [ ] `/webhooks/whatsapp`: GET verify, POST signature check, 200 fast, background processing, sender allow-list.
+- [x] `/webhooks/whatsapp`: GET verify, POST signature check, 200 fast, background processing, sender allow-list. (Inbound messages are only logged until Phase 2's text loop exists.)
 - [ ] Voice note: media download → Gemini with audio → agent core (text loop) → reply.
 - [ ] Interactive Confirm/Cancel buttons → resolve pending actions.
-- [ ] `/webhooks/github`: signature, dedupe, 4 alert rules (SPEC §4) → WhatsApp; submit the `koe_alert` template to Meta.
+- [x] `/webhooks/github`: signature, dedupe, 4 alert rules (SPEC §4) → WhatsApp. (Real sends blocked by Meta, see SERVICES_AND_COSTS; dedupe is in memory until `store.py`.)
+- [ ] Submit the `koe_alert` template to Meta (blocked: business verification).
 - [ ] WhatsApp latency stages logged.
 **Done when:** a voice note books a meeting in about 3–4 s end to end; a failing CI run on the test repo triggers a WhatsApp alert.
 

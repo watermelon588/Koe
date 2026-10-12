@@ -27,11 +27,12 @@ class FakeBrowser:
     async def accept(self):
         pass
 
-    async def receive_bytes(self):
+    async def receive(self):  # like Starlette: bytes or text frames, then a disconnect message
         data = await self.to_backend.get()
         if data is HANG_UP:
-            raise WebSocketDisconnect(1000)
-        return data
+            return {"type": "websocket.disconnect", "code": 1000}
+        key = "text" if isinstance(data, str) else "bytes"
+        return {"type": "websocket.receive", key: data}
 
     async def send_bytes(self, data):
         await self.to_browser.put(data)
@@ -49,6 +50,13 @@ class FakeBrowser:
         return await asyncio.wait_for(self.to_browser.get(), 2)
 
 
+def content(**fields):
+    """A server_content with the SDK's defaults (everything None) plus the given fields."""
+    base = dict(interrupted=None, model_turn=None, input_transcription=None, output_transcription=None,
+                turn_complete=None)
+    return SimpleNamespace(**{**base, **fields})
+
+
 def msg(server_content=None, go_away=None, handle=None, tool_call=None):
     update = SimpleNamespace(resumable=True, new_handle=handle) if handle else None
     return SimpleNamespace(server_content=server_content, go_away=go_away,
@@ -59,23 +67,35 @@ class FakeSession:
     """A Gemini Live connection. Each mic chunk gets a reply turn:
     b'BARGE' -> interrupted, b'GOAWAY' -> resume handle + GoAway,
     b'DROP' -> resume handle, then the connection breaks, b'TOOL' -> asks for github_my_prs and
-    speaks once the tool result arrives, else -> audio b'reply:' + chunk."""
+    speaks once the tool result arrives, b'SPEAK' -> transcripts of both sides + audio + turn end,
+    typed text -> a spoken answer with its transcript, else -> audio b'reply:' + chunk."""
 
     def __init__(self, name):
         self.name, self.sent, self.replies, self.tool_responses = name, [], asyncio.Queue(), []
+        self.texts = []
 
     async def send_tool_response(self, function_responses):
         self.tool_responses.extend(function_responses)
         await self.replies.put(b"after-tool")
 
-    async def send_realtime_input(self, audio):
+    async def send_realtime_input(self, audio=None, text=None):
+        if text is not None:
+            self.texts.append(text)
+            return await self.replies.put(("text", text))
         self.sent.append(audio)
         await self.replies.put(audio.data)
 
     async def receive(self):  # like the SDK: yields one model turn, then ends
         data = await self.replies.get()
-        if data == b"BARGE":
-            yield msg(SimpleNamespace(interrupted=True, model_turn=None))
+        if isinstance(data, tuple):  # typed text: Gemini answers out loud, with a transcript
+            yield msg(content(output_transcription=SimpleNamespace(text="ok: " + data[1]), turn_complete=True))
+        elif data == b"SPEAK":
+            yield msg(content(input_transcription=SimpleNamespace(text="hi koe")))
+            yield msg(content(output_transcription=SimpleNamespace(text="hello!"),
+                              model_turn=SimpleNamespace(parts=[SimpleNamespace(inline_data=SimpleNamespace(data=b"hello-audio"))])))
+            yield msg(content(turn_complete=True))
+        elif data == b"BARGE":
+            yield msg(content(interrupted=True))
         elif data == b"GOAWAY":
             yield msg(handle=f"handle-from-{self.name}")
             yield msg(go_away=SimpleNamespace(time_left="5s"))
@@ -87,7 +107,7 @@ class FakeSession:
             raise errors.APIError(1006, {"message": "abnormal closure"})
         else:
             part = SimpleNamespace(inline_data=SimpleNamespace(data=b"reply:" + data))
-            yield msg(SimpleNamespace(interrupted=None, model_turn=SimpleNamespace(parts=[part])))
+            yield msg(content(model_turn=SimpleNamespace(parts=[part])))
 
 
 def fake_gemini(monkeypatch):
@@ -217,3 +237,77 @@ def test_summarize_percentiles():
     assert voice_call.summarize([]) == "no turns"
     assert voice_call.summarize([900]) == "1 turns, p50 900 ms, p95 900 ms"
     assert voice_call.summarize(list(range(100, 2100, 100))) == "20 turns, p50 1050 ms, p95 1995 ms"
+
+
+def test_transcripts_and_turn_end_reach_the_browser(monkeypatch):
+    connections = fake_gemini(monkeypatch)
+
+    async def scenario(browser):
+        browser.says(b"SPEAK")
+        assert await browser.hears() == {"type": "transcript", "role": "user", "text": "hi koe"}
+        assert await browser.hears() == {"type": "transcript", "role": "koe", "text": "hello!"}
+        assert await browser.hears() == b"hello-audio"
+        assert (await browser.hears())["type"] == "latency"  # b"SPEAK" counts as speech
+        assert await browser.hears() == {"type": "turn_complete"}
+
+    run_call(scenario)
+    config = connections[0][0]
+    assert config["input_audio_transcription"] == {} and config["output_audio_transcription"] == {}
+    from koe import events
+    assert len(events.hub.latencies) == 1
+    assert events.hub.latencies[0]["ms"] >= 0
+
+
+def test_typed_text_goes_to_gemini_and_bad_frames_are_ignored(monkeypatch):
+    connections = fake_gemini(monkeypatch)
+
+    async def scenario(browser):
+        browser.says("not json")  # ignored, the call carries on
+        browser.says('{"type": "mute"}')  # unknown event: ignored
+        browser.says('{"type": "text", "text": 42}')  # not a string: ignored
+        browser.says('{"type": "text", "text": "   "}')  # empty after trimming: ignored
+        browser.says('{"type": "text", "text": "  what is on today?  "}')
+        assert await browser.hears() == {"type": "transcript", "role": "koe", "text": "ok: what is on today?"}
+        assert await browser.hears() == {"type": "turn_complete"}
+        browser.says('{"type": "text", "text": "' + "x" * 5000 + '"}')
+        await browser.hears()
+        await browser.hears()
+
+    run_call(scenario)
+    texts = connections[0][1].texts
+    assert texts[0] == "what is on today?"
+    assert len(texts) == 2 and len(texts[1]) == voice_call.MAX_TEXT
+
+
+def test_browser_call_requires_access_token_when_storage_enables_writes(monkeypatch):
+    monkeypatch.setattr(voice_call.settings, "supabase_url", "https://test.supabase.co")
+    monkeypatch.setattr(voice_call.settings, "supabase_secret_key", "sb_secret_test")
+    async def scenario():
+        browser = FakeBrowser()
+        await voice_call.call(browser)
+        assert (await browser.hears())[1] == 1008
+    asyncio.run(scenario())
+
+
+def test_invalid_access_token_never_opens_a_gemini_session(monkeypatch):
+    monkeypatch.setattr(voice_call.settings, "koe_access_token", "private-app-token")
+    class Browser(FakeBrowser):
+        async def receive_json(self):
+            return {"type": "auth", "token": "wrong"}
+    async def scenario():
+        browser = Browser()
+        await voice_call.call(browser)
+        assert (await browser.hears())[1] == 1008
+    asyncio.run(scenario())
+
+
+def test_valid_access_token_allows_the_existing_voice_flow(monkeypatch):
+    fake_gemini(monkeypatch)
+    monkeypatch.setattr(voice_call.settings, "koe_access_token", "private-app-token")
+    async def receive_json(self):
+        return {"type": "auth", "token": "private-app-token"}
+    monkeypatch.setattr(FakeBrowser, "receive_json", receive_json, raising=False)
+    async def scenario(browser):
+        browser.says(SILENT)
+        assert await browser.hears() == b"reply:" + SILENT
+    run_call(scenario)
