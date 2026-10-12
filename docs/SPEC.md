@@ -16,11 +16,22 @@ A single-user, voice-first agent for a developer founder. It works across GitHub
 ## 2. Channels
 | Channel | Direction | Transport | Model |
 |---|---|---|---|
-| **Web call** | User ⇄ Koe, live audio | Browser ⇄ FastAPI over WebSocket (`/ws/call`), PCM16 audio | Gemini Live native-audio model (speech-to-speech, tool calling) |
+| **Web call** | User ⇄ Koe, live audio | Browser ⇄ FastAPI over WebSocket (`/ws/call`), PCM16 audio (see wire format below) | Gemini Live native-audio model (speech-to-speech, tool calling) |
 | **Dashboard events** | Koe → browser | WebSocket (`/ws/events`), JSON | — |
 | **WhatsApp in** | User → Koe | Meta webhook `POST /webhooks/whatsapp` (text, audio, button replies) | Gemini (standard) with audio input |
 | **WhatsApp out** | Koe → User | Meta Send API (text, interactive buttons, templates for alerts) | — |
 | **GitHub events** | GitHub → Koe | Webhook `POST /webhooks/github` (HMAC-SHA256 verified) | none (rules decide what to alert) |
+
+### `/ws/call` wire format (implemented, Phase 1)
+- **Browser → backend:** binary frames only. Raw PCM16, **16 kHz**, mono, little-endian, ~40 ms per frame (640 samples).
+- **Backend → browser, binary frames:** Koe's voice. Raw PCM16, **24 kHz**, mono, little-endian, any length. Play back-to-back.
+- **Backend → browser, text frames:** JSON control events:
+  | Event | Meaning | Browser should |
+  |---|---|---|
+  | `{"type":"interrupted"}` | User talked over Koe (barge-in) | Stop and drop all queued audio at once |
+  | `{"type":"latency","ms":1650}` | This turn's "you stopped speaking → Koe's first audio", measured at the backend | Show it (latency readout) |
+- **Close codes:** normal hang-up = 1000. `1011` with a `reason` such as `"Gemini error: …"` = the call failed; show the reason.
+- Unknown event types must be ignored (more come in Phase 2/3: thinking, tool calls, transcripts).
 
 **Allowed WhatsApp senders:** only numbers in `ALLOWED_WHATSAPP_NUMBERS` (env). Everything else is ignored and logged.
 
