@@ -127,18 +127,19 @@ async def _relay_gemini(ws: WebSocket, mic: asyncio.Queue, state: CallState, cli
         connected_at = time.monotonic()
         try:
             async with client.aio.live.connect(model=LIVE_MODEL, config=config) as session:
-                upload = asyncio.create_task(_upload_mic(mic, session))
-                try:
+                # TaskGroup (not a loose task) so the uploader is always finished before we
+                # reconnect or exit, and its errors aren't silently lost.
+                async with asyncio.TaskGroup() as tg:
+                    upload = tg.create_task(_upload_mic(mic, session))
                     await _gemini_to_browser(ws, session, state)  # returns on GoAway
-                finally:
                     upload.cancel()
             quick_drops = 0
-        except (errors.APIError, OSError) as e:  # dropped connection / network blip
+        except* (errors.APIError, OSError) as eg:  # dropped connection / network blip
             stable = time.monotonic() - connected_at > STABLE_SECS
             quick_drops = 1 if stable else quick_drops + 1
             if state.resume_handle is None or quick_drops > MAX_QUICK_DROPS:
                 raise
-            log.warning("Gemini connection lost (%s): resuming, attempt %d", e, quick_drops)
+            log.warning("Gemini connection lost (%s): resuming, attempt %d", eg.exceptions[0], quick_drops)
             await asyncio.sleep(0.5 * quick_drops)
 
 
@@ -162,3 +163,8 @@ async def call(ws: WebSocket):
             await ws.close(code=1011, reason=f"Gemini error: {eg.exceptions[0]}"[:120])
     finally:
         log.info("call ended: %s", summarize(state.latencies_ms))
+    # If we're being cancelled (server shutdown) at the same moment the user hangs up, the
+    # TaskGroup reports only the hang-up, which we just swallowed. Never swallow a cancel.
+    # https://docs.python.org/3/library/asyncio-task.html#task-cancellation
+    if asyncio.current_task().cancelling():
+        raise asyncio.CancelledError
