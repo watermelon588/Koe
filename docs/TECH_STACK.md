@@ -12,6 +12,7 @@ Everything here is free and needs no credit card. Adding anything not on this pa
 | **Web Audio API**: `AnalyserNode` | Mascot mouth/scale from voice volume | Built in, no library |
 | **Native `WebSocket`** | `/ws/call` (audio) + `/ws/events` (JSON) | Built into browsers |
 | **three.js** + **`@pixiv/three-vrm`** (MIT) | 3D anime mascot (VRM model: mouth shapes, blink, gaze, expressions built in) | Standard for anime avatars; ~1.2 ms per frame measured; lazy-loaded chunk (186 kB gzip) |
+| **Web app manifest + service worker** (built into browsers) | Install Koe on the phone like an app; receive push notifications | No app store, no card, one codebase |
 | **`@phosphor-icons/react`** (MIT) | UI icons (header, call controls, dashboard tabs) | Light weight matches the light type; tree-shaken, only used icons ship. Added 2026-10-13 with Rohit's OK |
 | **VRoid Studio** (desktop app, free) | Making the mascot's VRM model | Free, commercial use allowed, exports VRM |
 
@@ -22,6 +23,7 @@ Everything here is free and needs no credit card. Adding anything not on this pa
 | **FastAPI + `uvicorn`** | HTTP routes, webhooks, **WebSockets** | Async, native WebSocket support, so no second server is needed |
 | **`google-genai`** (official Google Gen AI SDK) | Gemini Live (web call) + Gemini (WhatsApp, PR summaries) | Official SDK for both the Live API and regular calls |
 | **`httpx`** | Calls to GitHub, Notion, WhatsApp APIs | Async HTTP client; one client for all REST APIs |
+| **`pywebpush`** (MPL-2.0) | Web Push to the installed Koe app (VAPID, encrypted payloads) | The standard Python implementation; free push services (FCM, Mozilla, Apple) need no account. Added 2026-10-13 with Rohit's OK |
 | **`google-api-python-client` + `google-auth-oauthlib`** | Google Calendar + Sheets | Official Google clients; OAuth installed-app flow |
 | **`pydantic-settings`** | Config from `.env` | Typed config, fails fast if a key is missing |
 | **Supabase PostgreSQL + existing `httpx`** | Activity, pending actions, memory | Managed hosting-independent storage; transactional approval claims via restricted REST RPC |

@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from 'react'
-import { CalendarBlank, ChatCircle, GearSix, HandWaving, House, Key, Microphone, MicrophoneSlash, Moon, PaperPlaneRight,
+import { CalendarBlank, ChatCircle, ChatCircleDots, GearSix, HandWaving, House, Key, Microphone, MicrophoneSlash, Moon, PaperPlaneRight,
   Phone, PhoneDisconnect, Sun, IconContext } from '@phosphor-icons/react'
 import { moodOf, useCall, type Line } from './call/useCall'
 import { MascotView, type MascotController } from './mascot/MascotView'
 import { mascotProfile, savedMascot, saveMascot } from './mascot/catalog'
 import { SettingsPage } from './settings/SettingsPage'
+import { ChatPage } from './chat/ChatPage'
+import { savedToken } from './chat/api'
 import { Dashboard } from './dashboard/Dashboard'
 import { useDashboard } from './dashboard/useDashboard'
 
@@ -25,6 +27,9 @@ function savedTheme(): Theme {
     return 'dark' // storage can be blocked (private mode); dark is the default anyway
   }
 }
+type Page = 'home' | 'chat' | 'settings'
+const pageOf = (hash: string): Page => (hash === '#settings' ? 'settings' : hash === '#chat' ? 'chat' : 'home')
+
 function greeting() {
   const h = new Date().getHours()
   return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'
@@ -32,10 +37,10 @@ function greeting() {
 
 export default function App() {
   const [model, setModel] = useState(savedMascot)
-  const [page, setPage] = useState(() => location.hash === '#settings' ? 'settings' : 'home')
+  const [page, setPage] = useState<Page>(() => pageOf(location.hash))
   const [theme, setTheme] = useState<Theme>(savedTheme)
   const [wide, setWide] = useState(() => matchMedia(WIDE).matches)
-  const [accessToken, setAccessToken] = useState('')
+  const [accessToken, setAccessToken] = useState(savedToken)
   const mascot = useRef<MascotController | null>(null)
   const call = useCall(mascot)
   const inCall = call.state !== 'idle'
@@ -47,7 +52,7 @@ export default function App() {
         history.replaceState(null, '', `${location.pathname}${location.search}#home`)
         return
       }
-      setPage(location.hash === '#settings' ? 'settings' : 'home')
+      setPage(pageOf(location.hash))
       scrollTo({ top: 0 })
     }
     addEventListener('hashchange', navigate)
@@ -112,6 +117,9 @@ export default function App() {
           <a className="icon-btn" href="#home" aria-label="Home" title="Home" aria-current={page === 'home' ? 'page' : undefined}>
             <House weight={page === 'home' ? 'fill' : 'light'} />
           </a>
+          <a className="icon-btn" href="#chat" aria-label="Chat" title="Chat" aria-current={page === 'chat' ? 'page' : undefined}>
+            <ChatCircleDots weight={page === 'chat' ? 'fill' : 'light'} />
+          </a>
           <a className="icon-btn" href="#settings" aria-label="Settings" aria-current={page === 'settings' ? 'page' : undefined} aria-disabled={inCall}
             title={inCall ? 'End your call to open Settings' : 'Settings'} onClick={(e) => { if (inCall) e.preventDefault() }}>
             <GearSix weight={page === 'settings' ? 'fill' : 'light'} />
@@ -127,7 +135,7 @@ export default function App() {
       {page === 'settings' ? <SettingsPage selected={model} onSelect={(id) => {
         setModel(id)
         return saveMascot(id)
-      }} /> : <>
+      }} /> : page === 'chat' ? <ChatPage model={model} /> : <>
       <main className="home" id="main-content" tabIndex={-1} inert={inCall}>
         <section className="hello">
           <p className="date">{new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })}</p>

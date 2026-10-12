@@ -8,6 +8,8 @@
 
 > **Next slice built: Phase 3 live dashboard (2026-10-12).** At the user's request, implementation continued while credentials are deferred. Authenticated events, real read panels, activity, original-call approval controls and measured latency display are implemented. Local tests and isolated browser fixtures verify the wiring; real account data and an approved booking still await Phase 2 setup.
 
+> **Phase 5b: Koe app built (2026-10-13).** Rohit has no business to verify with Meta, so the phone channel is Koe's own installable web app: chat with text and voice notes both ways, Confirm/Cancel approvals, push notifications for replies and GitHub alerts. WhatsApp code stays for later.
+
 > **Phase 5 conversation built (2026-10-13).** WhatsApp text and voice notes run through the shared text agent and get replies; proposals carry Confirm/Cancel buttons; latency stages are logged. Verified with a faked Meta API plus real Gemini (transcription and replies). Real sending still waits on Meta business verification.
 
 > **Phase 4 implementation built (2026-10-13).** PR summaries, shipped history, Notion daily log, approved PR comments and approved Sheets entries are implemented and tested with fake APIs. Live acceptance remains pending; credentials can be added later using [PHASE4_SETUP.md](PHASE4_SETUP.md).
@@ -80,6 +82,14 @@ Implementation is verified locally against simulated API boundaries; live accept
 - [ ] Submit the `koe_alert` template to Meta (blocked: business verification).
 - [x] WhatsApp latency stages logged (`received → media_downloaded → transcribed → model_done → reply_sent`, ms, to the log and activity store).
 **Done when:** a voice note books a meeting in about 3–4 s end to end; a failing CI run on the test repo triggers a WhatsApp alert.
+
+## Phase 5b: Koe app (installable, push notifications)
+- [x] Installable web app: manifest, icons from the mascot, service worker, Install app button (iPhone: Add to Home Screen instructions).
+- [x] Chat page: text + recorded voice notes; Koe replies to voice with voice; persisted history; Confirm/Cancel approvals; typing indicator.
+- [x] `/api/app` backend: token-protected messages, voice upload/download, approvals, push subscription; SQLite history.
+- [x] Web Push (VAPID) for Koe's replies and GitHub alerts; skipped while the chat is on screen.
+- [ ] Live check on Rohit's phone over the cloudflared tunnel: install, enable notifications, send a voice note, receive a pushed reply.
+**Done when:** with the app closed, a GitHub alert and a Koe reply arrive as phone notifications, and a voice note gets a spoken answer.
 
 ## Phase 6: shared memory
 - [ ] Context builder: today's activity summary + last WhatsApp turns, injected into every new Live session and WhatsApp turn.

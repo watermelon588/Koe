@@ -7,7 +7,7 @@ import logging
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 
-from koe import events, whatsapp
+from koe import app_channel, events, whatsapp
 from koe.config import settings
 
 log = logging.getLogger("koe.github_hooks")
@@ -50,9 +50,9 @@ def alert(event: str, p: dict, me: str) -> str | None:
 
 
 async def send_alert(text: str) -> None:
+    await app_channel.alert(text)  # the Koe app on the phone (SPEC §14); WhatsApp below once Meta allows it
     numbers = whatsapp.allowed_numbers()
     if not numbers:
-        log.warning("alert not sent, ALLOWED_WHATSAPP_NUMBERS is empty: %s", text)
         return
     try:
         await whatsapp.send_text(numbers[0], text)

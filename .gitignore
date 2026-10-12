@@ -30,3 +30,6 @@ frontend/assets/mascot/*.vrm
 # VRoid design sources (large, change on every save; back up outside git)
 *.vroid
 *.xroid
+
+# Koe app runtime data: chat history, voice notes, VAPID keys
+backend/data/

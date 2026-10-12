@@ -18,6 +18,8 @@ A single-user, voice-first agent for a developer founder. It works across GitHub
 |---|---|---|---|
 | **Web call** | User ⇄ Koe, live audio | Browser ⇄ FastAPI over WebSocket (`/ws/call`), PCM16 audio (see wire format below) | Gemini Live native-audio model (speech-to-speech, tool calling) |
 | **Dashboard events** | Koe → browser | WebSocket (`/ws/events`), JSON | — |
+| **Koe app** (installable web app on the phone) | User ⇄ Koe | `/api/app/*` (HTTPS, access token): text and WAV voice notes in; replies stored in `backend/data/app.db` | Gemini (transcription + text agent); Koe's voice replies via Gemini Live |
+| **Push notifications** | Koe → phone | Web Push (VAPID, `pywebpush`) to the installed app's service worker: Koe's replies and GitHub alerts | — |
 | **WhatsApp in** | User → Koe | Meta webhook `POST /webhooks/whatsapp` (text, audio, button replies) | Gemini (standard) with audio input |
 | **WhatsApp out** | Koe → User | Meta Send API (text, interactive buttons, templates for alerts) | — |
 | **GitHub events** | GitHub → Koe | Webhook `POST /webhooks/github` (HMAC-SHA256 verified) | none (rules decide what to alert) |
@@ -169,3 +171,11 @@ Every turn records timestamps, stored in `activity` and shown on the dashboard:
 Visual revision: Settings uses one viewport-adaptive companion studio, actual VRM portrait thumbnails, and controls overlaid on the viewer. Full-body framing automatically expands the same canvas to a large inspection pane. Inspection supports persistent 360-degree rotation and zoom. Vertical placement stays fixed; left/right arrows rotate and Home resets rotation. Keep only framing, expand/close, wave, turntable, zoom and explicit Choose controls; remove descriptive card copy and the separate expression/mood button groups. Expanded view supports Escape, focus containment and restoration. Home rendering and saved selection semantics remain unchanged.
 
 The dedicated `#settings` page owns mascot selection: Kami, Miku, Aoi and Kobashi. Users preview one live VRM at a time, try gestures, expressions and call moods, and explicitly apply their choice. Browsing previews does not change the home mascot. The selected mascot persists locally on this browser/device, with Kami as the fallback. The home page retains layout and theme controls but has no mascot picker. Settings cannot interrupt an active call. No backend profile, voice or account behavior changes in this slice.
+
+## 14. Koe app (mobile channel, replaces WhatsApp while Meta needs business verification)
+- **What it is:** the same web app, installable from an **Install app** button (Chrome's install prompt; on iPhone, Share → Add to Home Screen). No app store. Opens on **Chat**: a WhatsApp-style conversation with Koe, the mascot as the avatar.
+- **Messages:** text, or a **voice note** recorded in the app (16 kHz mono WAV). Voice notes are transcribed by Gemini and answered **with a voice note** in Koe's call voice (Gemini Live), plus the text. History persists in `backend/data/app.db` (SQLite, git-ignored); audio in `backend/data/voice/`.
+- **Approvals:** a proposed write arrives as a message with **Confirm / Cancel**, resolved through the same gate as voice and CLI (§5).
+- **Notifications:** every Koe reply and GitHub alert is pushed (Web Push, VAPID keys generated once into `backend/data/vapid.pem`). The service worker skips the notification when the chat is already open on screen.
+- **Security:** every `/api/app` endpoint requires `KOE_ACCESS_TOKEN` (Bearer), fail closed, because the phone reaches the backend through a public tunnel. The token is remembered on the device. Voice notes ≤ 3 MB; text ≤ 2000 characters; voice files are served only by exact generated names.
+- **Limits:** Koe's spoken reply is a reading of the text reply (it can differ slightly from the text). A server restart keeps the chat history but forgets the model's working memory and any open approvals (Phase 6 adds the persisted summary).

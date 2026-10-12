@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowsClockwise, HandWaving, Person, UserFocus } from '@phosphor-icons/react'
+import { ArrowsClockwise, BellSimple, DeviceMobile, HandWaving, Key, Person, UserFocus } from '@phosphor-icons/react'
+import { savedToken, saveToken } from '../chat/api'
+import { disablePush, enablePush, pushState, useInstall, type PushState } from '../pwa'
 import { MASCOTS, mascotProfile, type MascotId } from '../mascot/catalog'
 import { MascotView, type LoadState, type MascotController } from '../mascot/MascotView'
 import type { Shot } from '../mascot/mascot'
@@ -66,6 +68,7 @@ export function SettingsPage({ selected, onSelect }: Props) {
           {applied ? 'Current companion' : `Use ${profile.name}`}
         </button>
         <p className="note" role="status">{notice}</p>
+        <DeviceSection />
       </aside>
 
       <section className="viewer" ref={viewer} aria-label={`${profile.name} preview`}>
@@ -81,5 +84,55 @@ export function SettingsPage({ selected, onSelect }: Props) {
         <p className="viewer-hint" aria-hidden="true">Drag to turn · Scroll to zoom</p>
       </section>
     </main>
+  )
+}
+
+// This device: install Koe like an app, turn on notifications, remember the access token (SPEC §14).
+function DeviceSection() {
+  const install = useInstall()
+  const [push, setPush] = useState<PushState | 'busy'>('off')
+  const [pushError, setPushError] = useState('')
+  const [token, setToken] = useState(savedToken)
+  const [tokenSaved, setTokenSaved] = useState(false)
+  useEffect(() => { void pushState().then(setPush) }, [])
+
+  async function togglePush() {
+    setPushError('')
+    const was = push
+    setPush('busy')
+    try {
+      if (was === 'on') await disablePush()
+      else await enablePush()
+    } catch (e) {
+      setPushError(e instanceof Error ? e.message : String(e))
+    }
+    setPush(await pushState())
+  }
+
+  return (
+    <section className="device" aria-label="This device">
+      <h2>This device</h2>
+      <div className="device-row">
+        <span><span><DeviceMobile size={16} /> Koe app</span>
+          <small>{install.installed ? 'Installed on this device.' : install.canPrompt ? 'Add Koe to your home screen, like an app.'
+            : install.ios ? 'On iPhone: Share, then Add to Home Screen.' : 'Open this page in Chrome on your phone to install.'}</small></span>
+        {!install.installed && install.canPrompt && <button className="soft" onClick={() => void install.install()}>Install app</button>}
+      </div>
+      <div className="device-row">
+        <span><span><BellSimple size={16} /> Notifications</span>
+          <small>{push === 'unsupported' ? (install.ios ? 'Install Koe to your home screen first.' : 'Not supported in this browser.')
+            : push === 'denied' ? 'Blocked. Allow notifications for this site in the browser settings.'
+            : pushError || 'Koe’s replies and GitHub alerts, like WhatsApp messages.'}</small></span>
+        {(push === 'on' || push === 'off' || push === 'busy') &&
+          <button className={push === 'on' ? 'ghost' : 'soft'} disabled={push === 'busy'} onClick={() => void togglePush()}>{push === 'on' ? 'Turn off' : 'Turn on'}</button>}
+      </div>
+      <form className="device-row" onSubmit={(e) => { e.preventDefault(); setTokenSaved(saveToken(token)) }}>
+        <span><span><Key size={16} /> Access token</span><small>{tokenSaved ? 'Saved on this device.' : 'KOE_ACCESS_TOKEN from backend/.env.'}</small></span>
+      </form>
+      <form className="token-row" onSubmit={(e) => { e.preventDefault(); setTokenSaved(saveToken(token)) }}>
+        <input type="password" value={token} onChange={(e) => { setToken(e.target.value); setTokenSaved(false) }} aria-label="Koe access token" autoComplete="off" />
+        <button className="soft" disabled={!token.trim()}>Save</button>
+      </form>
+    </section>
   )
 }

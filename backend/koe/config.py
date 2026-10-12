@@ -35,6 +35,8 @@ class Settings(BaseSettings):
     working_hours_start: str = "09:00"
     working_hours_end: str = "21:00"
     gemini_text_model: str = "gemini-3.8-flash"
+    # Web Push asks every sender for a contact (mailto: or https:), shown only to push services.
+    koe_push_contact: str = "mailto:koe@example.com"
 
 
 settings = Settings()
