@@ -19,14 +19,14 @@
 | 7 | W4 d3–7 | Evals, deploy (Azure + Vercel), README, demo video | Accuracy and latency numbers in the README; works with the laptop off |
 
 ## Phase 0: setup
-- [ ] Create accounts and keys (SERVICES_AND_COSTS.md, "Accounts the user creates").
-- [ ] `git init`, `.gitignore` (`.env`, `credentials.json`, `token.json`, `koe.db`, `node_modules`, `.venv`).
-- [ ] Backend scaffold: `uv init`, deps from TECH_STACK.md, `koe/main.py` with `/health`, `config.py`, `.env.example`.
-- [ ] Frontend scaffold: `npm create vite@latest frontend -- --template react-ts`.
-- [ ] One smoke script per service (Gemini text call, Calendar list, Notion read, GitHub `/user`, WhatsApp send "hello" to your number).
-- [ ] Record the verified Gemini Live model ID and free-tier limits in SERVICES_AND_COSTS.md.
-- [ ] Decide Learning vs Explanatory style (DECISIONS.md).
-**Done when:** all smoke scripts pass.
+- [ ] Create accounts and keys (SERVICES_AND_COSTS.md, "Accounts the user creates"). Gemini ✅ · Google OAuth, Notion, GitHub, WhatsApp to do.
+- [x] `git init`, `.gitignore` (`.env`, `credentials.json`, `token.json`, `koe.db`, `node_modules`, `.venv`).
+- [x] Backend scaffold: `uv init`, deps from TECH_STACK.md, `koe/main.py` with `/health`, `config.py`, `.env.example`.
+- [x] Frontend scaffold: `npm create vite@latest frontend -- --template react-ts`.
+- [x] One smoke script per service (Gemini text call, Calendar list, Notion read, GitHub `/user`, WhatsApp send "hello" to your number).
+- [x] Record the verified Gemini Live model ID and free-tier limits in SERVICES_AND_COSTS.md.
+- [x] Decide Learning vs Explanatory style (DECISIONS.md).
+**Done when:** all smoke scripts pass (`uv run python -m scripts.smoke` from backend/).
 
 ## Phase 1: live voice call (no tools)
 - [ ] Frontend: mic permission → `AudioWorklet` → 16 kHz PCM16 chunks → `/ws/call`.

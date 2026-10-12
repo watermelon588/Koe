@@ -27,12 +27,12 @@ Everything here is free and needs no credit card. Adding anything not on this pa
 
 Notion is called with plain `httpx` against the Notion REST API (one or two endpoints). That's simpler than adding the `notion-client` SDK. Revisit if the calls grow.
 
-## AI models (verify exact model IDs on Day 1; they change)
+## AI models (IDs verified 2026-10-12; see SERVICES_AND_COSTS.md)
 | Need | Model | Why |
 |---|---|---|
-| Live web voice | **Gemini Live, native-audio model** | Speech-to-speech in one model (no separate STT/TTS), streaming, server-side voice activity detection, barge-in, tool calling. Free tier available |
-| WhatsApp voice notes + text | **Gemini Flash (standard API)** with audio input | Understands audio directly (no separate transcription step), tool calling, free tier |
-| PR summaries | Gemini Flash | Long context for diffs |
+| Live web voice | **`gemini-3.8-live`** | Speech-to-speech in one model (no separate STT/TTS), streaming, server-side voice activity detection, barge-in, tool calling. Free tier available |
+| WhatsApp voice notes + text | **`gemini-3.8-flash`** (standard API) with audio input | Understands audio directly (no separate transcription step), tool calling, free tier |
+| PR summaries | `gemini-3.8-flash` | Long context for diffs |
 | **Fallback** if Gemini free-tier limits block us | Groq free tier (Whisper STT + gpt-oss LLM) + browser `speechSynthesis` or Gemini TTS | Keeps the project at ₹0 if one provider says no |
 
 ### Why speech-to-speech instead of an STT → LLM → TTS chain

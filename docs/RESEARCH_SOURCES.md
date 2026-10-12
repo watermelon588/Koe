@@ -16,7 +16,16 @@ Links behind the claims in these docs, gathered 2026-10-03 to 2026-10-12. Many a
 - Anthropic, "Writing effective tools for agents": https://www.anthropic.com/engineering/writing-tools-for-agents
 - Anthropic, "Building effective agents": https://www.anthropic.com/engineering/building-effective-agents
 
-*To add in Phase 0, from the official sites:* GitHub REST API (pulls, checks, webhooks + signature validation), Google Calendar API (freeBusy, events), Google Sheets API (values.append), Notion API (pages, databases), WhatsApp Cloud API (messages, media, interactive, templates, webhooks), Web Audio `AudioWorklet`.
+- Gemini models list: https://ai.google.dev/gemini-api/docs/models
+- Gemini Live get started (Python SDK): https://ai.google.dev/gemini-api/docs/live-api/get-started-sdk
+- Gemini Live session management (limits, resumption, GoAway): https://ai.google.dev/gemini-api/docs/live-api/session-management
+- Gemini rate limits (points to AI Studio): https://ai.google.dev/gemini-api/docs/rate-limits
+- GitHub REST, get authenticated user (API version 2026-03-10): https://docs.github.com/en/rest/users/users#get-the-authenticated-user
+- Notion, retrieve token's bot user (Notion-Version 2026-03-11): https://developers.notion.com/reference/get-self · https://developers.notion.com/reference/versioning
+- Google Calendar Python quickstart (OAuth installed-app flow): https://developers.google.com/workspace/calendar/api/quickstart/python
+- WhatsApp Cloud API get started (test number, 24 h window, Graph v23.0): https://developers.facebook.com/documentation/business-messaging/whatsapp/get-started
+
+*Still to add, when first used:* GitHub REST API (pulls, checks, webhooks + signature validation), Google Calendar API (freeBusy, events), Google Sheets API (values.append), Notion API (pages, databases), WhatsApp Cloud API (messages, media, interactive, templates, webhooks), Web Audio `AudioWorklet`.
 
 ## Costs and free tiers
 - Voice agent cost per minute (market context): https://futureagi.com/blog/voice-ai-infrastructure-stack-decision-guide-2026/ · https://softcery.com/ai-voice-agents-calculator

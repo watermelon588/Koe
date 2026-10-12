@@ -111,6 +111,6 @@ Every turn records timestamps, stored in `activity` and shown on the dashboard:
 ## 13. Open questions
 1. ~~Output style~~: **Explanatory** (decided 2026-10-12, see DECISIONS.md).
 2. Mascot design and name: decide at the start of Phase 3.
-3. Exact Gemini Live model ID and free-tier limits: verify on Day 1 (they change often).
+3. ~~Gemini Live model ID~~: `gemini-3.8-live`, 15 min audio sessions (verified 2026-10-12, SERVICES_AND_COSTS.md). Free-tier RPM/RPD aren't published; check AI Studio.
 4. Will Meta approve the `koe_alert` template quickly? If not, alerts only arrive inside the 24-hour window. Check in Phase 5.
 5. Is a Google Sheets timesheet useful to the user, or is Notion enough? Confirm before Phase 4.
