@@ -4,7 +4,7 @@
 **Difficulty:** about 7/10. Hardest parts: real-time audio streaming and barge-in, time/timezone correctness, Google OAuth quirks, Meta setup.
 **Rule:** every phase ends with a working, demoable slice, verified, logged in BUILD_LOG.md, and committed.
 
-> **Current phase: Phase 1 (started 2026-10-12).** Phase 0 done 2026-10-12, except Google OAuth (carried over, needed before Phase 2). Update this line as you go.
+> **Current phase: Phase 2 (started 2026-10-12).** Phase 1 done 2026-10-12 (latency p50 ≈ 1.7 s, over the 1.5 s target; see BUILD_LOG Steps 11–12). Phase 0 done 2026-10-12, except Google OAuth (carried over, needed before Phase 2). Update this line as you go.
 
 ## Overview
 | Phase | Week | Goal | Demo when done |
@@ -34,7 +34,7 @@
 - [x] Frontend playback: queue 24 kHz PCM chunks → speaker without gaps.
 - [x] Barge-in: on Gemini "interrupted", flush the playback queue.
 - [x] Latency: timestamp speech-end and first-audio-out; print p50/p95 per call. (Backend p50 ≈ 1.7 s, n=16. Over the 1.5 s target; tuning next.)
-- [ ] Session resumption when Gemini sends a GoAway.
+- [x] Session resumption when Gemini sends a GoAway (+ resume after unexpected drops; context compression).
 **Done when:** a 3-minute natural conversation, interruptions work, p50 latency measured and written in BUILD_LOG.
 **Risk:** audio format bugs (sample rate, endianness) cause chipmunk or static sound. Test with a known sine wave first.
 

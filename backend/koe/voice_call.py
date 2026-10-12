@@ -18,7 +18,7 @@ import time
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from google import genai
-from google.genai import types
+from google.genai import errors, types
 
 from koe.config import settings
 
@@ -35,7 +35,15 @@ SYSTEM_PROMPT = (
     "spoken sentences, no lists or markdown. You have no tools yet, so if asked to check GitHub, "
     "the calendar or Notion, say that's coming soon."
 )
-CONFIG = {"response_modalities": ["AUDIO"], "system_instruction": SYSTEM_PROMPT}
+CONFIG = {
+    "response_modalities": ["AUDIO"],
+    "system_instruction": SYSTEM_PROMPT,
+    # Lifts the 15 min audio-session cap: old context is trimmed instead of ending the session.
+    # https://ai.google.dev/gemini-api/docs/live-api/session-management
+    "context_window_compression": types.ContextWindowCompressionConfig(sliding_window=types.SlidingWindow()),
+}
+MAX_QUICK_DROPS = 3  # consecutive connections that die within STABLE_SECS before we give up
+STABLE_SECS = 30
 
 # ponytail: naive energy check to timestamp "user stopped speaking"; only used for the latency
 # metric (Gemini's own VAD drives the conversation). Ceiling: loud background noise counts as speech.
@@ -55,21 +63,22 @@ def summarize(latencies_ms: list[int]) -> str:
     return f"{len(latencies_ms)} turns, p50 {statistics.median(latencies_ms):.0f} ms, p95 {p95:.0f} ms"
 
 
-class Turns:
-    """Per-call timing shared by the two relay tasks."""
+class CallState:
+    """Per-call state shared by the relay tasks; survives Gemini reconnects."""
 
     def __init__(self):
         self.last_voice: float | None = None  # when the last mic chunk with speech arrived
         self.latencies_ms: list[int] = []
+        self.resume_handle: str | None = None  # latest Gemini session-resumption handle
 
 
-async def _read_mic(ws: WebSocket, mic: asyncio.Queue, turns: Turns):
+async def _read_mic(ws: WebSocket, mic: asyncio.Queue, state: CallState):
     # Reading is decoupled from uploading: if the upload to Gemini stalls, chunks are still
     # taken off the socket (and timestamped) on arrival, so the latency metric includes the stall.
     while True:
         pcm = await ws.receive_bytes()
         if rms(pcm) > VOICE_RMS:
-            turns.last_voice = time.perf_counter()
+            state.last_voice = time.perf_counter()
         mic.put_nowait(pcm)
 
 
@@ -79,10 +88,17 @@ async def _upload_mic(mic: asyncio.Queue, session):
         await session.send_realtime_input(audio=types.Blob(data=pcm, mime_type="audio/pcm;rate=16000"))
 
 
-async def _gemini_to_browser(ws: WebSocket, session, turns: Turns):
+async def _gemini_to_browser(ws: WebSocket, session, state: CallState):
+    """Relays one Gemini connection. Returns on GoAway (time to reconnect); raises if it breaks."""
     while True:  # session.receive() ends after each model turn, so loop for the next one
         first_audio = True
         async for msg in session.receive():
+            update = msg.session_resumption_update
+            if update and update.resumable and update.new_handle:
+                state.resume_handle = update.new_handle
+            if msg.go_away:
+                log.info("Gemini GoAway (time left %s): resuming on a new connection", msg.go_away.time_left)
+                return
             sc = msg.server_content
             if sc and sc.interrupted:
                 # User talked over Koe: tell the browser to drop queued audio (barge-in).
@@ -93,27 +109,51 @@ async def _gemini_to_browser(ws: WebSocket, session, turns: Turns):
                 for part in sc.model_turn.parts:
                     if part.inline_data:
                         await ws.send_bytes(part.inline_data.data)
-                        if first_audio and turns.last_voice is not None:
-                            ms = round((time.perf_counter() - turns.last_voice) * 1000)
-                            turns.latencies_ms.append(ms)
+                        if first_audio and state.last_voice is not None:
+                            ms = round((time.perf_counter() - state.last_voice) * 1000)
+                            state.latencies_ms.append(ms)
                             log.info("turn latency: speech end -> first audio %d ms", ms)
                             await ws.send_json({"type": "latency", "ms": ms})
                         first_audio = False
+
+
+async def _relay_gemini(ws: WebSocket, mic: asyncio.Queue, state: CallState, client):
+    """Keeps one logical conversation alive across Gemini connections using session resumption.
+    https://ai.google.dev/gemini-api/docs/live-api/session-management"""
+    quick_drops = 0
+    while True:
+        # handle=None on the first connection still switches on resumption updates.
+        config = {**CONFIG, "session_resumption": types.SessionResumptionConfig(handle=state.resume_handle)}
+        connected_at = time.monotonic()
+        try:
+            async with client.aio.live.connect(model=LIVE_MODEL, config=config) as session:
+                upload = asyncio.create_task(_upload_mic(mic, session))
+                try:
+                    await _gemini_to_browser(ws, session, state)  # returns on GoAway
+                finally:
+                    upload.cancel()
+            quick_drops = 0
+        except (errors.APIError, OSError) as e:  # dropped connection / network blip
+            stable = time.monotonic() - connected_at > STABLE_SECS
+            quick_drops = 1 if stable else quick_drops + 1
+            if state.resume_handle is None or quick_drops > MAX_QUICK_DROPS:
+                raise
+            log.warning("Gemini connection lost (%s): resuming, attempt %d", e, quick_drops)
+            await asyncio.sleep(0.5 * quick_drops)
 
 
 @router.websocket("/ws/call")
 async def call(ws: WebSocket):
     await ws.accept()
     client = genai.Client(api_key=settings.gemini_api_key)
-    turns = Turns()
+    state = CallState()
     mic: asyncio.Queue[bytes] = asyncio.Queue()
     try:
-        async with client.aio.live.connect(model=LIVE_MODEL, config=CONFIG) as session:
-            # All three run at once; if any fails (e.g. user hangs up), the others are cancelled.
-            async with asyncio.TaskGroup() as tg:
-                tg.create_task(_read_mic(ws, mic, turns))
-                tg.create_task(_upload_mic(mic, session))
-                tg.create_task(_gemini_to_browser(ws, session, turns))
+        # The browser side lives for the whole call; the Gemini side may reconnect underneath it.
+        # If either fails (e.g. user hangs up), the other is cancelled.
+        async with asyncio.TaskGroup() as tg:
+            tg.create_task(_read_mic(ws, mic, state))
+            tg.create_task(_relay_gemini(ws, mic, state, client))
     except* WebSocketDisconnect:
         pass  # user hung up
     except* Exception as eg:
@@ -121,4 +161,4 @@ async def call(ws: WebSocket):
         with contextlib.suppress(Exception):  # the browser may already be gone
             await ws.close(code=1011, reason=f"Gemini error: {eg.exceptions[0]}"[:120])
     finally:
-        log.info("call ended: %s", summarize(turns.latencies_ms))
+        log.info("call ended: %s", summarize(state.latencies_ms))
