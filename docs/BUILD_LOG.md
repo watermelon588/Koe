@@ -142,3 +142,27 @@ A plain-English learning journal. **One entry per step**, newest at the bottom. 
 | SPEC target | ≤ 1,500 ms | |
 So we're **≈0.2–0.35 s over target**, mostly in Gemini's end-of-speech wait plus first-audio generation. Next lever: tune Gemini's VAD end-of-speech settings, then re-measure.
 **Interview line:** "I instrumented speech-end → first-audio per turn, found my own test was 0.4 s optimistic and that a blocking relay hid upstream stalls from the metric, fixed both, and reported p50 1.7 s against a 1.5 s target instead of the flattering number."
+
+## Step 11: five UI directions to choose from  (Phase 3 prep · 2026-10-12)
+**Files:** frontend/design/index.html · base.css · koe.js · v1-kasumi.html · v2-hibiki.html · v3-ma.html · v4-kotoba.html · v5-utsuwa.html (all new) · .claude/launch.json (new, dev server for the preview pane)
+**What it does:** Five static design variants of the three pages Koe needs: **Call** (mascot slot, call button, live captions), **Today** (calendar + GitHub) and **Activity** (approvals, log, latency). All five share the same fonts; each one changes layout, colour, elements and buttons. Open http://localhost:5173/design/ while `npm run dev` runs.
+**Core concept:** *Explore cheap, build once.* Plain HTML + CSS mockups cost minutes and touch nothing in the real app, so we can compare five directions side by side, pick one, and only then port it into React. The pages share one tiny script: the URL hash (`#call`, `#today`, `#activity`) picks which `<section>` is visible, and a fake call sets `body[data-state]` to listening, thinking or speaking. Each variant's CSS reacts to that one attribute, which is the same contract the real mascot will use (SPEC §6 states).
+**How it connects:** `koe.js` → `body[data-state]` → each variant's CSS (orb, rings, ensō, ASCII field, glowing eyes). When a variant is chosen, its tokens become `index.css` and the state attribute will be driven by the real call (`/ws/call` + `AnalyserNode`).
+**Try it yourself:** open the gallery, pick a variant, press Call and watch the mascot slot cycle through states; on Activity, press Approve. Resize to phone width: every page collapses to one column.
+**Gotchas:** Google Fonts' `text=` parameter downloads only the kanji we use (声響間言葉器霞), so the Japanese font stays tiny. The inspiration images in `frontend/assets/` are references only; one carries a stock watermark, so none are embedded in the pages.
+**Measured:** latency numbers on the pages are the real Step 9 and 10 measurements (p50 1.09 s first audio, 0.49 s barge-in). Everything else is sample data.
+**Interview line:** "I explored five visual directions as throwaway static mockups that share one state contract with the future mascot, then chose one before writing any React."
+
+## Step 12: tuning Gemini's end-of-speech detection (reverted)  (Phase 1 · 2026-10-12)
+**Files:** none kept. backend/koe/voice_call.py was changed, measured, and reverted.
+**What it does:** Nothing ships. This entry records an experiment so nobody repeats it blindly.
+**Core concept:** *Measure → change one thing → re-measure under the same conditions → keep only a real win.* Gemini Live lets you tune its VAD: `silence_duration_ms` (how much silence before it decides you're done; Google recommends 500–800 ms) and `end_of_speech_sensitivity` (HIGH = decide sooner). Faster end-pointing should cut latency, but too eager and Koe interrupts you when you pause to think. *Interleaving* (A, B, A, B… in the same minutes) makes network drift hit both configs equally; *paired wins* (did B beat A in the same round?) are more telling than comparing two medians.
+**Measured (direct to Gemini, scripted 2.28 s utterance; ledger):**
+| Experiment | default p50 | tuned (HIGH + 500 ms) p50 | tuned faster in | cut-ins |
+|---|---|---|---|---|
+| #1: 4 configs × 8 interleaved rounds | 1,542 ms | 1,402 ms | 8/8 rounds | 0 |
+| #2: repeat, 2 configs × 10 rounds | 1,429 ms | 1,496 ms | 5/10 rounds | 0 |
+(#1 also tried HIGH alone, p50 1,414, and 500 ms alone, p50 1,392; both 6/8.)
+**Verdict: reverted.** The 140 ms win in #1 didn't reproduce in #2: within noise. Gemini's own response time drifts ±150 ms between sessions, more than the effect. A neutral change still costs something (a more eager VAD can cut the user off), so it doesn't stay.
+**What this tells us:** Gemini itself takes ~1.4–1.55 s (voice end → first audio). The Koe backend metric reads ~1.7–1.8 s, so ~150–250 ms is added between the scripts and the backend, not yet explained (see Step 11). Next places to look: measure again on the Linux Azure VM in Phase 7 (Windows event loop and dev laptop vs prod), and have the browser measure the user-perceived number.
+**Interview line:** "I A/B-tested Gemini's VAD settings with interleaved runs. A 140 ms win didn't reproduce, so I reverted it and logged it rather than shipping noise."
