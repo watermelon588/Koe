@@ -3,10 +3,18 @@
 Browser sends mic audio as 16 kHz PCM16 LE chunks; Gemini replies with 24 kHz PCM16 LE.
 Gemini's server-side voice activity detection decides when you've stopped talking.
 Live API (Python SDK): https://ai.google.dev/gemini-api/docs/live-api/get-started-sdk
+
+Messages to the browser: binary = Koe's audio; text = JSON control events:
+  {"type": "interrupted"}        user talked over Koe: drop queued audio
+  {"type": "latency", "ms": 1093} you stopped speaking -> Koe's first audio, per turn
 """
 import asyncio
 import contextlib
 import logging
+import math
+import statistics
+import struct
+import time
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from google import genai
@@ -29,40 +37,88 @@ SYSTEM_PROMPT = (
 )
 CONFIG = {"response_modalities": ["AUDIO"], "system_instruction": SYSTEM_PROMPT}
 
+# ponytail: naive energy check to timestamp "user stopped speaking"; only used for the latency
+# metric (Gemini's own VAD drives the conversation). Ceiling: loud background noise counts as speech.
+VOICE_RMS = 500  # PCM16 units; browser noise suppression keeps silence far below this
 
-async def _mic_to_gemini(ws: WebSocket, session):
+
+def rms(pcm: bytes) -> float:
+    n = len(pcm) // 2  # ignore a stray odd byte rather than crash the call on bad input
+    samples = struct.unpack(f"<{n}h", pcm[: n * 2])
+    return math.sqrt(sum(s * s for s in samples) / len(samples)) if samples else 0.0
+
+
+def summarize(latencies_ms: list[int]) -> str:
+    if not latencies_ms:
+        return "no turns"
+    p95 = statistics.quantiles(latencies_ms, n=20)[18] if len(latencies_ms) > 1 else latencies_ms[0]
+    return f"{len(latencies_ms)} turns, p50 {statistics.median(latencies_ms):.0f} ms, p95 {p95:.0f} ms"
+
+
+class Turns:
+    """Per-call timing shared by the two relay tasks."""
+
+    def __init__(self):
+        self.last_voice: float | None = None  # when the last mic chunk with speech arrived
+        self.latencies_ms: list[int] = []
+
+
+async def _read_mic(ws: WebSocket, mic: asyncio.Queue, turns: Turns):
+    # Reading is decoupled from uploading: if the upload to Gemini stalls, chunks are still
+    # taken off the socket (and timestamped) on arrival, so the latency metric includes the stall.
     while True:
         pcm = await ws.receive_bytes()
+        if rms(pcm) > VOICE_RMS:
+            turns.last_voice = time.perf_counter()
+        mic.put_nowait(pcm)
+
+
+async def _upload_mic(mic: asyncio.Queue, session):
+    while True:
+        pcm = await mic.get()
         await session.send_realtime_input(audio=types.Blob(data=pcm, mime_type="audio/pcm;rate=16000"))
 
 
-async def _gemini_to_browser(ws: WebSocket, session):
+async def _gemini_to_browser(ws: WebSocket, session, turns: Turns):
     while True:  # session.receive() ends after each model turn, so loop for the next one
+        first_audio = True
         async for msg in session.receive():
             sc = msg.server_content
             if sc and sc.interrupted:
                 # User talked over Koe: tell the browser to drop queued audio (barge-in).
                 # https://ai.google.dev/gemini-api/docs/live-api/capabilities
                 await ws.send_json({"type": "interrupted"})
+                first_audio = True
             if sc and sc.model_turn:
                 for part in sc.model_turn.parts:
                     if part.inline_data:
                         await ws.send_bytes(part.inline_data.data)
+                        if first_audio and turns.last_voice is not None:
+                            ms = round((time.perf_counter() - turns.last_voice) * 1000)
+                            turns.latencies_ms.append(ms)
+                            log.info("turn latency: speech end -> first audio %d ms", ms)
+                            await ws.send_json({"type": "latency", "ms": ms})
+                        first_audio = False
 
 
 @router.websocket("/ws/call")
 async def call(ws: WebSocket):
     await ws.accept()
     client = genai.Client(api_key=settings.gemini_api_key)
+    turns = Turns()
+    mic: asyncio.Queue[bytes] = asyncio.Queue()
     try:
         async with client.aio.live.connect(model=LIVE_MODEL, config=CONFIG) as session:
-            # Both directions run at once; if either fails (e.g. user hangs up), the other is cancelled.
+            # All three run at once; if any fails (e.g. user hangs up), the others are cancelled.
             async with asyncio.TaskGroup() as tg:
-                tg.create_task(_mic_to_gemini(ws, session))
-                tg.create_task(_gemini_to_browser(ws, session))
+                tg.create_task(_read_mic(ws, mic, turns))
+                tg.create_task(_upload_mic(mic, session))
+                tg.create_task(_gemini_to_browser(ws, session, turns))
     except* WebSocketDisconnect:
         pass  # user hung up
     except* Exception as eg:
         log.exception("call failed")
         with contextlib.suppress(Exception):  # the browser may already be gone
             await ws.close(code=1011, reason=f"Gemini error: {eg.exceptions[0]}"[:120])
+    finally:
+        log.info("call ended: %s", summarize(turns.latencies_ms))

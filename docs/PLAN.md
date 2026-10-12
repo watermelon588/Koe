@@ -33,7 +33,7 @@
 - [x] Backend: `/ws/call` ⇄ Gemini Live session (system prompt only); relay audio both ways.
 - [x] Frontend playback: queue 24 kHz PCM chunks → speaker without gaps.
 - [x] Barge-in: on Gemini "interrupted", flush the playback queue.
-- [ ] Latency: timestamp speech-end and first-audio-out; print p50/p95 per call.
+- [x] Latency: timestamp speech-end and first-audio-out; print p50/p95 per call. (Backend p50 ≈ 1.7 s, n=16. Over the 1.5 s target; tuning next.)
 - [ ] Session resumption when Gemini sends a GoAway.
 **Done when:** a 3-minute natural conversation, interruptions work, p50 latency measured and written in BUILD_LOG.
 **Risk:** audio format bugs (sample rate, endianness) cause chipmunk or static sound. Test with a known sine wave first.

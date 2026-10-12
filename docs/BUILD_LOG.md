@@ -109,7 +109,7 @@ A plain-English learning journal. **One entry per step**, newest at the bottom. 
 **How it connects:** browser mic → `/ws/call` → Gemini Live → `/ws/call` → `player.ts`. Phase 2 adds tools to the same session config; Slice 4 handles Gemini's `interrupted` signal (barge-in).
 **Try it yourself:** http://localhost:5173 → Call → "Hi Koe, who are you?" (headphones recommended). Test: `uv run pytest -q`; the fake session proves chunks are forwarded with the right format label and that replies flow across several turns.
 **Gotchas:** A test run reported "first audio after 1 ms", which was too good to be true: the **old echo code** was still running because the reload had silently stalled. Checking suspicious numbers caught it. See Step 8 for the real cause (Windows Ctrl+C reload needs a console).
-**Measured:** scripted e2e (2.6 s of real speech streamed in real time, then silence), 3 calls: speech end → first audio **1,697 / 1,089 / 1,094 ms → p50 ≈ 1.09 s** (target ≤ 1.5 s). This includes VAD end-pointing. Too few samples to claim yet; Slice 5 measures real calls.
+**Measured:** scripted e2e (2.6 s of real speech streamed in real time, then silence), 3 calls: speech end → first audio **1,697 / 1,089 / 1,094 ms → p50 ≈ 1.09 s** (target ≤ 1.5 s). This includes VAD end-pointing. Too few samples to claim yet; Slice 5 measures real calls. **⚠️ Corrected in Step 11:** these were timed from the end of the *file*, which had 0.36 s of quiet after the voice, so they were about 0.4 s too optimistic. Real p50 ≈ 1.7 s.
 **Interview line:** "The call is a full-duplex relay: two concurrent asyncio tasks under a TaskGroup, so a hang-up or model error on either side tears down the other cleanly. First measurements put speech-end to first audio around 1.1 s."
 
 ## Step 10: barge-in, so you can interrupt Koe  (Phase 1 · Slice 4 · 2026-10-12)
@@ -121,3 +121,24 @@ A plain-English learning journal. **One entry per step**, newest at the bottom. 
 **Gotchas:** Use headphones: on speakers, Koe's own voice can leak into the mic and "interrupt" itself, although the browser's echo cancellation usually prevents this.
 **Measured:** real Gemini, scripted (speak → wait for 0.5 s of Koe's reply → talk over it), 3 runs: `interrupted` arrives **459 / 489 / 516 ms** after you start talking. That's Gemini's VAD needing about half a second of speech to be sure; the local flush after that is effectively instant.
 **Interview line:** "Barge-in needed a client-side flush, because the model streams audio faster than real time and the browser holds a backlog. A control frame on the same socket stops every scheduled buffer, and interruption lands in about 0.5 s."
+
+## Step 11: measuring latency honestly  (Phase 1 · Slice 5 · 2026-10-12)
+**Files:** backend/koe/voice_call.py (per-turn latency, call summary, `latency` event, mic reader/uploader split, odd-byte guard) · backend/tests/test_voice_call.py (latency events, `rms`, `summarize`)
+**What it does:** For every turn the backend logs `turn latency: speech end -> first audio N ms`, sends `{"type":"latency","ms":N}` to the browser (for the UI), and when the call ends logs `call ended: X turns, p50 …, p95 …`.
+**Core concept:** *Measuring "you stopped talking".* Gemini decides end-of-speech internally and doesn't tell us when, so the backend runs its own tiny *energy detector*: the **RMS** (root mean square, roughly "loudness") of each 40 ms mic chunk. Chunks above 500 count as voice; the last voiced chunk's arrival time is "speech end", and the first audio of Koe's next turn closes the measurement. *p50 / p95:* the median turn, and the turn that 95% of turns are faster than. p95 catches the bad moments users remember.
+**How it connects:** mic reader → timestamps voice → queue → uploader → Gemini … → first audio → latency event → browser (the UI agent can show it).
+**Debugging story (worth rereading):**
+1. The first numbers disagreed between my test script (end of *file*) and the backend (end of *voice*). The test WAV had **0.36 s of quiet after the voice**, so the script, and my earlier Slice 3 "1.09 s" claim, were about 0.4 s too optimistic. Corrected.
+2. One call took 7.7 s while the backend reported 3.1 s. Cause: the relay read a mic chunk and then *waited for the upload to Gemini* before reading the next. When the upload stalled (the internet was dropping: `getaddrinfo failed`), mic chunks piled up unread and the latency clock started late, **hiding the stall**. Fix: a **reader** task timestamps chunks on arrival and puts them on an `asyncio.Queue`; a separate **uploader** task drains it to Gemini. Three tasks now run under one TaskGroup.
+3. A test sent a 5-byte message, and `rms()` crashed the whole call. Untrusted input must not kill a call, so odd bytes are now ignored.
+4. A remaining 50–265 ms difference between script and backend is unexplained (part of it is the script's own 40 ms send pacing). The true user-perceived number should come from the browser.
+**Try it yourself:** make a call, then read the backend terminal: one `turn latency` line per answer, and a `call ended` summary when you hang up.
+**Measured (2026-10-12, scripted 2.3 s utterance, real Gemini, localhost):**
+| What | p50 | n |
+|---|---|---|
+| Gemini direct (no Koe backend) | 1,551 ms | 1 |
+| Koe backend metric | ~1,700 ms (1,535–2,147) | 16 |
+| Test client end to end | ~1,850 ms | 16 |
+| SPEC target | ≤ 1,500 ms | |
+So we're **≈0.2–0.35 s over target**, mostly in Gemini's end-of-speech wait plus first-audio generation. Next lever: tune Gemini's VAD end-of-speech settings, then re-measure.
+**Interview line:** "I instrumented speech-end → first-audio per turn, found my own test was 0.4 s optimistic and that a blocking relay hid upstream stalls from the metric, fixed both, and reported p50 1.7 s against a 1.5 s target instead of the flattering number."
