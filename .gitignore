@@ -1,0 +1,17 @@
+# secrets — never commit (CLAUDE.md)
+.env
+credentials.json
+token.json
+
+# runtime data
+koe.db
+*.db-journal
+
+# python
+.venv/
+__pycache__/
+.pytest_cache/
+
+# node
+node_modules/
+dist/
