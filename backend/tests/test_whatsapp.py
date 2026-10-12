@@ -52,7 +52,7 @@ def test_only_allow_listed_senders_get_through(client):
 
 def test_post_checks_signature_and_hands_messages_off(client, monkeypatch):
     handled = []
-    monkeypatch.setattr(whatsapp, "handle_message", handled.append)
+    monkeypatch.setattr(whatsapp, "handle_message", lambda msg, received=None: handled.append(msg))
     body = json.dumps(meta_payload(ME, "15550001111")).encode()
     sig = "sha256=" + hmac.new(b"appsecret", body, hashlib.sha256).hexdigest()
 

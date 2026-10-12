@@ -8,6 +8,8 @@
 
 > **Next slice built: Phase 3 live dashboard (2026-10-12).** At the user's request, implementation continued while credentials are deferred. Authenticated events, real read panels, activity, original-call approval controls and measured latency display are implemented. Local tests and isolated browser fixtures verify the wiring; real account data and an approved booking still await Phase 2 setup.
 
+> **Phase 5 conversation built (2026-10-13).** WhatsApp text and voice notes run through the shared text agent and get replies; proposals carry Confirm/Cancel buttons; latency stages are logged. Verified with a faked Meta API plus real Gemini (transcription and replies). Real sending still waits on Meta business verification.
+
 > **Phase 4 implementation built (2026-10-13).** PR summaries, shipped history, Notion daily log, approved PR comments and approved Sheets entries are implemented and tested with fake APIs. Live acceptance remains pending; credentials can be added later using [PHASE4_SETUP.md](PHASE4_SETUP.md).
 
 ## Overview
@@ -71,12 +73,12 @@ Implementation is verified locally against simulated API boundaries; live accept
 **Done when:** "What did I ship today?" gives a correct list and writes the Notion log; "Summarize #42" is accurate on a real PR.
 
 ## Phase 5: WhatsApp + GitHub alerts
-- [x] `/webhooks/whatsapp`: GET verify, POST signature check, 200 fast, background processing, sender allow-list. (Inbound messages are only logged until Phase 2's text loop exists.)
-- [ ] Voice note: media download → Gemini with audio → agent core (text loop) → reply.
-- [ ] Interactive Confirm/Cancel buttons → resolve pending actions.
+- [x] `/webhooks/whatsapp`: GET verify, POST signature check, 200 fast, background processing, sender allow-list, one message at a time per sender.
+- [x] Voice note: media download → Gemini transcription → agent core (text loop) → reply. Text messages use the same path; per-sender history (in memory).
+- [x] Interactive Confirm/Cancel buttons → resolve pending actions (button id `approve:<id>` / `reject:<id>` → `agent.confirm`).
 - [x] `/webhooks/github`: signature, dedupe, 4 alert rules (SPEC §4) → WhatsApp. (Real sends blocked by Meta, see SERVICES_AND_COSTS; dedupe is in memory until `store.py`.)
 - [ ] Submit the `koe_alert` template to Meta (blocked: business verification).
-- [ ] WhatsApp latency stages logged.
+- [x] WhatsApp latency stages logged (`received → media_downloaded → transcribed → model_done → reply_sent`, ms, to the log and activity store).
 **Done when:** a voice note books a meeting in about 3–4 s end to end; a failing CI run on the test repo triggers a WhatsApp alert.
 
 ## Phase 6: shared memory

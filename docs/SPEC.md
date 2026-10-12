@@ -120,7 +120,7 @@ Alerts outside the 24-hour WhatsApp window use one approved **template** (`koe_a
 ## 8. Latency instrumentation
 Every turn records timestamps, stored in `activity` and shown on the dashboard:
 - **Web call:** `user_speech_end → first_audio_out` (headline metric), plus `tool_start/tool_end` for each tool.
-- **WhatsApp:** `webhook_received → media_downloaded → model_done → tools_done → reply_sent`.
+- **WhatsApp:** `webhook_received → media_downloaded → transcribed → model_done (includes tools) → reply_sent`; a button tap logs `tools_done → reply_sent`.
 
 ## 9. Limits and safety
 - Max call length is set by Gemini Live's free-tier session cap. Use session resumption to continue transparently.

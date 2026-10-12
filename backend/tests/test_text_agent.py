@@ -62,3 +62,12 @@ def test_shipped_then_log_sequence_returns_actual_tool_results(monkeypatch):
 def test_approval_result_copy_covers_non_calendar_writes():
     assert text_agent.approval_text({'status': 'executed', 'tool': 'github_comment', 'title': 'Comment on me/app#42'}).startswith('Saved: Comment')
     assert text_agent.approval_text({'status': 'rejected'}) == 'Cancelled. Nothing was changed.'
+
+
+def test_a_busy_model_is_reported_as_busy_not_as_a_failure():
+    from google.genai import errors
+    async def generate_content(**kwargs):
+        raise errors.ServerError(503, {"error": {"code": 503, "message": "high demand", "status": "UNAVAILABLE"}})
+    client = SimpleNamespace(aio=SimpleNamespace(models=SimpleNamespace(generate_content=generate_content)))
+    result = asyncio.run(text_agent.chat("hi", [], agent.Conversation("cli"), client))
+    assert result["text"].startswith("Gemini is busy")

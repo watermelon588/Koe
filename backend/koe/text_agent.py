@@ -1,13 +1,16 @@
 """A bounded Gemini text/tool loop shared by the CLI, future WhatsApp and evals.
 https://ai.google.dev/gemini-api/docs/function-calling
 """
+import logging
+
 from google import genai
-from google.genai import types
+from google.genai import errors, types
 
 from koe import agent, store
 from koe.config import settings
 
 MAX_TOOL_ROUNDS = 8
+log = logging.getLogger("koe.text_agent")
 
 
 def approval_text(result: dict) -> str:
@@ -61,6 +64,12 @@ async def chat(text: str, history: list, context: agent.Conversation, client: ge
                 result = await agent.run_tool(fc.name, fc.args, context=context)
                 parts.append(types.Part(function_response=types.FunctionResponse(name=fc.name, id=fc.id, response=result)))
             history.append(types.Content(role="user", parts=parts))
+    except errors.APIError as exc:
+        log.warning("model call failed: %s %s", exc.code, exc.status)
+        if exc.code in {429, 503}:  # free-tier rate limit or "high demand": temporary, say so
+            return _reply("Gemini is busy right now. Please try again in a minute. No approval was inferred.", context)
+        return _reply("The model could not complete this turn. No approval was inferred.", context)
     except Exception:
+        log.exception("text turn failed")
         return _reply("The model could not complete this turn. No approval was inferred.", context)
     return _reply("Stopped after eight tool rounds. Please narrow the request.", context)
