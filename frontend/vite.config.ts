@@ -4,4 +4,9 @@ import { defineConfig } from 'vite'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
+  server: {
+    // Dev only: the browser talks to :5173, Vite forwards /ws/* to the backend.
+    // https://vite.dev/config/server-options#server-proxy
+    proxy: { '/ws': { target: 'ws://localhost:8000', ws: true } },
+  },
 })

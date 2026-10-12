@@ -24,4 +24,5 @@ Add a row for every decision that changes scope, stack or behavior. Newest at th
 | 2026-10-12 | **Start Phase 1 before Google OAuth is set up** | Phase 1 only needs Gemini Live (verified); Calendar isn't used until Phase 2 | Block Phase 1 on every smoke test passing |
 | 2026-10-12 | Keep **WhatsApp**; Rohit adds funds to Meta (exception to "no card" for this one service) | User choice over Telegram / web-only | Telegram bot, web app only |
 | 2026-10-12 | ⚠️ Funds added (₹100), but WhatsApp still blocked: Meta requires **business verification** | Evidence in SERVICES_AND_COSTS.md. Next step pending a user decision; doesn't block Phases 1–4 | — |
+| 2026-10-12 | **WhatsApp parked**; continue Phase 1 | User will sort out Meta business verification (or switch to Telegram) later. Phases 1–4 don't need it | Block on WhatsApp now |
 | _pending_ | Mascot design + name | Decide at the start of Phase 3 | — |
