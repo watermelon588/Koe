@@ -62,3 +62,12 @@ A plain-English learning journal. **One entry per step**, newest at the bottom. 
 **Measured (2026-10-12, first real run):** Gemini Live `gemini-3.8-live` **first audio 0.85 s** after a text prompt (2.6 s of speech) ✅ free tier works · GitHub ✅ · `gemini-3.5-flash-lite` text 2.09 s ✅ · `gemini-3.8-flash` returned **503 "high demand"** and the SDK's retries made the script hang more than 60 s. The key is fine; the model was overloaded. That's real evidence for the rate-limit plan: Phase 2 needs a short timeout + fallback to Flash-Lite.
 **Gotcha found:** printing `→` crashed on the Windows console (cp1252 encoding), so the script output is plain ASCII now.
 **Interview line:** "Before writing features, I proved every external dependency with a one-command smoke test, built from the official docs, not memory."
+
+## Step 5: all service keys verified except Google  (Phase 0 · 2026-10-12)
+**Files:** backend/scripts/smoke.py (Graph API v23.0 → v25.0) · backend/.env (filled by Rohit, git-ignored)
+**What it does:** Ran the smoke tests with real keys: GitHub ✅ (`watermelon588`) · Notion ✅ (integration "koe") · WhatsApp ✅ (`hello_world` template accepted from the test number +1 555-653-7747 to your phone) · Gemini Live ✅ (0.85 s first audio). Google Calendar/Sheets is pending `credentials.json`.
+**Core concept:** *Accepted ≠ delivered.* WhatsApp's API returns a message ID as soon as it *accepts* the message. Whether it was *delivered* arrives later as a status webhook (Phase 5). The smoke test proves the token and IDs are right; your phone proves delivery.
+**How it connects:** Phase 5 sends replies and alerts with this same `POST /{phone-number-id}/messages` call.
+**Try it yourself:** `uv run python -m scripts.smoke github notion whatsapp` from backend/.
+**Gotchas:** The Meta dashboard showed Graph **v25.0** while the docs page said v23.0, so we went with the dashboard. The temporary WhatsApp token expires soon; Phase 5 replaces it with a permanent system-user token. Free-form text only works within 24 h of your last message to the test number; templates work any time.
+**Interview line:** "I verified every third-party credential with a one-command smoke test before writing features, so later failures can't be blamed on setup."

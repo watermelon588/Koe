@@ -4,7 +4,7 @@
 **Difficulty:** about 7/10. Hardest parts: real-time audio streaming and barge-in, time/timezone correctness, Google OAuth quirks, Meta setup.
 **Rule:** every phase ends with a working, demoable slice, verified, logged in BUILD_LOG.md, and committed.
 
-> **Current phase: Phase 0 (in progress, started 2026-10-12).** Update this line as you go.
+> **Current phase: Phase 1 (started 2026-10-12).** Phase 0 done 2026-10-12, except Google OAuth (carried over, needed before Phase 2). Update this line as you go.
 
 ## Overview
 | Phase | Week | Goal | Demo when done |
@@ -19,7 +19,7 @@
 | 7 | W4 d3–7 | Evals, deploy (Azure + Vercel), README, demo video | Accuracy and latency numbers in the README; works with the laptop off |
 
 ## Phase 0: setup
-- [ ] Create accounts and keys (SERVICES_AND_COSTS.md, "Accounts the user creates"). Gemini ✅ · Google OAuth, Notion, GitHub, WhatsApp to do.
+- [ ] Create accounts and keys (SERVICES_AND_COSTS.md, "Accounts the user creates"). Gemini ✅ · GitHub ✅ · Notion ✅ · WhatsApp ✅ · **Google OAuth `credentials.json`: carried over to before Phase 2.**
 - [x] `git init`, `.gitignore` (`.env`, `credentials.json`, `token.json`, `koe.db`, `node_modules`, `.venv`).
 - [x] Backend scaffold: `uv init`, deps from TECH_STACK.md, `koe/main.py` with `/health`, `config.py`, `.env.example`.
 - [x] Frontend scaffold: `npm create vite@latest frontend -- --template react-ts`.

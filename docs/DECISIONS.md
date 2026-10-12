@@ -21,4 +21,5 @@ Add a row for every decision that changes scope, stack or behavior. Newest at th
 | 2026-10-12 | **Python 3.13** (not 3.12) | Already installed; all deps resolve on it; `requires-python >=3.12` | Download a uv-managed 3.12 |
 | 2026-10-12 | Models: **`gemini-3.8-live`** (call), **`gemini-3.8-flash`** (WhatsApp, PR summaries) | Current stable + free tier per official docs; 2.5 is closed to new users | `gemini-3.8-live-extended-thinking` (adds reasoning delay), 2.5 native-audio |
 | 2026-10-12 | Phase 0 smoke tests are **one script** (`backend/scripts/smoke.py`) with a function per service, skipping services with no keys | One command to re-check everything; fewer files | Five separate scripts |
+| 2026-10-12 | **Start Phase 1 before Google OAuth is set up** | Phase 1 only needs Gemini Live (verified); Calendar isn't used until Phase 2 | Block Phase 1 on every smoke test passing |
 | _pending_ | Mascot design + name | Decide at the start of Phase 3 | — |
