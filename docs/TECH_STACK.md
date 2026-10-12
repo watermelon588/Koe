@@ -16,7 +16,7 @@ Everything here is free and needs no credit card. Adding anything not on this pa
 ## Backend
 | Tech | Use | Why |
 |---|---|---|
-| **Python 3.12 + `uv`** | Language + package manager | Best AI/Google/Notion libraries; `uv` is already installed |
+| **Python 3.13 + `uv`** | Language + package manager | Best AI/Google/Notion libraries; `uv` is already installed (3.13 was already on the laptop; `requires-python >=3.12`) |
 | **FastAPI + `uvicorn`** | HTTP routes, webhooks, **WebSockets** | Async, native WebSocket support, so no second server is needed |
 | **`google-genai`** (official Google Gen AI SDK) | Gemini Live (web call) + Gemini (WhatsApp, PR summaries) | Official SDK for both the Live API and regular calls |
 | **`httpx`** | Calls to GitHub, Notion, WhatsApp APIs | Async HTTP client; one client for all REST APIs |
