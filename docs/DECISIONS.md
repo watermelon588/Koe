@@ -22,4 +22,6 @@ Add a row for every decision that changes scope, stack or behavior. Newest at th
 | 2026-10-12 | Models: **`gemini-3.8-live`** (call), **`gemini-3.8-flash`** (WhatsApp, PR summaries) | Current stable + free tier per official docs; 2.5 is closed to new users | `gemini-3.8-live-extended-thinking` (adds reasoning delay), 2.5 native-audio |
 | 2026-10-12 | Phase 0 smoke tests are **one script** (`backend/scripts/smoke.py`) with a function per service, skipping services with no keys | One command to re-check everything; fewer files | Five separate scripts |
 | 2026-10-12 | **Start Phase 1 before Google OAuth is set up** | Phase 1 only needs Gemini Live (verified); Calendar isn't used until Phase 2 | Block Phase 1 on every smoke test passing |
+| 2026-10-12 | Keep **WhatsApp**; Rohit adds funds to Meta (exception to "no card" for this one service) | User choice over Telegram / web-only | Telegram bot, web app only |
+| 2026-10-12 | ⚠️ Funds added (₹100), but WhatsApp still blocked: Meta requires **business verification** | Evidence in SERVICES_AND_COSTS.md. Next step pending a user decision; doesn't block Phases 1–4 | — |
 | _pending_ | Mascot design + name | Decide at the start of Phase 3 | — |
