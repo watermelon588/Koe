@@ -71,3 +71,13 @@ A plain-English learning journal. **One entry per step**, newest at the bottom. 
 **Try it yourself:** `uv run python -m scripts.smoke github notion whatsapp` from backend/.
 **Gotchas:** The Meta dashboard showed Graph **v25.0** while the docs page said v23.0, so we went with the dashboard. The temporary WhatsApp token expires soon; Phase 5 replaces it with a permanent system-user token. Free-form text only works within 24 h of your last message to the test number; templates work any time.
 **Interview line:** "I verified every third-party credential with a one-command smoke test before writing features, so later failures can't be blamed on setup."
+
+## Step 6: debugging "WhatsApp message never arrived"  (Phase 0 · 2026-10-12)
+**Files:** none in the repo (a throwaway webhook logger in the scratch folder + a cloudflared tunnel) · docs/SERVICES_AND_COSTS.md
+**What it does:** Found out why no WhatsApp message reached the phone, using evidence instead of guesses.
+**Core concept:** *Accepted ≠ delivered.* The send API only says "accepted"; delivery results (`sent`/`delivered`/`failed` + error code) come later through a **webhook**. To see them we needed: a public URL (cloudflared) → a tiny listener that answers Meta's verify handshake (`hub.challenge`) → the app subscribed to the "messages" field → **and** the WhatsApp Business Account subscribed to *our* app (it was only subscribed to Meta's internal dashboard app, so nothing arrived at first). Then the **Health Status API** gave the root cause.
+**How it connects:** This is a preview of Phase 5's `/webhooks/whatsapp`: same handshake, same payload shape.
+**Debug trail:** dashboard test not delivered → our template not delivered → phone `CONNECTED`/`GREEN`, token valid, `hello_world` APPROVED → webhook shows `failed 131031 Business Account locked` → Health Status: WABA BLOCKED, **141006 payment method** → user sends "test": inbound ✅ → free text reply inside the 24 h window ❌ also 131031.
+**Measured:** inbound works; 0 of 4 outbound messages delivered.
+**Gotchas:** The block applies even to free messages. Without a card, this WhatsApp account can listen but never speak.
+**Interview line:** "Our sends returned 200, but nothing arrived. I stood up a webhook to read the real delivery status, found error 131031, and traced it via the Health Status API to a billing block on the account, then re-planned the channel instead of guessing."

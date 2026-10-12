@@ -9,7 +9,7 @@
 | GitHub API + webhooks | Core feature | ✅ | No | API rate limit 5,000 req/h with a token, which is plenty |
 | Google Calendar + Sheets API | Scheduling, timesheet | ✅ | No | OAuth app in **Testing** mode: refresh tokens may expire after **7 days**, so re-login weekly (or publish the app later) |
 | Notion API | Daily dev log | ✅ | No | Share the database with the integration, or it can't see it |
-| Meta WhatsApp Cloud API | Mobile channel + alerts | ✅ with the **test number** | No | Only up to **5 registered recipients**. Custom templates need Meta approval. From **Oct 1, 2026** service replies are reportedly billable beyond about 1,000 free/month/number (sources disagree), so we're far below that. **Business-initiated *calls* are paid**, so we don't use them |
+| Meta WhatsApp Cloud API | Mobile channel + alerts | ❌ **Blocked without a card (verified 2026-10-12)** | **Effectively yes** | Only up to **5 registered recipients**. Custom templates need Meta approval. From **Oct 1, 2026** service replies are reportedly billable beyond about 1,000 free/month/number (sources disagree), so we're far below that. **Business-initiated *calls* are paid**, so we don't use them |
 | Groq (fallback only) | Whisper STT + LLM if Gemini blocks us | ✅ | No | Daily request and audio caps |
 | cloudflared quick tunnel | Dev webhooks | ✅ | No account | URL changes every run, so update the webhook URLs |
 | Vercel | Frontend hosting | ✅ Hobby | No | Fine for a static React app; no WebSockets server, which we don't need there |
@@ -33,6 +33,14 @@ The backend must be **always on**: GitHub webhooks time out after about 10 s and
 | **Azure for Students** | **No** | ✅ Small Linux VM, always on, persistent disk, free DNS name `*.cloudapp.azure.com`, Caddy for free HTTPS. Covered by the free 12-month services and/or the $100 credit. **Confirm the VM size and cost in Azure's pricing calculator at signup** |
 
 Development (Phases 1–6) runs on the laptop + cloudflared at ₹0. Azure is needed only for Phase 7.
+
+## WhatsApp: verified blocked without a payment method (2026-10-12)
+Measured on our own account, not taken from a blog:
+- Incoming messages (user → test number) ✅ arrive by webhook.
+- **Every outgoing message fails**, templates *and* free service replies inside the 24 h window: status `failed`, error **131031 "Business Account locked"**.
+- Health Status API (`GET /{phone-number-id}?fields=health_status`): WABA `can_send_message: BLOCKED`, error **141006 "There is an error with the payment method. This will block business initiated conversations."** Business: 141010 (not verified, LIMITED).
+- Official pricing says service (non-template) messages are free (https://developers.facebook.com/documentation/business-messaging/whatsapp/pricing). The block is about having *no payment method on file*, not about price. The earlier claim that service replies become billable on Oct 1, 2026 is **not** on the official page (that date is only rate updates for a few other countries).
+- Debugging lessons: (1) the API's `200 accepted` ≠ delivered; the real result only arrives by status webhook. (2) The WABA must be subscribed to *our* app (`POST /{waba-id}/subscribed_apps`), or no webhooks arrive.
 
 ## Verified Gemini facts (2026-10-12, official pages)
 | Fact | Value | Source |
