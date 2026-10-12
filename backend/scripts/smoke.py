@@ -68,7 +68,7 @@ def live():
             w.setnchannels(1), w.setsampwidth(2), w.setframerate(24000)
             w.writeframes(audio)
         secs = len(audio) / 2 / 24000
-        return f"{LIVE_MODEL}: first audio after {first:.2f}s, {secs:.1f}s of speech → play {out}"
+        return f"{LIVE_MODEL}: first audio after {first:.2f}s, {secs:.1f}s of speech, play {out}"
 
     return asyncio.run(run())
 
