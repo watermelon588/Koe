@@ -20,6 +20,7 @@ Sources: [Neon storage update](https://neon.com/blog/neon-free-plan-1-gb-per-pro
 | Meta WhatsApp Cloud API | Mobile channel + alerts | ❌ **Blocked without a card (verified 2026-10-12)** | **Effectively yes** | Only up to **5 registered recipients**. Custom templates need Meta approval. From **Oct 1, 2026** service replies are reportedly billable beyond about 1,000 free/month/number (sources disagree), so we're far below that. **Business-initiated *calls* are paid**, so we don't use them |
 | Groq (fallback only) | Whisper STT + LLM if Gemini blocks us | ✅ | No | Daily request and audio caps |
 | cloudflared quick tunnel | Dev webhooks | ✅ | No account | URL changes every run, so update the webhook URLs |
+| Render free | Backend hosting (**temporary**, from `render.yaml`) | ✅ Free plan | No | Sleeps after 15 min idle (about 1 min to wake); disk wiped on deploy/restart/sleep (app chat history, voice notes and push subscriptions reset; Neon data survives); 750 instance hours/month. See DEPLOY.md |
 | Vercel | Frontend hosting | ✅ Hobby | No | Fine for a static React app; no WebSockets server, which we don't need there |
 | **Azure for Students** | Backend hosting (prod) | ✅ **$100 credit + 12 months of free services**, renewable yearly while a student | **No** | Must be a full-time university student; verify with college email or the GitHub Student Pack |
 
@@ -29,6 +30,8 @@ Sources: [Neon storage update](https://neon.com/blog/neon-free-plan-1-gb-per-pro
 Voice agents are usually expensive because they chain three paid services: speech-to-text, an LLM and text-to-speech, together about $0.07–0.25/min at market rates. We use **one speech-to-speech model (Gemini Live) on its free tier** instead. It's lower latency *and* free, within rate limits, for a single user.
 
 ## Hosting: why Azure and not Render
+**Update 2026-10-13:** the backend runs on Render free **for now**, to get a stable HTTPS URL for the frontend and the webhooks before Azure is set up. The limits below still apply, which is why Azure stays the Phase 7 target. Steps: [DEPLOY.md](DEPLOY.md).
+
 The backend must be **always on**: GitHub webhooks time out after about 10 s and aren't retried automatically, WhatsApp messages would be delayed, and the live call needs a persistent WebSocket.
 
 | Option | Card? | Verdict |

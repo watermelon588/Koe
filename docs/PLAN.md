@@ -101,6 +101,8 @@ Implementation is verified locally against simulated API boundaries; live accept
 - [ ] `evals/cases.yaml`: about 40 requests (normal + tricky: clashes, "next Tuesday", timezones, ambiguous names, PR questions) against the test calendar and test repo.
 - [ ] `evals/run.py`: tool-choice accuracy, argument correctness, end-state checks, latency → `evals/report.md` + chart.
 - [ ] Replace development token entry with owner-only provider sign-in and secure sessions across HTTP and WebSockets; verify expiry, logout and rejection of other accounts (AUTH_FLOW.md).
+- [x] Temporary hosting: backend on Render free (`render.yaml`), frontend on Vercel (DEPLOY.md). Webhooks get stable URLs.
+- [ ] Move the app chat (messages, voice notes, push subscriptions) from SQLite to Neon, so it survives Render's disk wipes.
 - [ ] Deploy: Azure for Students VM (uvicorn + systemd + Caddy), Vercel frontend, update webhook URLs.
 - [ ] README: problem, demo GIF/video, architecture diagram, metrics, setup, limits.
 - [ ] Demo video (the `brag` skill can help).

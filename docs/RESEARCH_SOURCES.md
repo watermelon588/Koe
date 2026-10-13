@@ -55,7 +55,8 @@ Links behind the claims in these docs, gathered 2026-10-03 to 2026-10-12. Many a
 - Groq free tier: https://www.eesel.ai/blog/groq-pricing
 - Deepgram $200 credit: https://costbench.com/software/ai-transcription-apis/deepgram/free-plan/
 - WhatsApp pricing and the Oct 2026 change: https://www.wati.io/en/blog/whatsapp-api-pricing-guide/ · https://github.com/robhunter/agentdeals/issues/2671 · https://sleekflow.io/blog/whatsapp-business-price
-- Render free tier: https://render.com/articles/platforms-with-a-real-free-tier-for-developers-in-2026 · https://agentdeals.dev/vendor/render
+- Render free tier: https://render.com/articles/platforms-with-a-real-free-tier-for-developers-in-2026 · https://agentdeals.dev/vendor/render · https://render.com/docs/free
+- Render deploy (2026-10-13): Blueprint spec https://render.com/docs/blueprint-spec · Python version + uv https://render.com/docs/python-version · secret files https://render.com/docs/configure-environment-variables · WebSockets https://render.com/docs/websocket
 - No-card hosting comparisons: https://snapdeploy.dev/blog/free-backend-hosting-2026-apis-servers · https://zizme.com/8-best-free-backend-deployment-platforms-in-2026-no-card-heroku-alternatives
 - Heroku student offer (needs card): https://www.heroku.com/github-students/
 

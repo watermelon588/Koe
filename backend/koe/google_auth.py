@@ -44,7 +44,10 @@ def credentials(required_scopes: list[str] | None = None) -> Credentials:
                 if not creds.refresh_token:
                     raise GoogleAuthError("Google consent expired. Run: python -m scripts.google_auth --reauthorize")
                 creds.refresh(Request())
-                save_token(creds)
+                try:
+                    save_token(creds)
+                except OSError:  # read-only token file (Render secret file): refresh again next time
+                    pass
             return creds
         except GoogleAuthError:
             raise

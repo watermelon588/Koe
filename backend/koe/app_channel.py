@@ -203,7 +203,10 @@ async def decide(action_id: str, body: Decision):
 # ── Push notifications ────────────────────────────────────────────────────────────────────────────
 
 def vapid() -> Vapid02:
-    """The server's push identity, generated once and kept in backend/data (losing it means re-subscribing)."""
+    """The server's push identity: VAPID_PRIVATE_KEY, else generated once into backend/data.
+    Losing it means every device must turn notifications on again."""
+    if settings.vapid_private_key:
+        return Vapid02.from_string(settings.vapid_private_key)
     path = DATA / "vapid.pem"
     if not path.exists():
         DATA.mkdir(parents=True, exist_ok=True)

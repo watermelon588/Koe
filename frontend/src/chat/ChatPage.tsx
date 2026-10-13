@@ -3,6 +3,7 @@ import { BellRinging, GearSix, Microphone, PaperPlaneRight, Pause, Phone, Play, 
 import { mascotProfile, type MascotId } from '../mascot/catalog'
 import { api, AuthError, saveToken, type Message } from './api'
 import { record } from './recorder'
+import { resendPush } from '../pwa'
 import './chat.css'
 
 // The Koe app's home on the phone (SPEC §14): a WhatsApp-style chat with Koe. Text or voice notes; Koe answers a
@@ -36,7 +37,7 @@ export function ChatPage({ model }: { model: MascotId }) {
     }
   }, [fail])
 
-  useEffect(() => { void load(0) }, [load])
+  useEffect(() => { void load(0); resendPush().catch(() => {}) }, [load])
   // New messages while the app is open: the service worker pings us on push; also re-check on return to the app.
   useEffect(() => {
     const onPush = (e: MessageEvent) => { if (e.data?.type === 'koe-refresh') void load(lastId) }

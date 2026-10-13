@@ -64,6 +64,13 @@ export async function enablePush(): Promise<void> {
   await api.subscribe(sub.toJSON())
 }
 
+// The backend may have forgotten this phone (Render free wipes its disk on restart): tell it again on every open.
+export async function resendPush(): Promise<void> {
+  if ((await pushState()) !== 'on') return
+  const sub = await (await navigator.serviceWorker.ready).pushManager.getSubscription()
+  if (sub) await api.subscribe(sub.toJSON())
+}
+
 export async function disablePush(): Promise<void> {
   const reg = await navigator.serviceWorker.ready
   await (await reg.pushManager.getSubscription())?.unsubscribe()

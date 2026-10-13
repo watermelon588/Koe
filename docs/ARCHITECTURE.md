@@ -132,9 +132,10 @@ Keep it flat. Split a file only when it passes about 400 lines, and log the spli
 | Stage | Backend | Frontend | Public URL for webhooks |
 |---|---|---|---|
 | Dev (Phases 1–6) | Laptop, `uvicorn --reload` | `npm run dev` | `cloudflared` quick tunnel (URL changes per run; update Meta/GitHub webhook URLs) |
+| Now (temporary) | **Render free** web service from `render.yaml` (sleeps when idle, disk wiped) | **Vercel** free | `https://<backend>.onrender.com` (stable). Steps: [DEPLOY.md](DEPLOY.md) |
 | Prod (Phase 7) | **Azure for Students** small Linux VM: `uvicorn` under `systemd`, **Caddy** for automatic HTTPS on the free `*.cloudapp.azure.com` DNS name | **Vercel** free | The VM's HTTPS URL (stable) |
 
-Why not Render free: it sleeps after 15 min idle (about 1 min cold start), the filesystem is wiped on restart (local Google credential files would need secure reprovisioning), WebSocket support on free is disputed, and GitHub webhooks (10 s timeout, no auto-retry) would be lost. See SERVICES_AND_COSTS.md.
+Render free is the temporary host (2026-10-13), chosen for a stable HTTPS URL today. Its WebSockets work over `wss` (https://render.com/docs/websocket). Its limits are why it isn't the final host: it sleeps after 15 min idle (about 1 min cold start), the filesystem is wiped on restart (local Google credential files would need secure reprovisioning), WebSocket support on free is disputed, and GitHub webhooks (10 s timeout, no auto-retry) would be lost. See SERVICES_AND_COSTS.md.
 
 ## 9. Security (minimal but real)
 - Webhook signature verification (Meta + GitHub).

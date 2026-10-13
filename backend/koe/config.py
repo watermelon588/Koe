@@ -37,6 +37,9 @@ class Settings(BaseSettings):
     gemini_text_model: str = "gemini-3.8-flash"
     # Web Push asks every sender for a contact (mailto: or https:), shown only to push services.
     koe_push_contact: str = "mailto:koe@example.com"
+    # The push identity (base64url private key, from scripts.vapid_key). Set it on hosts whose disk is wiped
+    # (Render free); empty = generate backend/data/vapid.pem once and reuse it.
+    vapid_private_key: str = Field(default="", repr=False)
     # Browser origins allowed to call the API cross-origin (comma-separated), e.g. https://koe.vercel.app.
     # Empty = same origin only (local dev through the Vite proxy).
     frontend_origins: str = ""

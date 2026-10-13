@@ -14,6 +14,7 @@
 | 5 | [docs/SERVICES_AND_COSTS.md](docs/SERVICES_AND_COSTS.md) | Free tiers, their catches, hosting plan (budget is ₹0) |
 | 6 | [docs/PLAN.md](docs/PLAN.md) | Phases, timeline, the current phase |
 | 7 | [docs/SKILLS.md](docs/SKILLS.md) | Which Claude Code skills to load for which work |
+| — | [docs/DEPLOY.md](docs/DEPLOY.md) | Hosting: Render backend, Vercel frontend, webhooks, local cloudflared |
 | — | [docs/BUILD_LOG.md](docs/BUILD_LOG.md) | Learning journal: append an entry for every step |
 | — | [docs/DECISIONS.md](docs/DECISIONS.md) | Decision log |
 | — | [docs/RESEARCH_SOURCES.md](docs/RESEARCH_SOURCES.md) | Every link behind every claim |

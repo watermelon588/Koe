@@ -67,6 +67,6 @@ A chain waits at each step: speech-to-text, then the LLM, then text-to-speech. D
 | **LangGraph / LangChain** | One agent with ≤10 tools; the tool loop is about 30 lines. LangGraph helps long multi-step workflows with checkpoints, which we don't have. It also fits poorly inside a streaming audio session |
 | **WebRTC / Pipecat (for now)** | A WebSocket to our backend is simpler and good enough. **Plan B** if measured latency or audio quality is bad: Pipecat with SmallWebRTC |
 | **Twilio / phone numbers** | Costs money; no card |
-| **Render free (prod backend)** | Sleeps, wipes disk, loses webhooks (see SERVICES_AND_COSTS) |
+| **Render free (prod backend)** | Sleeps, wipes disk, loses webhooks (see SERVICES_AND_COSTS). Used **temporarily** since 2026-10-13 until the Azure VM (DECISIONS) |
 | **Vector DB / RAG** | Not needed; memory is a daily summary in Neon PostgreSQL |
 | **Redux / heavy state libs** | One screen; React state + one event stream is enough |

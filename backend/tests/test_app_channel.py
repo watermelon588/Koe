@@ -160,3 +160,14 @@ def test_a_github_alert_lands_in_the_chat_and_is_pushed(monkeypatch):
     asyncio.run(github_hooks.send_alert("CI failed on #20"))
     assert pushed == [("GitHub", "CI failed on #20")]
     assert [(m["role"], m["text"]) for m in app_channel.list_messages()] == [("alert", "CI failed on #20")]
+
+
+def test_the_push_key_can_come_from_the_environment(monkeypatch):
+    # Render's disk is wiped on restart, so the key must survive as VAPID_PRIVATE_KEY.
+    from py_vapid import Vapid02, b64urlencode
+    key = Vapid02()
+    key.generate_keys()
+    raw = b64urlencode(key.private_key.private_numbers().private_value.to_bytes(32, "big"))
+    monkeypatch.setattr(app_channel.settings, "vapid_private_key", raw)
+    assert app_channel.vapid().private_key.private_numbers() == key.private_key.private_numbers()
+    assert not (app_channel.DATA / "vapid.pem").exists()

@@ -1,0 +1,53 @@
+# Koe backend on Render (free web service). Spec: https://render.com/docs/blueprint-spec
+# Render finds uv.lock in backend/ and installs with uv: https://render.com/docs/python-version
+# Steps, env values and free-tier caveats: docs/DEPLOY.md
+services:
+  - type: web
+    name: koe-backend
+    runtime: python
+    plan: free
+    rootDir: backend
+    buildCommand: uv sync --frozen --no-dev
+    startCommand: uv run --no-sync uvicorn koe.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    autoDeployTrigger: commit
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.13.5
+      - key: TIMEZONE
+        value: Asia/Kolkata
+      # Secrets: Render asks for these once when the Blueprint is created (sync: false = never in Git).
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: KOE_ACCESS_TOKEN
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      - key: FRONTEND_ORIGINS
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: WHATSAPP_TOKEN
+        sync: false
+      - key: WHATSAPP_PHONE_NUMBER_ID
+        sync: false
+      - key: WHATSAPP_APP_SECRET
+        sync: false
+      - key: WHATSAPP_VERIFY_TOKEN
+        sync: false
+      - key: ALLOWED_WHATSAPP_NUMBERS
+        sync: false
+      - key: GITHUB_TOKEN
+        sync: false
+      - key: GITHUB_REPOS
+        sync: false
+      - key: GITHUB_LOGIN
+        sync: false
+      - key: GITHUB_WEBHOOK_SECRET
+        sync: false
+      - key: NOTION_TOKEN
+        sync: false
+      - key: NOTION_DATABASE_ID
+        sync: false
+      - key: GOOGLE_SHEETS_ID
+        sync: false
