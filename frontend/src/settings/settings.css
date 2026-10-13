@@ -64,3 +64,7 @@
 @media (prefers-reduced-motion: reduce) {
   .mascot-list button { transition: none; }
 }
+
+/* Settings → Connections (Connections.tsx) */
+.device-note { font-size: 13px; color: var(--muted); }
+.device a.soft { text-decoration: none; color: var(--text); height: 34px; padding: 0 14px; font-size: 13px; flex-shrink: 0; }

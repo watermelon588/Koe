@@ -56,7 +56,7 @@ export function Guide() {
           <li><b>GitHub:</b> GitHub asks you to authorise Koe, then you choose which repositories Koe should look at.</li>
           <li><b>Notion:</b> Notion lets you pick the pages Koe may use. Koe can create a “Koe Daily Log” database there.</li>
         </ul>
-        <p className="doc-note"><b>Coming soon:</b> a <b>Settings → Connections</b> screen with a Connect button for each. Until then, connections are set up by the owner on the server, so ask the person who invited you.</p>
+        <p className="doc-note"><b>How:</b> open <b>Settings → Connections</b> and press <b>Connect</b> next to Google. Google asks for Calendar and Sheets together; leave both ticked. GitHub and Notion get their Connect buttons next. <b>Disconnect</b> deletes Koe’s copy of the access and revokes it at Google.</p>
         <p>Google may show “Google hasn’t verified this app”, because Koe is a small personal project. Choose <b>Advanced</b> → <b>Go to Koe</b> only if you trust the person who invited you.</p>
       </Section>
 

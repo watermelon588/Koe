@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { ArrowsClockwise, BellSimple, DeviceMobile, HandWaving, Key, Person, UserFocus } from '@phosphor-icons/react'
 import { savedToken, saveToken } from '../chat/api'
 import { SESSION, signOut } from '../session'
+import { ConnectionsSection } from './Connections'
 import { disablePush, enablePush, pushState, useInstall, type PushState } from '../pwa'
 import { MASCOTS, mascotProfile, type MascotId } from '../mascot/catalog'
 import { MascotView, type LoadState, type MascotController } from '../mascot/MascotView'
@@ -69,6 +70,7 @@ export function SettingsPage({ selected, onSelect }: Props) {
           {applied ? 'Current companion' : `Use ${profile.name}`}
         </button>
         <p className="note" role="status">{notice}</p>
+        <ConnectionsSection />
         <DeviceSection />
       </aside>
 

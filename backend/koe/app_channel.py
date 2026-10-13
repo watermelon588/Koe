@@ -32,7 +32,7 @@ from py_vapid import Vapid02, b64urlencode
 from pydantic import BaseModel
 from pywebpush import WebPushException, webpush_async
 
-from koe import agent, auth, text_agent, voice_call, whatsapp
+from koe import agent, auth, identity, text_agent, voice_call, whatsapp
 from koe.config import settings
 from koe.db import sql
 
@@ -56,7 +56,7 @@ router = APIRouter(prefix="/api/app", dependencies=[Depends(authorized)])
 # ── Storage: koe/db.py (Neon, or SQLite locally). Every row has an owner (ACCOUNTS_SPEC.md). ─────────
 
 def owner() -> str:
-    return settings.koe_owner_id  # ponytail: one owner until sign-in passes the user in (ACCOUNTS_SPEC.md task 3)
+    return identity.owner_id()  # set by auth.http_owner for this request
 
 
 def _public(row: dict) -> dict:

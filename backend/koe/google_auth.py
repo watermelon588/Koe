@@ -8,6 +8,7 @@ from pathlib import Path
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 
+from koe import connections, identity
 from koe.config import settings
 
 CALENDAR_SCOPES = ["https://www.googleapis.com/auth/calendar.events"]
@@ -27,7 +28,20 @@ def save_token(creds: Credentials):
 
 
 def credentials(required_scopes: list[str] | None = None) -> Credentials:
-    """Refresh cached consent without opening a browser in an HTTP/WebSocket worker."""
+    """The calling person's Google account from Settings → Connections; otherwise, for the owner only, the local
+    token.json from scripts.google_auth. Never opens a browser (runs in an HTTP/WebSocket worker thread)."""
+    required = required_scopes if required_scopes is not None else CALENDAR_SCOPES
+    if connections.configured():
+        try:
+            connected = connections.google_credentials(required)
+        except connections.ConnectionError_ as exc:
+            raise GoogleAuthError(str(exc)) from None
+        except Exception:
+            raise GoogleAuthError("Google refresh failed. Reconnect Google in Settings → Connections.") from None
+        if connected:
+            return connected
+    if not identity.is_owner():  # a friend must never fall back to the owner's calendar
+        raise GoogleAuthError("Connect Google in Settings → Connections first.")
     with _lock:
         path = Path(settings.google_token_file)
         if not path.exists():
@@ -35,7 +49,6 @@ def credentials(required_scopes: list[str] | None = None) -> Credentials:
         try:
             # Read granted scopes; don't overwrite them by passing a larger scopes list.
             creds = Credentials.from_authorized_user_file(str(path))
-            required = required_scopes if required_scopes is not None else CALENDAR_SCOPES
             if not creds.has_scopes(required):
                 if SHEETS_SCOPE in required:
                     raise GoogleAuthError("Sheets permission is missing. Run: python -m scripts.google_auth --with-sheets --reauthorize")

@@ -109,8 +109,8 @@ Goal: an invited friend goes from link to working assistant without touching cod
 - [ ] 5. *(storage done 2026-10-13; per-user conversation memory and approvals follow task 2)* App chat (messages, voice notes, push subscriptions) moves from SQLite to Neon with `owner_id` = user; conversations and pending approvals keyed by user. *Accept:* user B sees none of user A's chat/activity/approvals (tests); survives a Render restart.
 
 **Group 4: connections**
-- [ ] 6. `connections.py` + encrypted token store + Settings → Connections list (connect / disconnect / status). Google Calendar connect; calendar tools use the caller's token. *Accept:* "what's on my calendar today?" uses the caller's calendar.
-- [ ] 7. Google Sheets: same consent; "Create my Hours sheet" button. *Accept:* sheet created with headers; a timesheet row needs approval.
+- [x] 6. *(done 2026-10-13)* `connections.py` + encrypted token store + Settings → Connections list (connect / disconnect / status). Google Calendar connect; calendar tools use the caller's token. *Accept:* "what's on my calendar today?" uses the caller's calendar.
+- [ ] 7. *(Sheets access comes with the Google connection; the "Create my Hours sheet" button is still to do)* Google Sheets: same consent; "Create my Hours sheet" button. *Accept:* sheet created with headers; a timesheet row needs approval.
 - [ ] 8. GitHub OAuth App connect + repo picker; GitHub tools use the caller's token. *Needs Rohit:* GitHub OAuth App.
 - [ ] 9. Notion public integration connect + "Create Koe Daily Log". *Needs Rohit:* Notion public integration (uses the privacy/terms URLs from task 1).
 - **Checkpoint:** a friend connects all four from Settings with no code changes.

@@ -4,6 +4,8 @@ OpenID Connect authorization-code flow with PKCE, state and nonce:
 https://developers.google.com/identity/openid-connect/openid-connect
   GET  /auth/google/start?next=/   → Google's consent page (state/nonce/PKCE verifier kept in a short HttpOnly cookie)
   GET  /auth/google/callback       → code → tokens → verified ID token → invited? → session cookie → back to `next`
+  GET  /auth/google/connect?next=  → the same dance with Calendar + Sheets scopes and offline access, for a signed-in
+                                     person: their tokens are stored encrypted (connections.py), no new session
   GET  /auth/status                → {"google": sign-in available?, "user": {...} | null}
   POST /auth/logout                → session revoked, cookie cleared (same-origin requests only)
   POST /api/ws-ticket              → a one-time, 60-second ticket for /ws/call and /ws/events
@@ -32,6 +34,7 @@ from fastapi.responses import RedirectResponse
 from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token
 
+from koe import identity
 from koe.config import settings
 from koe.db import sql
 
@@ -89,27 +92,48 @@ def _cookie(response: Response, request: Request, name: str, value: str, seconds
                         secure=site(request).startswith("https://"))
 
 
-@router.get("/auth/google/start")
-def start(request: Request, next: str = "/"):
-    if not enabled():
-        raise HTTPException(404, "Google sign-in isn't set up on this server.")
+def _to_google(request: Request, next_path: str, scopes: list[str], extra: dict | None = None, **flow_extra) -> RedirectResponse:
+    """Redirect to Google's consent page; state, nonce and the PKCE verifier wait in a 10-minute HttpOnly cookie."""
     origin = site(request)
     state, nonce, verifier = secrets.token_urlsafe(32), secrets.token_urlsafe(32), secrets.token_urlsafe(48)
     query = {
         "client_id": settings.google_web_client_id,
         "redirect_uri": f"{origin}/auth/google/callback",
         "response_type": "code",
-        "scope": "openid email profile",
+        "scope": " ".join(scopes),
         "state": state,
         "nonce": nonce,
         "code_challenge": _b64(hashlib.sha256(verifier.encode()).digest()),
         "code_challenge_method": "S256",
-        "prompt": "select_account",
+        **(extra or {}),
     }
     response = RedirectResponse(f"{AUTHORIZE}?{urlencode(query)}", 302, headers=NO_STORE)
-    flow = {"state": state, "nonce": nonce, "verifier": verifier, "next": _safe_next(next)}
+    flow = {"state": state, "nonce": nonce, "verifier": verifier, "next": _safe_next(next_path), **flow_extra}
     _cookie(response, request, FLOW_COOKIE, _b64(json.dumps(flow).encode()), FLOW_MINUTES * 60, path="/auth")
     return response
+
+
+@router.get("/auth/google/start")
+def start(request: Request, next: str = "/"):
+    if not enabled():
+        raise HTTPException(404, "Google sign-in isn't set up on this server.")
+    return _to_google(request, next, ["openid", "email", "profile"], {"prompt": "select_account"}, purpose="signin")
+
+
+@router.get("/auth/google/connect")
+async def connect(request: Request, next: str = "/#settings"):
+    """Connect the signed-in person's Google Calendar + Sheets. `prompt=consent` + offline access makes Google send
+    a refresh token, so Koe keeps working after the 1-hour access token expires.
+    https://developers.google.com/identity/protocols/oauth2/web-server#offline"""
+    from koe import connections  # connections imports auth
+    if not enabled() or not connections.configured():
+        raise HTTPException(404, "Connecting Google isn't set up on this server (Google client and KOE_SECRET_KEY).")
+    user = await signed_in_user(request)
+    if not user:
+        raise HTTPException(401, "Sign in to Koe first.")
+    _owner_only(user)
+    extra = {"access_type": "offline", "prompt": "consent", "include_granted_scopes": "true", "login_hint": user["email"]}
+    return _to_google(request, next, connections.GOOGLE_SCOPES, extra, purpose="connect", owner=user["id"])
 
 
 def verify_id_token(token: str) -> dict:
@@ -173,6 +197,9 @@ async def callback(request: Request, code: str = "", state: str = "", error: str
     if not hmac.compare_digest(str(claims.get("nonce", "")), flow["nonce"]) or not claims.get("email_verified"):
         raise HTTPException(400, "Google's answer couldn't be verified. Please try again.")
 
+    if flow.get("purpose") == "connect":
+        return await _finish_connect(request, flow, reply.json(), str(claims["email"]).lower(), back)
+
     email = str(claims["email"]).lower()
     if not await invited(email):
         return back("/?signin=not-invited")  # no account, no session
@@ -187,6 +214,27 @@ async def callback(request: Request, code: str = "", state: str = "", error: str
     response = back(flow["next"])
     _cookie(response, request, SESSION_COOKIE, token, SESSION_DAYS * 24 * 3600)
     return response
+
+
+async def _finish_connect(request: Request, flow: dict, tokens: dict, account: str, back) -> RedirectResponse:
+    from koe import connections
+    user = await signed_in_user(request)
+    if not user or user["id"] != flow.get("owner"):  # the person who started connecting must be the one finishing
+        raise HTTPException(400, "Sign in to Koe again, then connect Google.")
+    granted = str(tokens.get("scope", "")).split()
+    if not {connections.CALENDAR_SCOPE, connections.SHEETS_SCOPE} <= set(granted):
+        return back(_with_query(flow["next"], "connect=missing-scopes"))  # the person unticked a permission
+    expiry = _now() + timedelta(seconds=int(tokens.get("expires_in", 3600)))
+    await asyncio.to_thread(connections.save, user["id"], "google", account, granted, {
+        "access_token": tokens["access_token"], "refresh_token": tokens.get("refresh_token"), "expiry": expiry.isoformat()})
+    return back(_with_query(flow["next"], "connected=google"))
+
+
+def _with_query(path: str, query: str) -> str:
+    """Put ?query before any #hash, so the page can read it from location.search."""
+    base, _, fragment = path.partition("#")
+    joined = f"{base}{'&' if '?' in base else '?'}{query}"
+    return f"{joined}#{fragment}" if fragment else joined
 
 
 async def signed_in_user(request: Request) -> dict | None:
@@ -243,8 +291,10 @@ async def http_owner(request: Request) -> str:
     """Who is calling an /api endpoint: the signed-in owner (cookie), or anyone holding KOE_ACCESS_TOKEN."""
     user = await signed_in_user(request)
     if user:
-        return _owner_only(user)
+        identity.OWNER.set(_owner_only(user))
+        return user["id"]
     if _access_token_ok(request.headers.get("authorization", "").removeprefix("Bearer ").strip()):
+        identity.OWNER.set(settings.koe_owner_id)
         return settings.koe_owner_id
     raise HTTPException(401, "Sign in to Koe.")
 

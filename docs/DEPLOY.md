@@ -60,6 +60,24 @@ Open `/health` first so the backend is awake. Meta checks the URL immediately.
 2. Go to **Settings**: enter `KOE_ACCESS_TOKEN`, then **Install app**, then turn on **Notifications**. If notifications were turned on earlier against the laptop, turn them off and on once, because the push key changed.
 3. Go to **Chat** and send a voice note.
 
+## 6. Google sign-in and Connections
+Sign-in replaces the access token (ACCOUNTS_SPEC.md). Connections lets each person link their own Google Calendar and Sheets.
+1. **Google Cloud** (the project that owns the *Web application* OAuth client):
+   - Redirect URIs: `https://koe-pi.vercel.app/auth/google/callback` and `http://localhost:5173/auth/google/callback`.
+   - **Enable the APIs:** Google Calendar API and Google Sheets API.
+   - Consent screen: Privacy `https://koe-pi.vercel.app/privacy`, Terms `https://koe-pi.vercel.app/terms`. Add yourself, and later friends, as **test users**.
+2. **Render → Environment**, using the same values as `backend/.env`:
+
+   | Variable | Value |
+   |---|---|
+   | `GOOGLE_WEB_CLIENT_ID`, `GOOGLE_WEB_CLIENT_SECRET` | from the downloaded client JSON |
+   | `KOE_ADMIN_EMAIL` | the owner's Gmail |
+   | `KOE_PUBLIC_URL` | `https://koe-pi.vercel.app` |
+   | `KOE_SECRET_KEY` | **exactly the value in `.env`**: both read the same Neon tokens; a different key can't decrypt them |
+3. Vercel already proxies `/api` and `/auth` to Render (`frontend/vercel.json`), so the sign-in cookie belongs to `koe-pi.vercel.app`.
+
+Until these are set, the site keeps using the access token, so nothing breaks in the meantime.
+
 ## Updating
 Push to `main`, and both Render and Vercel rebuild by themselves. The URLs stay the same.
 

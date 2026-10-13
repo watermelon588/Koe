@@ -614,3 +614,23 @@ A QR code is just a URL drawn as squares. Since the URL is fixed, the image is g
 - Chat loads with no token card;
 - Sign out returns to the sign-in screen, and the server reports `user: null`.
 **Interview line:** "I removed the shared password by putting the API behind the frontend's own origin, so the session cookie is first-party, and by trading that session for one-time tickets on the WebSockets the proxy can't carry."
+
+## Step 43: Settings → Connections: your own Google Calendar and Sheets  (Phase 5c, task 6 · 2026-10-13)
+**Files:** backend/koe/{connections.py,identity.py} (new) · backend/migrations/004_connections.sql (new) · backend/tests/test_connections.py (new) · backend/koe/{auth.py,google_auth.py,app_channel.py,db.py,config.py,main.py} · backend/pyproject.toml + uv.lock (`cryptography` listed directly) · backend/tests/conftest.py · frontend/src/settings/{Connections.tsx (new),SettingsPage.tsx,settings.css} · frontend/src/pages/Guide.tsx · docs/DEPLOY.md
+**What it does:** Settings gets a **Connections** list. **Connect** next to Google opens Google's consent screen for Calendar and Sheets together, and comes back with "Google connected". From then on the calendar and timesheet tools use that account. **Disconnect** deletes Koe's copy and revokes it at Google. The owner still falls back to the local `token.json`; anyone else never does.
+**Core concept:**
+- *Sign-in ≠ access.* Signing in asks Google only "who is this?" (`openid email profile`). Connecting asks for `calendar.events` + `spreadsheets` with `access_type=offline`, which makes Google send a **refresh token**. That's a long-lived key Koe can swap for a fresh 1-hour access token whenever it needs one. Both flows reuse the same registered callback; a field in the short-lived flow cookie (`purpose`) tells them apart.
+- *Encryption at rest.* The tokens are sealed with **Fernet** (AES + an HMAC that detects tampering) before they reach Neon. The key is derived from `KOE_SECRET_KEY`, which exists only in `.env` and Render. A copy of the database alone is useless. Losing or changing the key just means reconnecting.
+- *Whose request is this?* A context variable (`identity.OWNER`) is set when a request is authenticated. It follows the request into the worker thread where `google_auth.credentials()` runs, so the tools load the caller's own connection without passing a user id through every function.
+**How it connects:** Settings → `/auth/google/connect` → Google consent → `/auth/google/callback` (`purpose=connect`) → `connections.save` (encrypted) → `/?connected=google#settings`. Later: the agent → calendar/sheets tool → `google_auth.credentials()` → `connections.google_credentials()` → refresh if needed → Google API.
+**Try it yourself:** Signed in on Koe, open Settings → Connections → Connect → allow both. Then ask "what's on my calendar today?". `uv run pytest -q tests/test_connections.py` runs 7 tests.
+**Gotchas:**
+- The Google Cloud project behind the web client needs the **Google Calendar API** and **Google Sheets API** enabled.
+- `KOE_SECRET_KEY` must be identical in `.env` and on Render, because both use the same Neon database.
+- Under the dev Vite server, a 204 reply must have *no* body. FastAPI sent `null`, the browser aborted the response, and the list didn't refresh. The endpoint now returns an empty `Response(204)`.
+**Measured:**
+- 7 new tests: encryption and a changed key; the connect URL; stored encrypted; unticked permission; the tools use and refresh the connection; a friend never falls back to the owner's calendar; disconnect revokes. Removing the friend guard fails its test.
+- 230 backend tests and 18 frontend tests pass.
+- Google accepted the real connect request (its sign-in page, with no `invalid_scope` or redirect errors).
+- In the browser, with a temporary test account (deleted afterwards): the list renders, the notice shows once, and the connected state plus Disconnect work. Disconnect takes about 5 s because of Google's revoke call, so the button says "Disconnecting…".
+**Interview line:** "I separated identity from authorization: sign-in uses minimal OpenID scopes, while each service is a separate incremental-consent connection whose refresh token is Fernet-encrypted at rest and loaded per request through a context variable."
