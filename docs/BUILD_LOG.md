@@ -965,3 +965,17 @@ Next phase: approved schema creation and safe Sheets row editing is tracked in [
 **Try it:** Ask Koe to book three weekly reviews with explicit start/end, or block an all-day date with the following day as exclusive end. Review every occurrence before confirming.
 
 **Interview line:** “I use a bounded recurrence language and deterministic expansion to validate all dates before creating a series.”
+
+## 2026-10-14 — Actual Meet readiness and bounded Calendar evidence
+
+**Files:** Calendar adapter/registry, extension regression tests.
+
+**What it does:** Requests a unique Meet for a new event using the persisted approval ID. Returns pending/success/failure separately from event-save success, with only actual allowlisted HTTPS Meet links. Adds a versioned single-event read and richer list data. Supports DELETE204, bounded streamed evidence, repeated-page-token detection and total operation/scan budgets; TLS and credentials stay off the audio event loop.
+
+**Core concept:** A saved event and an asynchronously generated conference have different states. Koe can reread a pending conference; it must never create another event just because the link is not ready.
+
+**Verification:** Six new contracts first failed; **54 Calendar/approval tests passed** after implementation. Synthetic pending/success/failure, unsafe conference URL and empty DELETE-response cases pass; no real meeting or invitation was created.
+
+**Try it:** Ask for a new meeting with a Meet link. After approval, use its actual returned conference state. Ask Koe to read the event again when pending.
+
+**Interview line:** “I model asynchronous provider readiness separately from mutation success and bound the data used for decisions.”

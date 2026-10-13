@@ -67,3 +67,58 @@ def test_recurring_creation_runs_actual_adapter_only_after_approval(fake_store, 
         assert 'error' in await agent.confirm(ctx, True)
         assert sum(c[0] == 'POST' for c in api[0]) == 1
     asyncio.run(scenario())
+
+
+@pytest.mark.parametrize('status', ['pending', 'success', 'failure'])
+def test_meet_requests_unique_conference_and_returns_provider_state(monkeypatch, status):
+    calls = []
+    async def request(method, path, **kwargs):
+        calls.append((method, path, kwargs))
+        if method == 'GET': return {'items': []}
+        return {'id': 'new', 'conferenceData': {'createRequest': {'status': {'statusCode': status}},
+            'entryPoints': [{'entryPointType': 'video', 'uri': 'https://meet.google.com/abc-defg-hij'}] if status == 'success' else []}}
+    monkeypatch.setattr(calendar, 'request', request)
+    result = asyncio.run(calendar.calendar_upsert_event(**ARGS, create_meet=True, request_id='a1b2-c3d4'))
+    assert result['conference']['status'] == status
+    assert bool(result['conference']['url']) == (status == 'success')
+    body, params = calls[-1][2]['json'], calls[-1][2]['params']
+    assert body['conferenceData']['createRequest'] == {'requestId': 'a1b2-c3d4', 'conferenceSolutionKey': {'type': 'hangoutsMeet'}}
+    assert params['conferenceDataVersion'] == 1
+
+
+def test_meet_missing_approval_id_or_nonboolean_never_reaches_api(api):
+    for kwargs in ({'create_meet': True}, {'create_meet': 'yes', 'request_id': 'abc'}):
+        result = asyncio.run(calendar.calendar_upsert_event(**ARGS, **kwargs))
+        assert result['error']['code'] == 'bad_args'
+    assert not api[0]
+
+
+def test_event_read_returns_version_instance_and_safe_conference(monkeypatch):
+    async def request(*args, **kwargs):
+        return {'id': 'instance', 'etag': '"v1"', 'summary': 'Review', 'recurringEventId': 'series',
+            'originalStartTime': {'date': '2026-10-15'}, 'start': {'date': '2026-10-15'}, 'end': {'date': '2026-10-16'},
+            'attendees': [{'email': 'me@example.com'}],
+            'conferenceData': {'createRequest': {'status': {'statusCode': 'success'}},
+                               'entryPoints': [{'entryPointType': 'video', 'uri': 'https://meet.google.com.evil.test/x'}]}}
+    monkeypatch.setattr(calendar, 'request', request)
+    result = asyncio.run(calendar.calendar_get_event('instance'))
+    assert result['etag'] == '"v1"' and result['recurring_event_id'] == 'series'
+    assert result['all_day'] and result['conference']['url'] is None
+    assert result['original_start'] == {'date': '2026-10-15'}
+
+
+def test_calendar_request_accepts_delete_no_content(monkeypatch):
+    from types import SimpleNamespace
+    import httpx
+    import respx
+    monkeypatch.setattr(calendar.google_auth, 'credentials', lambda: SimpleNamespace(token='fake'))
+    with respx.mock as router:
+        router.delete(calendar.API + '/calendars/primary/events/old').mock(return_value=httpx.Response(204))
+        assert asyncio.run(calendar.request('DELETE', '/calendars/primary/events/old')) == {}
+
+
+def test_incomplete_or_repeating_calendar_pages_are_not_treated_as_free(monkeypatch):
+    async def request(*args, **kwargs): return {'items': [], 'nextPageToken': 'same'}
+    monkeypatch.setattr(calendar, 'request', request)
+    result = asyncio.run(calendar.calendar_upsert_event(**ARGS))
+    assert result['error']['code'] == 'calendar_too_large'

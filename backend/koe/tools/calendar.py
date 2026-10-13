@@ -4,9 +4,11 @@ REST reference: https://developers.google.com/workspace/calendar/api/v3/referenc
 Events PATCH supports If-Match: https://developers.google.com/workspace/calendar/api/guides/version-resources
 """
 import asyncio
+import json
 import re
+from functools import wraps
 from datetime import date as Date, datetime, time, timedelta
-from urllib.parse import quote
+from urllib.parse import quote, urlparse
 from zoneinfo import ZoneInfo
 
 import httpx
@@ -16,6 +18,22 @@ from koe.config import settings
 
 API = "https://www.googleapis.com/calendar/v3"
 _write_lock = asyncio.Lock()  # also protects two different proposals in this one-process app
+OPERATION_SECONDS = 45
+SCAN_SECONDS = 30
+MAX_RESPONSE_BYTES = 4 * 1024 * 1024
+
+
+def bounded(fn):
+    @wraps(fn)
+    async def run(*args, **kwargs):
+        try:
+            async with asyncio.timeout(OPERATION_SECONDS):
+                return await fn(*args, **kwargs)
+        except TimeoutError:
+            return error('calendar_timeout', 'Calendar operation timed out; no mutation was retried.', 'Check Calendar before proposing another write.')
+        except CalendarError as exc:
+            return exc.result
+    return run
 
 
 def error(code: str, message: str, hint: str = "Clarify the request and try again.") -> dict:
@@ -31,17 +49,29 @@ async def request(method: str, path: str, **kwargs) -> dict:
     try:
         creds = await asyncio.to_thread(google_auth.credentials)
         headers = {"Authorization": f"Bearer {creds.token}", **kwargs.pop("headers", {})}
-        async with httpx.AsyncClient(timeout=20, trust_env=False) as client:
-            r = await client.request(method, API + path, headers=headers, **kwargs)
-        if r.is_error:
-            code = {401: "google_reauthorize", 403: "calendar_permission", 409: "calendar_duplicate",
-                    412: "calendar_changed"}.get(r.status_code, "calendar_unavailable")
-            raise CalendarError(code, f"Google Calendar returned HTTP {r.status_code}. No write was retried.")
-        return r.json()
+        client = await asyncio.to_thread(httpx.AsyncClient, timeout=20, trust_env=False)
+        async with client:
+            async with client.stream(method, API + path, headers=headers, **kwargs) as r:
+                if r.is_error:
+                    code = {401: "google_reauthorize", 403: "calendar_permission", 404: 'calendar_missing',
+                            410: 'calendar_missing', 409: "calendar_duplicate", 412: "calendar_changed"}.get(r.status_code, "calendar_unavailable")
+                    raise CalendarError(code, f"Google Calendar returned HTTP {r.status_code}. No write was retried.")
+                if r.status_code == 204:
+                    return {}
+                data = bytearray()
+                async for chunk in r.aiter_bytes():
+                    data.extend(chunk)
+                    if len(data) > MAX_RESPONSE_BYTES:
+                        raise CalendarError('calendar_too_large', 'Calendar response exceeded the safe evidence limit. Check Calendar before retrying a write.')
+        result = json.loads(data)
+        if not isinstance(result, dict): raise ValueError()
+        return result
     except google_auth.GoogleAuthError as exc:
         raise CalendarError("google_not_connected", str(exc)) from None
     except httpx.HTTPError:
         raise CalendarError("calendar_unreachable", "Google did not answer. Check Calendar before retrying a write.") from None
+    except (ValueError, TypeError):
+        raise CalendarError('calendar_evidence', 'Google returned invalid Calendar evidence. Check Calendar before retrying a write.') from None
 
 
 def _path() -> str:
@@ -60,11 +90,13 @@ def _iso(value: str) -> datetime:
 def prepare_event(title: str, start: str, end: str, attendees: list[str] | None = None,
                   event_id: str | None = None, description: str | None = None,
                   location: str | None = None, reminders: list[dict] | None = None,
-                  all_day: bool = False, recurrence: dict | None = None) -> dict:
+                  all_day: bool = False, recurrence: dict | None = None, create_meet: bool = False) -> dict:
     if not isinstance(title, str) or not title.strip() or len(title) > 200:
         raise ValueError("Provide a title of 1 to 200 characters.")
     if type(all_day) is not bool:
         raise ValueError('all_day must be true or false.')
+    if type(create_meet) is not bool or (create_meet and event_id):
+        raise ValueError('create_meet must be boolean and is supported for new events only.')
     if all_day:
         if any(not isinstance(v, str) or Date.fromisoformat(v).isoformat() != v for v in (start, end)):
             raise ValueError('All-day events need YYYY-MM-DD dates and an exclusive end date.')
@@ -90,7 +122,8 @@ def prepare_event(title: str, start: str, end: str, attendees: list[str] | None 
     result = {"title": title.strip(), "start": start if all_day else start_dt.isoformat(),
             "end": end if all_day else end_dt.isoformat(),
             "attendees": attendees, "event_id": event_id, 'description': description,
-            'location': location, 'reminders': reminders, 'all_day': all_day, 'recurrence': recurrence}
+            'location': location, 'reminders': reminders, 'all_day': all_day, 'recurrence': recurrence,
+            'create_meet': create_meet}
     event_plan(result)  # Validate and bound the entire plan before any API access.
     return result
 
@@ -128,17 +161,28 @@ def event_plan(args):
 
 
 async def _events(start: datetime, end: datetime) -> list[dict]:
-    events, token = [], None
-    for _ in range(100):
+    async with asyncio.timeout(SCAN_SECONDS):
+        return await _scan_events(start, end)
+
+
+async def _scan_events(start, end):
+    events, token, seen = [], None, set()
+    for _ in range(10):
         params = {"timeMin": start.isoformat(), "timeMax": end.isoformat(), "singleEvents": "true",
-                  "orderBy": "startTime", "maxResults": 2500, "timeZone": settings.timezone}
+                  "orderBy": "startTime", "maxResults": 250, "timeZone": settings.timezone}
         if token:
             params["pageToken"] = token
         data = await request("GET", _path(), params=params)
-        events.extend(data.get("items", []))
+        items = data.get('items', [])
+        if not isinstance(items, list) or any(not isinstance(e, dict) for e in items):
+            raise CalendarError('calendar_evidence', 'Calendar event scan was incomplete or malformed.')
+        events.extend(items)
         token = data.get("nextPageToken")
+        if len(events) > 1000 or token and (not isinstance(token, str) or token in seen):
+            break
         if not token:
             return events
+        seen.add(token)
     raise CalendarError("calendar_too_large", "Too many events; narrow the time range.")
 
 
@@ -161,14 +205,79 @@ def _day(value: str):
     return start, datetime.combine(d + timedelta(days=1), time.min, tz)
 
 
+def conference(event, requested=False):
+    data = event.get('conferenceData') or {}
+    status = data.get('createRequest', {}).get('status', {}).get('statusCode')
+    url = None
+    for entry in data.get('entryPoints', []):
+        if entry.get('entryPointType') != 'video': continue
+        value = entry.get('uri', '')
+        try:
+            parsed = urlparse(value)
+            if parsed.scheme == 'https' and parsed.hostname == 'meet.google.com' and not parsed.username and not parsed.password and parsed.port in (None, 443):
+                url = value
+        except (TypeError, ValueError):
+            pass
+    if status not in ('pending', 'success', 'failure'):
+        status = 'success' if url else 'unavailable' if requested or data else 'none'
+    if status != 'success': url = None
+    return {'status': status, 'url': url,
+            'note': 'Event save and Meet readiness are separate. Read the event again if pending; never recreate it to get a link.'}
+
+
+def _valid_id(value):
+    if not isinstance(value, str) or not re.fullmatch(r'[a-zA-Z0-9_-]{1,1024}', value):
+        raise ValueError('Use an exact event ID from a Calendar read.')
+    return value
+
+
+def _valid_etag(value):
+    if not isinstance(value, str) or not re.fullmatch(r'"[^"\r\n]{1,180}"', value):
+        raise ValueError('Read the event first and use its exact quoted etag.')
+    return value
+
+
+def display_event(event):
+    try:
+        identifier = _valid_id(event['id'])
+        start, end = event['start'], event['end']
+        all_day = 'date' in start and 'dateTime' not in start
+        a, b = (_day(start['date'])[0], _day(end['date'])[0]) if all_day else (_iso(start['dateTime']), _iso(end['dateTime']))
+        if b <= a: raise ValueError()
+        attendees = event.get('attendees', [])
+        if not isinstance(attendees, list) or any(not isinstance(a, dict) for a in attendees): raise ValueError()
+        return {'id': identifier, 'etag': event.get('etag'), 'title': str(event.get('summary', 'Untitled'))[:200],
+            'start': start, 'end': end, 'all_day': all_day, 'url': event.get('htmlLink'),
+            'description': str(event.get('description', ''))[:6000], 'location': str(event.get('location', ''))[:500],
+            'reminders': event.get('reminders', {}), 'attendees': [a.get('email', '') for a in attendees[:50]],
+            'attendees_omitted': bool(event.get('attendeesOmitted') or len(attendees) > 50),
+            'recurring_event_id': event.get('recurringEventId'), 'original_start': event.get('originalStartTime'),
+            'recurrence': event.get('recurrence', []), 'event_type': event.get('eventType', 'default'),
+            'conference': conference(event), 'timezone': settings.timezone}
+    except (KeyError, ValueError, TypeError, AttributeError):
+        raise CalendarError('calendar_evidence', 'Calendar did not return a complete supported event.') from None
+
+
+@bounded
+async def calendar_get_event(event_id: str):
+    try:
+        identifier = _valid_id(event_id)
+        event = await request('GET', _path() + '/' + quote(identifier, safe=''))
+        if event.get('status') == 'cancelled':
+            return error('calendar_missing', 'That event is already cancelled.')
+        result = display_event(event)
+        if result['id'] != identifier: raise CalendarError('calendar_evidence', 'Calendar returned a different event.')
+        return result
+    except ValueError as exc:
+        return error('bad_args', str(exc))
+
+
+@bounded
 async def calendar_list(date: str) -> dict:
     try:
         start, end = _day(date)
         events = await _events(start, end)
-        return {"date": date, "timezone": settings.timezone, "events": [
-            {"id": e["id"], "title": e.get("summary", "Untitled"), "start": e["start"],
-             "end": e["end"], "url": e.get("htmlLink"), 'description': e.get('description', ''),
-             'location': e.get('location', ''), 'reminders': e.get('reminders', {})}
+        return {"date": date, "timezone": settings.timezone, "events": [display_event(e)
             for e in events if e.get("status") != "cancelled"]}
     except CalendarError as exc:
         return exc.result
@@ -176,6 +285,7 @@ async def calendar_list(date: str) -> dict:
         return error("bad_args", "Use an ISO date, e.g. 2026-10-12.")
 
 
+@bounded
 async def calendar_find_free(date: str, duration_min: int, between: str | None = None) -> dict:
     try:
         if type(duration_min) is not int or not 1 <= duration_min <= 1440:
@@ -210,14 +320,17 @@ async def calendar_find_free(date: str, duration_min: int, between: str | None =
         return error("bad_args", str(exc))
 
 
+@bounded
 async def calendar_upsert_event(title: str, start: str, end: str, attendees: list[str] | None = None,
                                 event_id: str | None = None, description: str | None = None,
                                 location: str | None = None, reminders: list[dict] | None = None,
-                                all_day: bool = False, recurrence: dict | None = None, *,
+                                all_day: bool = False, recurrence: dict | None = None, create_meet: bool = False, *,
                                 request_id: str | None = None) -> dict:
     """Only agent.resolve may invoke a write after claiming its stored approval."""
     try:
-        args = prepare_event(title, start, end, attendees, event_id, description, location, reminders, all_day, recurrence)
+        args = prepare_event(title, start, end, attendees, event_id, description, location, reminders, all_day, recurrence, create_meet)
+        if create_meet and (not isinstance(request_id, str) or not re.fullmatch(r'[a-zA-Z0-9-]{1,100}', request_id)):
+            raise ValueError('Meet creation requires the persisted approval request ID.')
         plan = event_plan(args)
         intervals = [(_day(p['start'])[0], _day(p['end'])[0]) if all_day else (_iso(p['start']), _iso(p['end']))
                      for p in plan['occurrences']]
@@ -246,6 +359,9 @@ async def calendar_upsert_event(title: str, start: str, end: str, attendees: lis
             if reminders is not None:
                 body['reminders'] = {'useDefault': False, 'overrides': args['reminders']}
             params = {"sendUpdates": "all"}
+            if create_meet:
+                body['conferenceData'] = {'createRequest': {'requestId': request_id, 'conferenceSolutionKey': {'type': 'hangoutsMeet'}}}
+                params['conferenceDataVersion'] = 1
             if old:
                 if not old.get("etag"):
                     return error("calendar_changed", "The event has no version; it wasn't moved.")
@@ -257,7 +373,8 @@ async def calendar_upsert_event(title: str, start: str, end: str, attendees: lis
                 result = await request("POST", _path(), json=body, params=params)
             return {"id": result["id"], "url": result.get("htmlLink"), "title": args["title"],
                     "start": args["start"], "end": args["end"], 'all_day': all_day,
-                    'occurrences': plan['occurrences'], 'recurrence': plan['rrule']}
+                    'occurrences': plan['occurrences'], 'recurrence': plan['rrule'],
+                    'conference': conference(result, requested=create_meet)}
     except CalendarError as exc:
         return exc.result
     except (ValueError, TypeError) as exc:
