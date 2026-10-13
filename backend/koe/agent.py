@@ -5,6 +5,7 @@ Every tool returns a JSON-able dict. Failures never raise: they come back as
 {"error": {"code", "message", "hint"}} so the model can tell the user instead of guessing.
 """
 import asyncio
+import json
 import re
 import time
 from dataclasses import dataclass, field
@@ -46,6 +47,7 @@ SYSTEM_PROMPT = (
     " For GitHub activity counts/changed lines use github_activity; use github_contributions for contribution streaks. "
     "Use returned Python totals, coverage and metric definitions; never compute or invent statistics yourself. "
     "For yesterday use since='yesterday'; until is exclusive. Default-branch history is not every branch."
+    " For optional Sheets columns call sheets_schema first. Use exact existing headers; never invent columns, values or hours."
 )
 
 
@@ -135,7 +137,12 @@ TOOLS.update({
     'sheets_log_hours': Tool(sheets.sheets_log_hours,
         'Propose ONE hours entry in the configured timesheet. Every entry needs separate approval. Never infer hours.',
         {'type': 'object', 'properties': {'date': {'type': 'string'}, 'client': {'type': 'string'},
-         'hours': {'type': 'number'}, 'note': {'type': 'string'}}, 'required': ['date', 'client', 'hours']}, needs_approval=True),
+         'hours': {'type': 'number'}, 'note': {'type': 'string'},
+         'fields': {'type': 'object', 'description': 'Optional exact column names from sheets_schema; values are strings, numbers or booleans. Required columns/action ID cannot be overridden.',
+                    'additionalProperties': {'anyOf': [{'type': 'string'}, {'type': 'number'}, {'type': 'boolean'}]}}},
+         'required': ['date', 'client', 'hours']}, needs_approval=True),
+    'sheets_schema': Tool(sheets.sheets_schema, 'Read the configured timesheet required/optional headers before using optional columns. No writes.',
+        {'type': 'object', 'properties': {}}),
 })
 
 TOOLS.update({
@@ -172,7 +179,8 @@ def prepare_write(name: str, args: dict) -> tuple[dict, str]:
         normalized = sheets.prepare_hours(**args)
         return normalized, (f"Log {normalized['hours']:g} hours for {normalized['client']} on {normalized['date']}. "
                             f"Destination: https://docs.google.com/spreadsheets/d/{normalized['spreadsheet_id']}/edit "
-                            f"tab {normalized['sheet_name']}. Note:\n{normalized['note']}")
+                            f"tab {normalized['sheet_name']}. Note:\n{normalized['note']}"
+                            + ('\nOptional columns: ' + json.dumps(normalized['fields'], ensure_ascii=False) if normalized['fields'] else ''))
     normalized = calendar.prepare_event(**args)
     summary = (f"{'Move' if normalized['event_id'] else 'Create'} {normalized['title']}: "
                f"{normalized['start']} to {normalized['end']} {settings.timezone}; attendees: "
@@ -234,6 +242,8 @@ async def _run_tool(name: str, args: dict | None, *, context: Conversation | Non
             return _error("approval_busy", "The existing approval is being resolved.", "Wait for its result.")
         try:
             normalized, summary = prepare_write(name, args or {})
+            if name == 'sheets_log_hours' and normalized.get('fields'):
+                normalized = await sheets.freeze_fields(normalized)
             pending = await store.propose(context.session_id, context.channel, name, normalized, summary)
             if "error" in pending:
                 return pending

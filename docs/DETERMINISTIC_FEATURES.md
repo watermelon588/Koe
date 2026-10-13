@@ -18,8 +18,8 @@ Every Calendar, Sheets and Notion record/property change uses the existing persi
 | G4 | Contribution calendar and streaks | GitHub contribution days, current/longest streak within a stated window; not a commit-only streak or lifetime claim | Implemented; synthetic tests pass |
 | C1 | Event description and location | Optional validated strings; omission preserves existing fields when moving | Implemented; synthetic tests pass |
 | C2 | Event notification reminders | Explicit minutes-before-start, popup/email, at most five; device delivery cannot be guaranteed | Implemented; synthetic tests pass |
-| S1 | Discover actual timesheet headers | Read configured sheet only; validate unique headers and preserve required base columns | Pending |
-| S2 | Fill optional existing columns | Named scalar fields, RAW input, leave unspecified cells blank in new rows; no arbitrary destination or formula execution | Pending |
+| S1 | Discover actual timesheet headers | Read configured sheet only; validate unique headers and preserve required base columns | Implemented; synthetic tests pass |
+| S2 | Fill optional existing columns | Named scalar fields, RAW input, leave unspecified cells blank in new rows; no arbitrary destination or formula execution | Implemented; synthetic tests pass |
 | N1 | Discover editable Notion properties/options | Configured data source only; type and option validation; no arbitrary workspace traversal | Pending |
 | N2 | Fill optional existing Notion properties | Text, finite number, checkbox, date, URL, email, select/multi-select; reserved workflow fields and computed results protected | Pending |
 | C3 | Google Meet link creation | Doable; requires supported conference type, asynchronous result handling and exact proposal semantics | Queued |

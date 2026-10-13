@@ -874,3 +874,16 @@ Each had its own fix. No guessing.
 **Try it yourself:** “Book a review tomorrow at 7 PM for 30 minutes, at the library, and remind me 15 minutes before.” Koe must present the complete proposal before writing.
 
 **Interview line:** "A voice request becomes a typed, approved Calendar payload with explicit preservation and clearing semantics."
+
+## Step 54: optional Sheets columns (2026-10-13)
+**Files:** tools/sheets.py, agent.py, new test_sheet_fields.py and the feature checklist.
+
+**What it does:** sheets_schema reads the configured timesheet's actual headers (up to AZ). The existing five base columns remain; up to 20 existing optional columns can be filled by exact name with literal text, finite numbers or booleans. The proposal previews every value and freezes the header order; execution rereads it and rejects schema/destination changes before appending. No columns or existing rows are edited.
+
+**Core concept:** Map names to verified column positions rather than asking the model for spreadsheet coordinates. Python builds the ordered row; RAW input prevents user text from being interpreted as a formula. Missing optional fields stay blank in the new row. Required fields and the action ID cannot be overridden.
+
+**Verification:** Eight new regressions first failed; 42 Sheets/log/approval tests passed after implementation, using synthetic API responses. Unknown/reserved/nested/nonfinite fields, duplicate headers and schema changes are covered. No real rows were written.
+
+**Try it yourself:** Add optional headers such as Project, Billable or Amount after the five base columns in your sheet. Ask “Log one hour for Client tomorrow; Project Koe and Billable true.” Koe reads the schema and presents the complete approved row.
+
+**Interview line:** "Optional spreadsheet fields are bound to verified headers and a frozen approval, not model-invented cell addresses."
