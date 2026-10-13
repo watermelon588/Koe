@@ -16,7 +16,7 @@ from zoneinfo import ZoneInfo
 
 from koe import events, identity, store, notion_service
 from koe.config import settings
-from koe.tools import calendar, github, github_work, github_stats, notion, sheets
+from koe.tools import calendar, github, github_work, github_stats, notion, sheets, sheet_workspace
 
 SYSTEM_PROMPT = (
     "You are Koe (声, 'voice'), a warm, upbeat voice assistant for Rohit, a developer founder "
@@ -148,6 +148,10 @@ TOOLS.update({
          'required': ['date', 'client', 'hours']}, needs_approval=True),
     'sheets_schema': Tool(sheets.sheets_schema, 'Read the configured timesheet required/optional headers before using optional columns. No writes.',
         {'type': 'object', 'properties': {}}),
+    'sheets_add_columns': Tool(sheet_workspace.sheets_add_columns,
+        'Propose 1–10 new optional columns in the configured timesheet; preserves existing columns/data. Separate approval; no values filled.',
+        {'type': 'object', 'properties': {'columns': {'type': 'array', 'items': {'type': 'string'}, 'minItems': 1, 'maxItems': 10}},
+         'required': ['columns']}, needs_approval=True),
 })
 
 TOOLS.update({
@@ -165,10 +169,12 @@ TOOLS.update({
          'required': ['page_id', 'expected_edited', 'title']}, needs_approval=True),
 })
 
-APPROVED_WRITERS = {'calendar_upsert_event', 'github_comment', 'sheets_log_hours', 'notion_save', 'notion_archive'}
+APPROVED_WRITERS = {'calendar_upsert_event', 'github_comment', 'sheets_log_hours', 'notion_save', 'notion_archive', 'sheets_add_columns'}
 
 
 def prepare_write(name: str, args: dict) -> tuple[dict, str]:
+    if name == 'sheets_add_columns':
+        return sheet_workspace.prepare_write(name, **args), ''
     if name == 'notion_save':
         n = notion_service.prepare_save(**args)
         return n, (f"{'Update' if n['page_id'] else 'Create'} Notion {n['kind']}: {n['title']}\n"
@@ -253,6 +259,8 @@ async def _run_tool(name: str, args: dict | None, *, context: Conversation | Non
             return _error("approval_busy", "The existing approval is being resolved.", "Wait for its result.")
         try:
             normalized, summary = prepare_write(name, args or {})
+            if name == 'sheets_add_columns':
+                normalized, summary = await sheet_workspace.prepare_proposal(name, normalized)
             if name == 'sheets_log_hours' and normalized.get('fields'):
                 normalized = await sheets.freeze_fields(normalized)
             if name == 'notion_save' and normalized.get('fields'):

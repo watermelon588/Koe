@@ -15,6 +15,12 @@ from koe.config import settings
 from koe.tools.github import _error
 
 HEADERS = ['Date', 'Client', 'Hours', 'Note', 'Koe action ID']
+_write_locks = {}
+
+
+def write_lock(spreadsheet_id, sheet_name):
+    key = (asyncio.get_running_loop(), spreadsheet_id, sheet_name)
+    return _write_locks.setdefault(key, asyncio.Lock())
 
 
 def timesheet_id() -> str:
@@ -89,7 +95,7 @@ async def read_headers(spreadsheet_id, sheet_name):
 async def freeze_fields(args):
     headers = await read_headers(args['spreadsheet_id'], args['sheet_name'])
     if set(args['fields']) - set(headers[5:]):
-        raise ValueError('An optional field is not an existing column. Read sheets_schema; add columns separately in Sheets.')
+        raise ValueError('An optional field is not an existing column. Read sheets_schema; propose sheets_add_columns separately.')
     return {**args, 'expected_headers': headers}
 
 
@@ -105,7 +111,12 @@ async def sheets_schema():
         return _error('sheets_schema', 'The configured timesheet headers could not be validated.', 'Check the connected sheet and its unique headers.')
 
 
-async def sheets_log_hours(date: str, client: str, hours: float, note: str = '', *,
+async def sheets_log_hours(*args, **kwargs):
+    async with write_lock(kwargs['spreadsheet_id'], kwargs['sheet_name']):
+        return await _sheets_log_hours(*args, **kwargs)
+
+
+async def _sheets_log_hours(date: str, client: str, hours: float, note: str = '', *,
                            spreadsheet_id: str, sheet_name: str, request_id: str,
                            fields: dict | None = None, expected_headers: list | None = None) -> dict:
     try:

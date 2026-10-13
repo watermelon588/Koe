@@ -2,6 +2,8 @@
 
 Add a row for every decision that changes scope, stack or behavior. Newest at the bottom.
 
+2026-10-14 schema/row editing: user authorizes the next backend build for existing Sheets rows and adding Sheets columns/Notion properties through Koe; user handles Render. Add three approved writers plus read-only row discovery. Use stable action IDs, Google row metadata, typed versions and sparse literal edits; insert columns atomically without replacing old data. Notion schema patches are additive and owner-scoped. Keep UI/dependencies/scopes unchanged and document optimistic concurrency limits rather than promising an external-editor lock.
+
 2026-10-13 deterministic integration expansion: user authorizes implementing feasible features one by one with a dedicated Markdown checklist. Prioritize exact GitHub date reports/counts/line changes/contribution streaks, event details/reminders and schema-validated optional Sheets/Notion fields. Calculations, destination/schema checks and writes remain Python-owned. Preserve the UI freeze, approval gate, provider setup and free budget. More complex series/schema/relationship changes stay explicitly queued.
 
 2026-10-13 backend takeover: user freezes the UI and authorizes necessary backend fixes. Add regression coverage for transient provider failures and partial voice retries, bound/drain best-effort audit tasks, and expose secret-free owner deployment diagnostics. Preserve approval semantics and existing provider keys/models; avoid quota-consuming acceptance repeats. Read-only Render probes now show Notion/Connections routes, so the earlier pre-Notion deployment report must be rechecked rather than assumed current.

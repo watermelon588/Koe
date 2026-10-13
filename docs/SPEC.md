@@ -16,6 +16,8 @@ A single-user, voice-first agent for a developer founder. It works across GitHub
 
 ### User stories
 
+Schema/row editing phase (2026-10-14): [SCHEMA_ROW_EDIT_PLAN.md](SCHEMA_ROW_EDIT_PLAN.md) defines approved optional column/property creation and existing Sheets row editing. Stable IDs, typed snapshots, exact previews, stale checks and bounded scans are enforced by Python. External-editor races are documented honestly; no remote compare-and-set is claimed. UI and hosting stay unchanged.
+
 Integration expansion (2026-10-13): [DETERMINISTIC_FEATURES.md](DETERMINISTIC_FEATURES.md) defines the implementation order and acceptance contract for exact GitHub history/statistics/streaks, Calendar details/reminders and typed optional Sheets/Notion fields. Python validates and executes; the LLM chooses tools and explains evidence. The UI remains frozen. Queued features are not advertised as implemented.
 
 1. *At my desk*, I click **Call** and ask "What's my day?". Koe speaks a summary of today's meetings, PRs waiting on me, and my open PRs' CI status, while the dashboard highlights each item.

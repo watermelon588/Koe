@@ -902,6 +902,8 @@ Each had its own fix. No guessing.
 **Interview line:** "Schema discovery becomes a typed approval contract, so optional fields cannot silently change meaning before execution."
 
 ## Step 56: review boundaries and verify the integration batch (2026-10-13)
+
+Next phase: approved schema creation and safe Sheets row editing is tracked in [SCHEMA_ROW_EDIT_PLAN.md](SCHEMA_ROW_EDIT_PLAN.md), requested 2026-10-14. Render deployment is handled by the user.
 **Files:** GitHub history/statistics, Sheets/Notion validators, shared declaration, regression tests and integration docs.
 
 **What it does:** Adds a 30-second total history deadline and a 15-second optional line-detail deadline, preserving completed detail reads with explicit partial coverage. Cold GitHub credential/preferences reads run off the event loop. Contribution requests use UTC bounds and provider calendar labels, return compact summaries by default, and mark a one-day empty window's prior streak unknown. Extreme integer inputs are rejected before float conversion. URLs reject whitespace/control characters. Returned commit IDs are validated before detail endpoints are built.
