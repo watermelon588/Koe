@@ -119,3 +119,30 @@ def test_disconnect_forgets_the_tokens_and_revokes_them_at_google(client, monkey
         assert client.delete("/api/connections/google").status_code == 204
     assert revoke.called and b"secret-refresh" in revoke.calls[0].request.content
     assert asyncio.run(sql("select * from koe_connections")) == []
+
+
+def test_create_my_timesheet_makes_the_sheet_the_tool_expects_and_uses_it(client, monkeypatch):
+    from koe.tools import sheets
+    sign_in(client, monkeypatch, ADMIN)
+    connect(client, monkeypatch)
+    monkeypatch.setattr(google_auth, "credentials", lambda **kw: type("C", (), {"token": "ya29.t"})())
+    with respx.mock:
+        made = respx.post(connections.SHEETS_API).mock(return_value=httpx.Response(200, json={"spreadsheetId": "sheet_123"}))
+        r = client.post("/api/connections/google/timesheet")
+    assert r.json() == {"timesheet": "https://docs.google.com/spreadsheets/d/sheet_123/edit"}
+    sent = made.calls[0].request
+    assert sent.headers["authorization"] == "Bearer ya29.t" and b'"Koe action ID"' in sent.content
+    assert client.get("/api/connections").json()["timesheet"].endswith("/sheet_123/edit")
+    assert sheets.prepare_hours("2026-10-13", "Acme", 2)["spreadsheet_id"] == "sheet_123"
+
+
+def test_a_friend_without_a_timesheet_never_writes_to_the_owners(monkeypatch):
+    from koe.tools import sheets
+    monkeypatch.setattr(settings, "google_sheets_id", "owners_sheet")
+    assert sheets.timesheet_id() == "owners_sheet"  # the owner keeps GOOGLE_SHEETS_ID
+    token = identity.OWNER.set("friend-id")
+    try:
+        with pytest.raises(ValueError, match="Create my timesheet"):
+            sheets.prepare_hours("2026-10-13", "Acme", 2)
+    finally:
+        identity.OWNER.reset(token)

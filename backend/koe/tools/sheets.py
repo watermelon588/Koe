@@ -9,11 +9,17 @@ from urllib.parse import quote
 
 import httpx
 
-from koe import google_auth
+from koe import connections, google_auth, identity
 from koe.config import settings
 from koe.tools.github import _error
 
 HEADERS = ['Date', 'Client', 'Hours', 'Note', 'Koe action ID']
+
+
+def timesheet_id() -> str:
+    """The caller's own timesheet (Settings → Connections); the owner may still use GOOGLE_SHEETS_ID from .env."""
+    mine = connections.pref('google_sheets_id')
+    return mine or (settings.google_sheets_id if identity.is_owner() else '')
 
 
 def prepare_hours(date: str, client: str, hours: float, note: str = '') -> dict:
@@ -29,10 +35,10 @@ def prepare_hours(date: str, client: str, hours: float, note: str = '') -> dict:
             raise ValueError('Hours must be positive, at most 24, with at most two decimal places.')
     except InvalidOperation:
         raise ValueError('Hours must be a finite number.') from None
-    sheet = settings.google_sheets_id
+    sheet = timesheet_id()
     tab = settings.google_sheets_tab
     if not re.fullmatch(r'[A-Za-z0-9_-]+', sheet) or not tab.strip() or len(tab) > 100:
-        raise ValueError('Set GOOGLE_SHEETS_ID and GOOGLE_SHEETS_TAB.')
+        raise ValueError('No timesheet yet: Settings → Connections → Create my timesheet.')
     return {'date': date, 'client': client.strip(), 'hours': float(value), 'note': note,
             'spreadsheet_id': sheet, 'sheet_name': tab}
 

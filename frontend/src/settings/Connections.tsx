@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { CalendarBlank, GithubLogo, NotePencil } from '@phosphor-icons/react'
+import { CalendarBlank, GithubLogo, NotePencil, Table } from '@phosphor-icons/react'
 import { httpUrl } from '../backend'
 import { savedToken } from '../chat/api'
 import { SESSION } from '../session'
@@ -19,6 +19,8 @@ export function ConnectionsSection() {
   const signedIn = savedToken() === SESSION
   const [list, setList] = useState<Connection[] | null>(null)
   const [ready, setReady] = useState(true)
+  const [timesheet, setTimesheet] = useState('')
+  const [sheetError, setSheetError] = useState('')
   const [busy, setBusy] = useState('')
   const [notice] = useState(() => NOTICES[location.search.slice(1)] ?? '')
 
@@ -27,12 +29,26 @@ export function ConnectionsSection() {
     if (!r.ok) return setList([])
     const body = await r.json()
     setReady(body.ready)
+    setTimesheet(body.timesheet ?? '')
     setList(body.connections)
   }
   useEffect(() => {
     if (location.search) history.replaceState(null, '', location.pathname + location.hash) // a notice shows once
     if (signedIn) void load()
   }, [signedIn])
+
+  async function createTimesheet() {
+    setBusy('timesheet')
+    setSheetError('')
+    try {
+      const r = await fetch(httpUrl('/api/connections/google/timesheet'), { method: 'POST' })
+      const body = await r.json().catch(() => ({}))
+      if (r.ok) setTimesheet(body.timesheet)
+      else setSheetError(body.detail ?? 'Google didn’t create the sheet. Try again.')
+    } finally {
+      setBusy('')
+    }
+  }
 
   async function disconnect(provider: string) {
     setBusy(provider)
@@ -62,6 +78,13 @@ export function ConnectionsSection() {
             </div>
           )
         })}
+      {signedIn && ready && list?.find((c) => c.provider === 'google')?.connected && <div className="device-row">
+        <span><span><Table size={16} /> Timesheet</span>
+          <small>{sheetError || (timesheet ? 'Koe logs your hours here (each row needs your OK).' : 'A Google Sheet for logging hours, made for you.')}</small></span>
+        {timesheet
+          ? <a className="soft" href={timesheet} target="_blank" rel="noopener">Open</a>
+          : <button className="soft" disabled={busy === 'timesheet'} onClick={() => void createTimesheet()}>{busy === 'timesheet' ? 'Creating…' : 'Create my timesheet'}</button>}
+      </div>}
     </section>
   )
 }

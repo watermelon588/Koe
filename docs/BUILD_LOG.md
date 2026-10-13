@@ -634,3 +634,15 @@ A QR code is just a URL drawn as squares. Since the URL is fixed, the image is g
 - Google accepted the real connect request (its sign-in page, with no `invalid_scope` or redirect errors).
 - In the browser, with a temporary test account (deleted afterwards): the list renders, the notice shows once, and the connected state plus Disconnect work. Disconnect takes about 5 s because of Google's revoke call, so the button says "Disconnecting…".
 **Interview line:** "I separated identity from authorization: sign-in uses minimal OpenID scopes, while each service is a separate incremental-consent connection whose refresh token is Fernet-encrypted at rest and loaded per request through a context variable."
+
+## Step 44: "Create my timesheet": no Sheet ID to copy  (Phase 5c, task 7 · 2026-10-13)
+**Files:** backend/migrations/005_prefs.sql (new) · backend/koe/{connections.py,db.py,tools/sheets.py} · backend/tests/{test_connections.py,conftest.py} · frontend/src/settings/Connections.tsx
+**What it does:** Once Google is connected, Settings → Connections shows **Timesheet → Create my timesheet**. Koe creates "Koe timesheet" in *your* Google Drive, with an **Hours** tab and exactly the five headers the timesheet tool checks for. It remembers the sheet for you, and the button becomes **Open**. Logging hours then goes to your own sheet, and every row still needs your OK. Only the owner can still fall back to `GOOGLE_SHEETS_ID` from `.env`.
+**Core concept:** *Make the setup step a button.* One `spreadsheets.create` call with the header row inside the request body replaces "make a sheet, type five headers exactly, copy the ID out of the URL, paste it into .env". The sheet's ID is stored per person in `koe_prefs`, a small key/value table. It's cached in memory, because the tool validates a proposal outside any worker thread.
+**How it connects:** Settings → `POST /api/connections/google/timesheet` → `google_auth.credentials()` (your connection) → Sheets API → `koe_prefs.google_sheets_id`. Later: `sheets.prepare_hours()` → `timesheet_id()` → your sheet.
+**Try it yourself:** Connect Google, then Create my timesheet, then Open: the headers are already there. Ask Koe "log 2 hours for Acme today", then Confirm, and a new row appears.
+**Gotchas:**
+- The Google Sheets API must be enabled in the client's Cloud project, or Google refuses with an error, which the page shows.
+- The prefs cache is per process. Tests reset it in `conftest.py`, so one test's sheet can't leak into another.
+**Measured:** 2 new tests: the request carries the headers and your token, the ID is stored and used by the tool, and a friend without a timesheet is refused rather than given the owner's. 232 backend tests and 18 frontend tests pass.
+**Interview line:** "I replaced a five-step manual setup with one API call that creates a correctly shaped spreadsheet in the user's own Drive, and stored the result as a per-user preference with an owner-only fallback."

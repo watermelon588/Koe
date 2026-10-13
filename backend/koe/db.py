@@ -1,7 +1,7 @@
 """Koe's per-user tables: Neon when DATABASE_URL is set (survives Render's disk wipes), else one local SQLite file.
 
 The same SQL runs on both (%s placeholders; SQLite gets ?). Times are ISO-8601 UTC text in both, so they compare
-as strings. Neon tables: migrations/002_app_chat.sql, 003_accounts.sql, 004_connections.sql. The approval/activity RPCs stay in store.py.
+as strings. Neon tables: migrations/002_app_chat.sql, 003_accounts.sql, 004_connections.sql, 005_prefs.sql. The approval/activity RPCs stay in store.py.
 """
 import asyncio
 import sqlite3
@@ -31,6 +31,8 @@ create table if not exists koe_sessions (token_hash text primary key, user_id te
 create table if not exists koe_connections (owner_id text not null, provider text not null, account text not null default '',
   scopes text not null default '', token_enc text not null, created text not null, updated text not null,
   primary key (owner_id, provider));
+create table if not exists koe_prefs (owner_id text not null, name text not null, value text not null,
+  updated text not null, primary key (owner_id, name));
 """
 
 # One reused Neon connection. Measured from the laptop: a new connection ~950 ms (TLS + auth to Singapore), a query

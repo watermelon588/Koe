@@ -3,12 +3,14 @@ later GitHub and Notion, and Koe's tools act with *their* account.
 
   GET    /api/connections            → [{provider, connected, account}]
   DELETE /api/connections/{provider} → forget it here and revoke it at the provider
+  POST   /api/connections/google/timesheet → create "Koe timesheet" in the person's Drive with the Hours headers
   (Connecting is a browser redirect: GET /auth/google/connect, in auth.py.)
 
 Tokens are encrypted with Fernet (AES-128-CBC + HMAC-SHA256) before they reach the database, under a key derived
 from KOE_SECRET_KEY, which lives only in .env / Render: a copy of the table alone is useless.
 https://cryptography.io/en/latest/fernet/
 """
+import asyncio
 import base64
 import hashlib
 import json
@@ -30,6 +32,8 @@ GOOGLE_REVOKE = "https://oauth2.googleapis.com/revoke"
 CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar.events"
 SHEETS_SCOPE = "https://www.googleapis.com/auth/spreadsheets"
 GOOGLE_SCOPES = ["openid", "email", CALENDAR_SCOPE, SHEETS_SCOPE]
+SHEETS_API = "https://sheets.googleapis.com/v4/spreadsheets"
+TIMESHEET_HEADERS = ["Date", "Client", "Hours", "Note", "Koe action ID"]  # tools/sheets.py checks row 1 against these
 
 
 class ConnectionError_(Exception):
@@ -75,6 +79,28 @@ def load(owner: str, provider: str) -> dict | None:
     return {"account": rows[0]["account"], "scopes": rows[0]["scopes"].split(), "token": decrypt(rows[0]["token_enc"])}
 
 
+# ── Per-person settings (koe_prefs) ──────────────────────────────────────────────────────────────────
+# Read synchronously (the Sheets tool validates a proposal outside any thread), so they're cached per process.
+# ponytail: one backend instance; a second instance would need cache invalidation.
+_prefs: dict[tuple[str, str], str] = {}
+
+
+def pref(name: str, owner: str | None = None) -> str:
+    owner = owner or identity.owner_id()
+    if (owner, name) not in _prefs:
+        rows = _run("select value from koe_prefs where owner_id = %s and name = %s", (owner, name))
+        _prefs[(owner, name)] = rows[0]["value"] if rows else ""
+    return _prefs[(owner, name)]
+
+
+async def set_pref(name: str, value: str, owner: str | None = None) -> None:
+    owner = owner or identity.owner_id()
+    await sql("insert into koe_prefs (owner_id, name, value, updated) values (%s, %s, %s, %s) on conflict (owner_id, name) "
+              "do update set value = excluded.value, updated = excluded.updated",
+              owner, name, value, datetime.now(timezone.utc).isoformat())
+    _prefs[(owner, name)] = value
+
+
 def google_credentials(required_scopes: list[str]) -> Credentials | None:
     """The calling person's Google credentials, refreshed when expired, or None if they haven't connected Google.
     Runs in a worker thread (the tools call google_auth.credentials via asyncio.to_thread)."""
@@ -108,8 +134,32 @@ api = APIRouter(prefix="/api/connections", dependencies=[Depends(auth.http_owner
 async def list_connections():
     rows = await sql("select provider, account from koe_connections where owner_id = %s", identity.owner_id())
     have = {r["provider"]: r["account"] for r in rows}
-    return {"ready": configured(), "connections": [
-        {"provider": p, "connected": p in have, "account": have.get(p, "")} for p in PROVIDERS]}
+    sheet = await asyncio.to_thread(pref, "google_sheets_id", identity.owner_id())
+    return {"ready": configured(), "timesheet": f"https://docs.google.com/spreadsheets/d/{sheet}/edit" if sheet else "",
+            "connections": [{"provider": p, "connected": p in have, "account": have.get(p, "")} for p in PROVIDERS]}
+
+
+@api.post("/google/timesheet")
+async def create_timesheet():
+    """A new spreadsheet in the person's own Drive, tab and headers exactly as the Sheets tool expects, so nobody
+    copies an ID. https://developers.google.com/workspace/sheets/api/reference/rest/v4/spreadsheets/create"""
+    from koe import google_auth
+    try:
+        creds = await asyncio.to_thread(google_auth.credentials, required_scopes=[SHEETS_SCOPE])
+    except google_auth.GoogleAuthError as exc:
+        raise HTTPException(409, str(exc)) from None
+    body = {
+        "properties": {"title": "Koe timesheet"},
+        "sheets": [{"properties": {"title": settings.google_sheets_tab}, "data": [{"startRow": 0, "startColumn": 0, "rowData": [
+            {"values": [{"userEnteredValue": {"stringValue": h}} for h in TIMESHEET_HEADERS]}]}]}],
+    }
+    async with httpx.AsyncClient(timeout=20) as http:
+        r = await http.post(SHEETS_API, json=body, headers={"Authorization": f"Bearer {creds.token}"})
+    if r.status_code != 200:
+        raise HTTPException(502, "Google didn't create the sheet. Is the Google Sheets API enabled for this project?")
+    sheet_id = r.json()["spreadsheetId"]
+    await set_pref("google_sheets_id", sheet_id)
+    return {"timesheet": f"https://docs.google.com/spreadsheets/d/{sheet_id}/edit"}
 
 
 @api.delete("/{provider}", status_code=204)
