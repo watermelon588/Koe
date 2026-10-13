@@ -152,6 +152,14 @@ TOOLS.update({
         'Propose 1–10 new optional columns in the configured timesheet; preserves existing columns/data. Separate approval; no values filled.',
         {'type': 'object', 'properties': {'columns': {'type': 'array', 'items': {'type': 'string'}, 'minItems': 1, 'maxItems': 10}},
          'required': ['columns']}, needs_approval=True),
+    'sheets_find_rows': Tool(sheet_workspace.sheets_find_rows,
+        'Read/filter configured timesheet rows and their stable row_id/version. Up to 20 matches; row numbers are display hints. Ask when multiple matches.',
+        {'type': 'object', 'properties': {k: {'type': 'string'} for k in ('query', 'client', 'date', 'row_id')}}),
+    'sheets_update_row': Tool(sheet_workspace.sheets_update_row,
+        'Propose editing ONE existing row read with sheets_find_rows. Exact row_id/version required. Changes are exact existing header names and scalar values. Cannot overwrite formulas/tracking ID. Separate approval.',
+        {'type': 'object', 'properties': {'row_id': {'type': 'string'}, 'expected_version': {'type': 'string'},
+            'changes': {'type': 'object', 'additionalProperties': {'anyOf': [{'type': 'string'}, {'type': 'number'}, {'type': 'boolean'}]}}},
+         'required': ['row_id', 'expected_version', 'changes']}, needs_approval=True),
 })
 
 TOOLS.update({
@@ -169,11 +177,11 @@ TOOLS.update({
          'required': ['page_id', 'expected_edited', 'title']}, needs_approval=True),
 })
 
-APPROVED_WRITERS = {'calendar_upsert_event', 'github_comment', 'sheets_log_hours', 'notion_save', 'notion_archive', 'sheets_add_columns'}
+APPROVED_WRITERS = {'calendar_upsert_event', 'github_comment', 'sheets_log_hours', 'notion_save', 'notion_archive', 'sheets_add_columns', 'sheets_update_row'}
 
 
 def prepare_write(name: str, args: dict) -> tuple[dict, str]:
-    if name == 'sheets_add_columns':
+    if name in ('sheets_add_columns', 'sheets_update_row'):
         return sheet_workspace.prepare_write(name, **args), ''
     if name == 'notion_save':
         n = notion_service.prepare_save(**args)
@@ -258,8 +266,8 @@ async def _run_tool(name: str, args: dict | None, *, context: Conversation | Non
         if context.resolving:
             return _error("approval_busy", "The existing approval is being resolved.", "Wait for its result.")
         try:
-            normalized, summary = prepare_write(name, args or {})
-            if name == 'sheets_add_columns':
+            normalized, summary = await asyncio.to_thread(prepare_write, name, args or {})
+            if name in ('sheets_add_columns', 'sheets_update_row'):
                 normalized, summary = await sheet_workspace.prepare_proposal(name, normalized)
             if name == 'sheets_log_hours' and normalized.get('fields'):
                 normalized = await sheets.freeze_fields(normalized)

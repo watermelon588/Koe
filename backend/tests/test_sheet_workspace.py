@@ -29,6 +29,8 @@ class Sheet:
         self.row_count = 20
         self.writes = []
         self.metadata = []
+        self.value_writes = []
+        self.move_before_update = False
 
     def response(self, grid=False):
         tab = {'properties': {'sheetId': 7, 'title': 'Hours', 'gridProperties': {
@@ -44,7 +46,9 @@ class Sheet:
     def batch(self, request):
         body = json.loads(request.content)
         self.writes.append(body)
+        replies = []
         for item in body['requests']:
+            reply = {}
             if 'insertDimension' in item:
                 r = item['insertDimension']['range']
                 index, count = r['startIndex'], r['endIndex'] - r['startIndex']
@@ -54,7 +58,42 @@ class Sheet:
                 update = item['updateCells']
                 for offset, value in enumerate(update['rows'][0]['values']):
                     self.rows[0][update['start']['columnIndex'] + offset] = value['userEnteredValue']['stringValue']
-        return httpx.Response(200, json={'replies': [{} for _ in body['requests']]})
+            elif 'createDeveloperMetadata' in item:
+                entry = copy.deepcopy(item['createDeveloperMetadata']['developerMetadata'])
+                entry['metadataId'] = 42 + len(self.metadata)
+                self.metadata.append(entry)
+                reply = {'createDeveloperMetadata': {'developerMetadata': entry}}
+            replies.append(reply)
+        return httpx.Response(200, json={'replies': replies})
+
+    def search(self, request):
+        return httpx.Response(200, json={'matchedDeveloperMetadata': [{'developerMetadata': m} for m in self.metadata]})
+
+    def by_filter(self, request):
+        body = json.loads(request.content)
+        selected = next(f['developerMetadataLookup']['metadataId'] for f in body['dataFilters'] if 'developerMetadataLookup' in f)
+        meta = next(m for m in self.metadata if m['metadataId'] == selected)
+        index = meta['location']['dimensionRange']['startIndex']
+        result = self.response()
+        result['sheets'][0]['data'] = [
+            {'startRow': 0, 'rowData': [{'values': [cell(v) for v in self.rows[0]]}]},
+            {'startRow': index, 'rowData': [{'values': [cell(v) for v in self.rows[index]]}]}]
+        return httpx.Response(200, json=result)
+
+    def update(self, request):
+        body = json.loads(request.content)
+        self.value_writes.append(body)
+        if self.move_before_update:
+            self.rows.insert(1, ['2026-10-14', 'Other', 2, 'Preserve', 'other-id', 'Other project'])
+            for meta in self.metadata:
+                meta['location']['dimensionRange']['startIndex'] += 1
+                meta['location']['dimensionRange']['endIndex'] += 1
+        selected = body['data'][0]['dataFilter']['developerMetadataLookup']['metadataId']
+        meta = next(m for m in self.metadata if m['metadataId'] == selected)
+        row = self.rows[meta['location']['dimensionRange']['startIndex']]
+        for index, value in enumerate(body['data'][0]['values'][0]):
+            if value is not None: row[index] = value
+        return httpx.Response(200, json={'totalUpdatedRows': 1})
 
 
 @pytest.fixture(autouse=True)
@@ -70,6 +109,9 @@ def sheet():
         table = Sheet()
         respx.get(ROOT).mock(side_effect=table.get)
         respx.post(ROOT + ':batchUpdate').mock(side_effect=table.batch)
+        respx.post(ROOT + '/developerMetadata:search').mock(side_effect=table.search)
+        respx.post(ROOT + ':getByDataFilter').mock(side_effect=table.by_filter)
+        respx.post(ROOT + '/values:batchUpdateByDataFilter').mock(side_effect=table.update)
         yield table
 
 
@@ -121,3 +163,89 @@ def test_columns_require_separate_approval_and_execute_once(sheet, fake_store):
         assert 'error' in await agent.confirm(ctx, True)
     asyncio.run(scenario())
     assert len(sheet.writes) == 1
+
+
+def test_row_discovery_returns_real_identity_values_and_version(sheet):
+    from koe.tools import sheet_workspace as workspace
+    result = asyncio.run(workspace.sheets_find_rows(client='Client', date='2026-10-14'))
+    row = result['matches'][0]
+    assert row['row_id'] == ROW_ID and row['fields']['Note'] == 'Original note'
+    assert len(row['version']) == 64 and row['editable'] and not sheet.writes
+
+
+def test_edit_follows_moving_metadata_and_preserves_unrequested_cells(sheet, fake_store):
+    from koe.tools import sheet_workspace as workspace
+    sheet.rows[0].append('Calculated')
+    sheet.rows[1].append({'formulaValue': '=C2*2'})
+    async def scenario():
+        row = (await workspace.sheets_find_rows(row_id=ROW_ID))['matches'][0]
+        ctx = agent.Conversation('cli')
+        result = await agent.run_tool('sheets_update_row', {'row_id': ROW_ID, 'expected_version': row['version'],
+            'changes': {'Hours': 1.5, 'Note': '=literal'}}, context=ctx)
+        assert 'pending_action' in result and 'Original note' in result['pending_action']['summary'] and not sheet.value_writes
+        assert 'error' in await agent.confirm(ctx, True)
+        stored = fake_store[0][result['pending_action']['id']]
+        stored['args_json'] = json.loads(json.dumps(stored['args_json']))
+        sheet.move_before_update = True
+        ctx.approval_ready = True
+        assert (await agent.confirm(ctx, True))['status'] == 'executed'
+        assert 'error' in await agent.confirm(ctx, True)
+    asyncio.run(scenario())
+    assert len(sheet.value_writes) == 1
+    assert sheet.rows[1][3] == 'Preserve' and sheet.rows[2][2:5] == [1.5, '=literal', ROW_ID]
+    assert sheet.rows[2][6] == {'formulaValue': '=C2*2'}
+    sent = sheet.value_writes[0]
+    assert sent['valueInputOption'] == 'RAW'
+    assert sent['data'][0]['values'] == [[None, None, 1.5, '=literal']]
+
+
+def test_stale_or_duplicate_rows_never_write(sheet):
+    from koe.tools import sheet_workspace as workspace
+    async def scenario():
+        row = (await workspace.sheets_find_rows(row_id=ROW_ID))['matches'][0]
+        sheet.rows[1][3] = 'Changed elsewhere'
+        with pytest.raises(ValueError):
+            await workspace.prepare_proposal('sheets_update_row', workspace.prepare_write('sheets_update_row',
+                row_id=ROW_ID, expected_version=row['version'], changes={'Note': 'New'}))
+        sheet.rows.append(copy.deepcopy(sheet.rows[1]))
+        rows = await workspace.sheets_find_rows(row_id=ROW_ID)
+        assert all(not r['editable'] for r in rows['matches'])
+    asyncio.run(scenario())
+    assert not sheet.writes and not sheet.value_writes
+
+
+@pytest.mark.parametrize('changes', [{'Koe action ID': 'spoof'}, {'Hours': True}, {'Unknown': 'x'}, {'Project': {'nested': 'x'}}])
+def test_invalid_row_fields_cannot_be_proposed(sheet, changes):
+    from koe.tools import sheet_workspace as workspace
+    async def scenario():
+        row = (await workspace.sheets_find_rows(row_id=ROW_ID))['matches'][0]
+        await workspace.prepare_proposal('sheets_update_row', workspace.prepare_write('sheets_update_row',
+            row_id=ROW_ID, expected_version=row['version'], changes=changes))
+    with pytest.raises(ValueError): asyncio.run(scenario())
+    assert not sheet.writes
+
+
+def test_formula_target_and_changed_row_after_approval_are_rejected(sheet):
+    from koe.tools import sheet_workspace as workspace
+    async def scenario():
+        sheet.rows[1][5] = {'formulaValue': '=1+1'}
+        row = (await workspace.sheets_find_rows(row_id=ROW_ID))['matches'][0]
+        with pytest.raises(ValueError):
+            await workspace.prepare_proposal('sheets_update_row', workspace.prepare_write('sheets_update_row',
+                row_id=ROW_ID, expected_version=row['version'], changes={'Project': 'New'}))
+        args, _ = await workspace.prepare_proposal('sheets_update_row', workspace.prepare_write('sheets_update_row',
+            row_id=ROW_ID, expected_version=row['version'], changes={'Note': 'New'}))
+        sheet.rows[1][2] = 2
+        assert 'error' in await workspace.sheets_update_row(**args, request_id='action')
+    asyncio.run(scenario())
+    assert not sheet.writes and not sheet.value_writes
+
+
+def test_discovery_refuses_incomplete_scan_and_reports_match_limit(sheet):
+    from koe.tools import sheet_workspace as workspace
+    sheet.rows += [['2026-10-14', 'Client', 1, 'Note', f'id-{i}', 'Koe'] for i in range(25)]
+    sheet.row_count = 50
+    result = asyncio.run(workspace.sheets_find_rows(client='Client'))
+    assert len(result['matches']) == 20 and result['has_more'] and result['match_count'] == 26
+    sheet.row_count = 6000
+    assert 'error' in asyncio.run(workspace.sheets_find_rows())

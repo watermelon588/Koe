@@ -21,8 +21,8 @@ All three writers use the existing persisted proposal → explicit approval → 
 ## Verification
 
 - [x] Column creation: exact preview, atomic literal header batch, destination/tab/header changes, reserved/duplicate names and preservation of existing columns. Nine new regressions first failed; 43 focused Sheets/tool tests passed. Uncertain-result cases are included in final review.
-- [ ] Row discovery: bounded full identity scan, duplicate/missing IDs, actual typed cell data, version changes, match limits and owner-scoped destination.
-- [ ] Row edits: complete approval/storage roundtrip, wrong/stale versions, moved rows, changed anchor identity, formula targets, protected fields, sparse RAW update, readback and no replay/timeout retry.
+- [x] Row discovery: bounded full identity scan, duplicate IDs, actual typed cell data, versions and match limits; final review extends malformed-response coverage.
+- [x] Row edits: approval/storage roundtrip, stale versions, moved rows, formula targets, protected fields, sparse RAW update and readback. Nine new regressions first failed; 52 focused Sheets/approval/tool tests passed. Final review extends uncertain/anchor coverage.
 - [ ] Notion properties: supported types/options, name/type validation, existing/ambiguous names, source/schema changes, owner restriction, exact additive patch, response verification and no replay.
 - [ ] Full backend tests, SDK declaration serialization, no frontend/secrets/dependency/deployment changes. Optional read-only real-account probes; no real writes during automated acceptance.
 

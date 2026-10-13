@@ -903,6 +903,9 @@ Each had its own fix. No guessing.
 
 ## Step 56: review boundaries and verify the integration batch (2026-10-13)
 
+### Follow-up phase, 2026-10-14: schema/row slices
+Sheets column creation passed 43 focused tests after nine new failures established the missing behavior. Stable row discovery/editing then passed 52 focused tests after nine more regressions. New edits use unique action IDs, typed row/header versions and Google developer metadata; sparse RAW updates preserve unrequested cells/formulas and tracking IDs. A synthetic move immediately before the value write still edits the correct row. No real Sheets writes, UI edits or Render changes were made. The schema/row contract and known external-editor race limit are in SCHEMA_ROW_EDIT_PLAN.md.
+
 Next phase: approved schema creation and safe Sheets row editing is tracked in [SCHEMA_ROW_EDIT_PLAN.md](SCHEMA_ROW_EDIT_PLAN.md), requested 2026-10-14. Render deployment is handled by the user.
 **Files:** GitHub history/statistics, Sheets/Notion validators, shared declaration, regression tests and integration docs.
 
