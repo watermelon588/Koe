@@ -49,6 +49,7 @@ class Settings(BaseSettings):
     koe_admin_email: str = ""  # the owner: always allowed, can invite; their user id is koe_owner_id
     koe_public_url: str = ""  # the site people open, e.g. https://koe-pi.vercel.app (Google's redirect goes back here)
     koe_secret_key: str = Field(default="", repr=False)  # encrypts connection tokens (connections.py); 32+ random chars
+    koe_daily_turns: int = 60  # turns a day for friends on the shared Gemini key (usage.py); the owner is never limited
 
 
 settings = Settings()

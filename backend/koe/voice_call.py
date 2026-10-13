@@ -26,8 +26,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from google import genai
 from google.genai import errors, types
 
-from koe import agent, auth, events, identity, store
-from koe.config import settings
+from koe import agent, auth, events, identity, store, usage
 
 router = APIRouter()
 log = logging.getLogger("uvicorn.error")
@@ -291,7 +290,12 @@ async def call(ws: WebSocket):
         except (ValueError, asyncio.TimeoutError, WebSocketDisconnect):
             await ws.close(code=1008, reason="Sign in to Koe again.")
             return
-    client = genai.Client(api_key=settings.gemini_api_key)
+    try:
+        await usage.spend()  # starting a call is one turn on the shared key
+    except usage.OverQuota as exc:
+        await ws.close(code=1008, reason=str(exc)[:120])
+        return
+    client = genai.Client(api_key=usage.gemini_key())  # the caller's own key if they added one
     state = CallState()
     mic: asyncio.Queue[bytes | str] = asyncio.Queue()
     try:

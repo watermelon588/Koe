@@ -24,7 +24,7 @@ from fastapi.responses import PlainTextResponse
 from google import genai
 from google.genai import errors, types
 
-from koe import agent, store, text_agent
+from koe import agent, store, text_agent, usage
 from koe.config import settings
 
 log = logging.getLogger("koe.whatsapp")
@@ -110,7 +110,7 @@ class Chat:
 # ponytail: one in-memory chat per sender; a restart forgets the history and any pending button
 # (the user just asks again). Phase 6 adds the cross-channel memory summary.
 CHATS: dict[str, Chat] = {}
-_client: genai.Client | None = None
+_clients: dict[str, genai.Client] = {}
 _http: httpx.AsyncClient | None = None
 
 
@@ -123,10 +123,11 @@ def http() -> httpx.AsyncClient:
 
 
 def gemini() -> genai.Client:
-    global _client
-    if _client is None:
-        _client = genai.Client(api_key=settings.gemini_api_key)
-    return _client
+    """One reused client per key: the person's own Gemini key if they added one (usage.py), else the shared key."""
+    key = usage.gemini_key()
+    if key not in _clients:
+        _clients[key] = genai.Client(api_key=key)
+    return _clients[key]
 
 
 async def handle_message(msg: dict, received: float | None = None) -> None:

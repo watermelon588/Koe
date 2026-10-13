@@ -13,6 +13,7 @@ os.environ.setdefault("GEMINI_API_KEY", "test")
 from fastapi import WebSocketDisconnect  # noqa: E402
 from google.genai import errors  # noqa: E402
 
+from koe.config import settings
 from koe import voice_call  # noqa: E402
 
 SILENT = b"\x00\x00" * 640
@@ -280,7 +281,7 @@ def test_typed_text_goes_to_gemini_and_bad_frames_are_ignored(monkeypatch):
 
 
 def test_browser_call_requires_access_token_when_storage_enables_writes(monkeypatch):
-    monkeypatch.setattr(voice_call.settings, "database_url", "postgresql://test@localhost/test?sslmode=require")
+    monkeypatch.setattr(settings, "database_url", "postgresql://test@localhost/test?sslmode=require")
     async def scenario():
         browser = FakeBrowser()
         await voice_call.call(browser)
@@ -289,7 +290,7 @@ def test_browser_call_requires_access_token_when_storage_enables_writes(monkeypa
 
 
 def test_invalid_access_token_never_opens_a_gemini_session(monkeypatch):
-    monkeypatch.setattr(voice_call.settings, "koe_access_token", "private-app-token")
+    monkeypatch.setattr(settings, "koe_access_token", "private-app-token")
     class Browser(FakeBrowser):
         async def receive_json(self):
             return {"type": "auth", "token": "wrong"}
@@ -302,7 +303,7 @@ def test_invalid_access_token_never_opens_a_gemini_session(monkeypatch):
 
 def test_valid_access_token_allows_the_existing_voice_flow(monkeypatch):
     fake_gemini(monkeypatch)
-    monkeypatch.setattr(voice_call.settings, "koe_access_token", "private-app-token")
+    monkeypatch.setattr(settings, "koe_access_token", "private-app-token")
     async def receive_json(self):
         return {"type": "auth", "token": "private-app-token"}
     monkeypatch.setattr(FakeBrowser, "receive_json", receive_json, raising=False)

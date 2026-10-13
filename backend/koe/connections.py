@@ -4,6 +4,7 @@ later GitHub and Notion, and Koe's tools act with *their* account.
   GET    /api/connections            → [{provider, connected, account}]
   DELETE /api/connections/{provider} → forget it here and revoke it at the provider
   POST   /api/connections/google/timesheet → create "Koe timesheet" in the person's Drive with the Hours headers
+  PUT    /api/connections/gemini {"key"} → use your own free Gemini key (no daily limit), checked with Google first
   (Connecting is a browser redirect: GET /auth/google/connect, in auth.py.)
 
 Tokens are encrypted with Fernet (AES-128-CBC + HMAC-SHA256) before they reach the database, under a key derived
@@ -21,18 +22,20 @@ from cryptography.fernet import Fernet, InvalidToken
 from fastapi import APIRouter, Depends, HTTPException, Response
 from google.auth.transport.requests import Request as GoogleRequest
 from google.oauth2.credentials import Credentials
+from pydantic import BaseModel
 
 from koe import auth, identity
 from koe.config import settings
 from koe.db import _run, sql
 
-PROVIDERS = ("google", "github", "notion")
+PROVIDERS = ("google", "github", "notion", "gemini")
 GOOGLE_TOKEN = "https://oauth2.googleapis.com/token"
 GOOGLE_REVOKE = "https://oauth2.googleapis.com/revoke"
 CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar.events"
 SHEETS_SCOPE = "https://www.googleapis.com/auth/spreadsheets"
 GOOGLE_SCOPES = ["openid", "email", CALENDAR_SCOPE, SHEETS_SCOPE]
 SHEETS_API = "https://sheets.googleapis.com/v4/spreadsheets"
+GEMINI_MODELS = "https://generativelanguage.googleapis.com/v1beta/models"
 TIMESHEET_HEADERS = ["Date", "Client", "Hours", "Note", "Koe action ID"]  # tools/sheets.py checks row 1 against these
 
 
@@ -176,4 +179,31 @@ async def disconnect(provider: str):
         except (ConnectionError_, httpx.HTTPError):
             pass
     await sql("delete from koe_connections where owner_id = %s and provider = %s", owner, provider)
+    if provider == "gemini":
+        from koe import usage
+        usage.forget(owner)
     return Response(status_code=204)  # a 204 must have no body (FastAPI would send `null`)
+
+
+class GeminiKey(BaseModel):
+    key: str
+
+
+@api.put("/gemini", status_code=204)
+async def save_gemini_key(body: GeminiKey):
+    """Check the key with Google (list models) before storing it encrypted, so a typo fails here, not mid-call.
+    https://ai.google.dev/api/models#method:-models.list"""
+    from koe import usage
+    key = body.key.strip()
+    if not 20 <= len(key) <= 200:
+        raise HTTPException(400, "That doesn't look like a Gemini API key.")
+    if not configured():
+        raise HTTPException(409, "The server needs KOE_SECRET_KEY before it can store keys.")
+    async with httpx.AsyncClient(timeout=15) as http:
+        r = await http.get(GEMINI_MODELS, headers={"x-goog-api-key": key})
+    if r.status_code != 200:
+        raise HTTPException(400, "Google didn't accept that key. Copy it again from aistudio.google.com/apikey.")
+    owner = identity.owner_id()
+    await asyncio.to_thread(save, owner, "gemini", f"key ending {key[-4:]}", [], {"key": key})
+    usage.forget(owner)
+    return Response(status_code=204)

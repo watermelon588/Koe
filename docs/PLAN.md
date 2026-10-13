@@ -116,7 +116,7 @@ Goal: an invited friend goes from link to working assistant without touching cod
 - **Checkpoint:** a friend connects all four from Settings with no code changes.
 
 **Group 5: quota and admin**
-- [ ] 10. Daily turn cap on the shared Gemini key + optional own key (encrypted). *Accept:* the cap message appears at the limit; an own key removes it.
+- [x] 10. *(done 2026-10-13)* Daily turn cap on the shared Gemini key + optional own key (encrypted). *Accept:* the cap message appears at the limit; an own key removes it.
 - [ ] 11. Owner's Settings → People: invite/remove emails. *Accept:* an invited email can sign in, a removed one is signed out.
 
 ## Phase 6: shared memory

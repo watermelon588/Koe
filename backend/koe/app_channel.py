@@ -32,7 +32,7 @@ from py_vapid import Vapid02, b64urlencode
 from pydantic import BaseModel
 from pywebpush import WebPushException, webpush_async
 
-from koe import agent, auth, identity, text_agent, voice_call, whatsapp
+from koe import agent, auth, identity, text_agent, usage, voice_call, whatsapp
 from koe.config import settings
 from koe.db import sql
 
@@ -153,6 +153,15 @@ class Decision(BaseModel):
     approve: bool
 
 
+async def _over_quota() -> str:
+    """"" when this turn may go ahead; otherwise the friendly limit message (usage.py)."""
+    try:
+        await usage.spend()
+        return ""
+    except usage.OverQuota as exc:
+        return str(exc)
+
+
 @router.get("/messages")
 async def get_messages(after: int = 0):
     return {"messages": await list_messages(after)}
@@ -164,6 +173,8 @@ async def post_message(body: TextIn):
     if not text:
         raise HTTPException(400, "Type a message first.")
     mine = await add_message("you", text)
+    if over := await _over_quota():
+        return {"messages": [mine, await add_message("koe", over)]}
     return {"messages": [mine, await reply(text, spoken=False)]}
 
 
@@ -174,6 +185,8 @@ async def post_voice(request: Request):
         raise HTTPException(413, "Voice notes can be up to about 90 seconds.")
     if audio[:4] != b"RIFF" or audio[8:12] != b"WAVE":
         raise HTTPException(415, "Send the voice note as WAV audio.")
+    if over := await _over_quota():
+        return {"messages": [await add_message("you", "", voice=await save_voice(audio)), await add_message("koe", over)]}
     name = await save_voice(audio)
     try:
         heard = await whatsapp.transcribe(audio, "audio/wav")

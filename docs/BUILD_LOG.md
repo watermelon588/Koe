@@ -666,3 +666,28 @@ A QR code is just a URL drawn as squares. Since the URL is fixed, the image is g
 - Friends stay blocked at sign-in until their own connections exist, so this is groundwork that's already enforced.
 **Measured:** 234 backend tests pass. Reverting the store to the fixed owner fails the new test.
 **Interview line:** "Multi-tenancy is enforced where identity is established: a context variable set at authentication flows into every storage call, so no request body or model output can pick whose rows it touches."
+
+## Step 46: a daily limit on the shared Gemini key, or bring your own  (Phase 5c, task 10 · 2026-10-13)
+**Files:** backend/koe/usage.py (new) · backend/migrations/006_usage.sql (new) · backend/tests/test_usage.py (new) · backend/koe/{whatsapp.py,app_channel.py,voice_call.py,connections.py,db.py,config.py} · backend/tests/{conftest.py,test_voice_call.py} · backend/.env.example · frontend/src/settings/Connections.tsx
+**What it does:**
+- Friends using Koe on the owner's free Gemini key get `KOE_DAILY_TURNS` (default 60) turns a day. A turn is a message, a voice note, or starting a call.
+- Past the limit, the chat explains how to continue, and a call closes with the same message.
+- In Settings → Connections, a friend can paste their **own free Gemini key**. Koe checks it with Google, stores it encrypted, and from then on uses it for that person with no limit.
+- The owner is never limited.
+**Core concept:**
+- *Quota on a shared resource.* An atomic upsert, `insert … on conflict do update set turns = turns + 1 returning turns`, counts per person per day in Asia/Kolkata. Two quick requests can't both read "59" and both pass.
+- *Per-person clients.* `whatsapp.gemini()` returns one reused client per key, so the app chat, voice-note transcription and spoken replies all follow the person's key without changing their call sites. Calls get the same key.
+**How it connects:**
+- `/api/app/messages` and `/voice` → `usage.spend()` → `koe_usage`; then `whatsapp.gemini()` → `usage.gemini_key()` → the person's own key (an encrypted connection) or the shared one.
+- Settings → `PUT /api/connections/gemini` → Google `models.list` check → `connections.save` (encrypted).
+**Try it yourself:** `uv run pytest -q tests/test_usage.py` runs 4 tests:
+- the limit applies to a friend but not to the owner;
+- an own key lifts the limit and is the key used;
+- a wrong key is refused before it's stored, and a right key is stored encrypted;
+- over the limit, the chat answers without calling Gemini.
+**Gotchas:**
+- The call tests used to patch `voice_call.settings`, which went away when the module stopped needing it. They now patch `koe.config.settings`.
+- The own-key cache is per process, and tests reset it in `conftest.py`.
+- Friends are still kept out at sign-in until their own GitHub/Notion connections exist, so the limit has no effect yet.
+**Measured:** 238 backend tests and 18 frontend tests pass. Migration 006 is applied to Neon.
+**Interview line:** "I metered a shared free-tier API per user with an atomic upsert counter, and let users bring their own key, validated against the provider before it's encrypted and routed per request."
