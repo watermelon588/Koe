@@ -1,9 +1,13 @@
+import logging
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from koe import app_channel, dashboard, github_hooks, voice_call, whatsapp
 from koe.config import settings  # import = fail fast on missing config
 
+# Show Koe's own INFO lines (latency stages, delivery failures) next to uvicorn's in the host logs.
+logging.basicConfig(level=logging.INFO, format="%(levelname)s:     %(name)s: %(message)s")
 app = FastAPI(title="Koe")
 # The frontend on Vercel is another origin: allow only the configured ones, Bearer token in a header (no cookies).
 # https://fastapi.tiangolo.com/tutorial/cors/

@@ -463,3 +463,20 @@ Verified the original displacement before the fix, then long upward/downward dra
 **Gotchas:** Render free sleeps after 15 min idle, and the first request takes up to about a minute; GitHub webhooks sent during that minute can be lost. The app's chat history and voice notes reset whenever Render restarts, until they move to Neon (PLAN Phase 7). A push subscription made against the laptop's key must be turned off and on once against Render's key.
 **Measured:** 154 backend tests (1 new: push key from the environment) and 10 frontend tests pass; `uv lock --check` passes. Nothing is deployed yet, so there are no Render latency numbers.
 **Interview line:** "I made the backend disposable: config and keys come from the host's environment, durable data lives in Postgres, and the client re-registers what the server may have forgotten, so a free host that wipes its disk still works."
+
+## Step 36: WhatsApp wiring on Render: three silent breaks  (Phase 5 · 2026-10-13)
+**Files:** backend/koe/whatsapp.py (`log_failed_deliveries`) · backend/koe/main.py (INFO logging) · backend/tests/test_whatsapp.py · Meta account config (no code)
+**What it does:** Meta webhooks now reach Koe on Render. Failed deliveries of Koe's replies are logged with Meta's own error code, and Koe's INFO lines (latency stages) show in Render's logs.
+**Core concept:** *Every hop can fail silently.* A WhatsApp round trip has four independent switches, and each one failed without an error:
+1. The webhook URL is verified (Meta → App → WhatsApp → Configuration).
+2. The WhatsApp Business Account (WABA) is **subscribed to this app**: `POST /{waba-id}/subscribed_apps`. Ours was only subscribed to Meta's internal "WA DevX" app.
+3. The app secret is set under the exact name Koe reads. `.env` had `WHATS_APP_SECRET`, Koe reads `WHATSAPP_APP_SECRET`, and Render had none, so signed events got 401.
+4. The send API's "accepted" isn't "delivered". The real result arrives later as a `statuses[].status = "failed"` webhook, which Koe used to drop unread.
+**Try it yourself:** Message the test number. In the Render logs, look for `POST /webhooks/whatsapp 200`, then Koe's `koe.whatsapp` lines. A `WhatsApp delivery failed: <code> <title>` line names Meta's reason.
+**Gotchas:** Meta's health check (`GET /{phone-id}?fields=health_status`) showed:
+- the WABA **BLOCKED** for business-initiated messages (141006, a payment-method error);
+- the business **LIMITED** (141010, not verified).
+
+Replies within 24 h of your own message are a different category. A correct app secret can be proven without revealing it: Graph accepts an `appsecret_proof` (an HMAC of the token) only when it was made with the right secret.
+**Measured:** 155 backend tests pass. A local send was accepted by Meta. A correctly signed empty event got 401 on Render before the secret was set and 200 after. Meta's POSTs arrived about 10 s apart: your message, then the receipt for the reply.
+**Interview line:** "I traced a 'no reply' bug across four silent hops: webhook verification, the account-to-app subscription, the signing secret's name, and asynchronous delivery receipts. Then I made the last hop log Meta's own error code."

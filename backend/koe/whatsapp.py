@@ -72,13 +72,28 @@ def inbound_messages(payload: dict) -> list[dict]:
     return [m for m in msgs if m.get("from") in allowed]
 
 
+def log_failed_deliveries(payload: dict) -> None:
+    """Meta reports a reply it couldn't deliver only here, in a later "failed" status webhook; the send API
+    had already said "accepted". Log the reason, or a blocked account looks like silence.
+    https://developers.facebook.com/documentation/business-messaging/whatsapp/webhooks/reference/messages/status"""
+    for e in payload.get("entry", []):
+        for c in e.get("changes", []):
+            for s in c.get("value", {}).get("statuses", []):
+                if s.get("status") == "failed":
+                    log.warning("WhatsApp delivery failed: %s", "; ".join(
+                        f"{err.get('code')} {err.get('title')}: {(err.get('error_data') or {}).get('details', '')}"
+                        for err in s.get("errors", [])) or "no reason given")
+
+
 @router.post("/webhooks/whatsapp")
 async def receive(request: Request, background: BackgroundTasks):
     received = time.perf_counter()
     body = await request.body()
     if not valid_signature(settings.whatsapp_app_secret, body, request.headers.get("x-hub-signature-256")):
         raise HTTPException(401, "bad signature")
-    for msg in inbound_messages(await request.json()):
+    payload = await request.json()
+    log_failed_deliveries(payload)
+    for msg in inbound_messages(payload):
         background.add_task(handle_message, msg, received)  # runs after the 200 is sent: Meta wants a fast ack
     return {"ok": True}
 

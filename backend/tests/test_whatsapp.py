@@ -70,3 +70,15 @@ def test_send_refuses_numbers_outside_allow_list(client):
     with pytest.raises(ValueError):
         asyncio.run(whatsapp.send_text("15550001111", "hi"))
     assert route.call_count == 0
+
+
+def test_a_failed_delivery_is_logged_with_metas_reason(caplog):
+    # The send API only says "accepted"; a blocked reply shows up later as a "failed" status webhook.
+    payload = {"entry": [{"changes": [{"value": {"statuses": [
+        {"id": "wamid.x", "status": "failed", "errors": [
+            {"code": 131031, "title": "Business Account locked", "error_data": {"details": "verify your business"}}]},
+        {"id": "wamid.y", "status": "delivered"}]}}]}]}
+    with caplog.at_level("WARNING", logger="koe.whatsapp"):
+        whatsapp.log_failed_deliveries(payload)
+    assert [r.getMessage() for r in caplog.records] == \
+        ["WhatsApp delivery failed: 131031 Business Account locked: verify your business"]
