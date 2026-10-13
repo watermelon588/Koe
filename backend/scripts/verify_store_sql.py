@@ -17,7 +17,7 @@ from uuid import uuid4
 def main():
     commands = {name: shutil.which(name) for name in ("initdb", "postgres", "pg_ctl", "psql")}
     if not all(commands.values()):
-        raise SystemExit("Local PostgreSQL tools are required. This check never connects to Supabase.")
+        raise SystemExit("Local PostgreSQL tools are required. This check never connects to Neon.")
     flags = {"creationflags": subprocess.CREATE_NO_WINDOW} if os.name == "nt" else {}
     def run(name, *args, **kwargs):
         return subprocess.run([commands[name], *args], capture_output=True, text=True,
@@ -42,7 +42,7 @@ def main():
                         break
                     except subprocess.CalledProcessError:
                         time.sleep(0.1)
-                sql("create role anon; create role authenticated; create role service_role bypassrls;")
+                sql("create role untrusted;")
                 migration = (Path(__file__).resolve().parents[1] / "migrations/001_phase2.sql").read_text(encoding="utf-8")
                 sql(migration)
                 session = str(uuid4())
@@ -68,12 +68,15 @@ def main():
                 rejected = propose()
                 assert json.loads(sql(f"select public.koe_claim_action('owner','{session}','{rejected['id']}',false);"))["status"] == "rejected"
                 assert not sql(f"select public.koe_claim_action('owner','{session}','{rejected['id']}',true);")
-                assert sql("select has_function_privilege('anon','public.koe_claim_action(text,uuid,uuid,boolean)','execute');") == "f"
-                assert sql("select has_function_privilege('authenticated','public.koe_claim_action(text,uuid,uuid,boolean)','execute');") == "f"
-                assert sql("select has_table_privilege('anon','public.koe_pending_actions','select');") == "f"
+                assert sql("select has_function_privilege('untrusted','public.koe_claim_action(text,uuid,uuid,boolean)','execute');") == "f"
+                assert sql("select has_table_privilege('untrusted','public.koe_pending_actions','select');") == "f"
                 assert sql("select bool_and(relrowsecurity) from pg_class where relname in ('koe_activity','koe_pending_actions','koe_daily_notes','koe_github_deliveries');") == "t"
+                app_session = str(uuid4())
+                app_action = json.loads(sql(f"select public.koe_propose_action('owner','{app_session}','app','calendar_upsert_event','{{}}','App proposal');"))
+                assert app_action["channel"] == "app", "Installed app proposals must be persisted too"
+                assert json.loads(sql(f"select public.koe_claim_action('owner','{app_session}','{app_action['id']}',false);"))["status"] == "rejected"
                 sql(migration)  # reapplying must preserve existing actions
-                assert sql("select count(*) from public.koe_pending_actions;") == "3"
+                assert sql("select count(*) from public.koe_pending_actions;") == "4"
                 print("PASS SQL: migration/reapply, audit, concurrent claims, owner/session isolation, expiry, rejection, RLS/grants")
             finally:
                 subprocess.run([commands["pg_ctl"], "-D", data, "-m", "fast", "-w", "stop"],

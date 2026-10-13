@@ -1,5 +1,6 @@
 import { useEffect, useReducer, useRef, useState } from 'react'
 import { emptyState, reduceEvent } from './state'
+import { wsUrl } from '../backend'
 
 export function useDashboard(onAlert: () => void) {
   const [data, dispatch] = useReducer(reduceEvent, emptyState)
@@ -20,7 +21,7 @@ export function useDashboard(onAlert: () => void) {
     function open() {
       if (gone) return
       setStatus('Connecting dashboard…')
-      ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws/events`)
+      ws = new WebSocket(wsUrl('/ws/events'))
       socket.current = ws
       ws.onopen = () => ws.send(JSON.stringify({ type: 'auth', token }))
       ws.onmessage = (message) => {

@@ -48,9 +48,9 @@ async def refresh():
                 for pending in rows["pending"]:
                     if pending["id"] not in events.hub.resolved:
                         events.hub.pending.setdefault(pending["id"], pending)
-                events.hub.storage = "Saved activity connected." if store.configured() else "Not connected: add Supabase settings to save activity."
+                events.hub.storage = "Saved activity connected." if store.configured() else "Not connected: configure Neon to save activity."
             except store.StoreError:
-                events.hub.storage = "Saved activity unavailable. Check Supabase settings and migration."
+                events.hub.storage = "Saved activity unavailable. Check Neon settings and migration."
 
         await asyncio.gather(panel("calendar", lambda: calendar.calendar_list(day)),
                              panel("reviews", lambda: github_read(github.github_review_queue)),

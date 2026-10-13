@@ -26,7 +26,7 @@ Everything here is free and needs no credit card. Adding anything not on this pa
 | **`pywebpush`** (MPL-2.0) | Web Push to the installed Koe app (VAPID, encrypted payloads) | The standard Python implementation; free push services (FCM, Mozilla, Apple) need no account. Added 2026-10-13 with Rohit's OK |
 | **`google-api-python-client` + `google-auth-oauthlib`** | Google Calendar + Sheets | Official Google clients; OAuth installed-app flow |
 | **`pydantic-settings`** | Config from `.env` | Typed config, fails fast if a key is missing |
-| **Supabase PostgreSQL + existing `httpx`** | Activity, pending actions, memory | Managed hosting-independent storage; transactional approval claims via restricted REST RPC |
+| **Neon PostgreSQL + `psycopg[binary]` 3** | Activity, pending actions, memory | Managed storage in Singapore; parameterized SQL and atomic approval functions. Blocking connections run in worker threads so voice stays responsive; works with Windows' default event loop. |
 | **`tzdata`** | IANA timezones on Windows | Python's `zoneinfo` needs timezone data; Windows does not ship the IANA database |
 | **`pytest` + `respx`** | Tests; fake HTTP APIs | Test logic without hitting real services |
 
@@ -68,5 +68,5 @@ A chain waits at each step: speech-to-text, then the LLM, then text-to-speech. D
 | **WebRTC / Pipecat (for now)** | A WebSocket to our backend is simpler and good enough. **Plan B** if measured latency or audio quality is bad: Pipecat with SmallWebRTC |
 | **Twilio / phone numbers** | Costs money; no card |
 | **Render free (prod backend)** | Sleeps, wipes disk, loses webhooks (see SERVICES_AND_COSTS) |
-| **Vector DB / RAG** | Not needed; memory is a daily summary in Supabase PostgreSQL |
+| **Vector DB / RAG** | Not needed; memory is a daily summary in Neon PostgreSQL |
 | **Redux / heavy state libs** | One screen; React state + one event stream is enough |

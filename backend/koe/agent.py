@@ -196,7 +196,7 @@ async def _run_tool(name: str, args: dict | None, *, context: Conversation | Non
             return {"pending_action": {k: pending[k] for k in ("id", "summary", "expires_ts")},
                     "message": "Not executed. Read the summary and ask the user to confirm or cancel."}
         except store.StoreError:
-            return _error("storage_unavailable", "The proposal could not be saved; nothing was executed.", "Check Supabase setup.")
+            return _error("storage_unavailable", "The proposal could not be saved; nothing was executed.", "Check Neon setup.")
         except (ValueError, TypeError) as exc:
             return _error("bad_args", str(exc), "Clarify the request; don't invent missing information.")
     try:

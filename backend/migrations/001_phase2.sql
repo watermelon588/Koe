@@ -1,16 +1,23 @@
--- Run in your Supabase project's SQL Editor. This migration is additive and rerunnable.
--- Backend-only tables: RLS + no anon/authenticated table or function privileges.
--- https://supabase.com/docs/guides/database/functions#function-privileges
+-- Neon PostgreSQL: run python -m scripts.migrate_store from backend/.
+-- Additive and rerunnable. No Supabase roles or extensions are required.
+-- Backend-only tables: RLS + no PUBLIC table/function privileges.
+-- The backend connection role owns these objects and has implicit owner access.
+-- Never expose DATABASE_URL or connect the browser directly to PostgreSQL.
 begin;
 
 create table if not exists public.koe_activity (
   id uuid primary key default gen_random_uuid(), owner_id text not null,
   ts timestamptz not null default now(), session_id uuid not null,
-  channel text not null check (channel in ('web','cli','whatsapp','github')),
+  channel text not null check (channel in ('web','cli','whatsapp','github','app')),
   kind text not null, summary text not null, payload_json jsonb not null default '{}',
   latency_json jsonb not null default '{}'
 );
 alter table public.koe_activity add column if not exists latency_json jsonb not null default '{}';
+-- Expand the original Phase 2 constraint for the later installed-app channel.
+-- Replacing the check inside this transaction retains every row and every old channel.
+alter table public.koe_activity drop constraint if exists koe_activity_channel_check;
+alter table public.koe_activity add constraint koe_activity_channel_check
+  check (channel in ('web','cli','whatsapp','github','app'));
 create index if not exists koe_activity_owner_ts on public.koe_activity(owner_id, ts desc);
 
 create table if not exists public.koe_pending_actions (
@@ -38,9 +45,7 @@ alter table public.koe_pending_actions enable row level security;
 alter table public.koe_daily_notes enable row level security;
 alter table public.koe_github_deliveries enable row level security;
 revoke all on public.koe_activity, public.koe_pending_actions, public.koe_daily_notes,
-  public.koe_github_deliveries from public, anon, authenticated;
-grant all on public.koe_activity, public.koe_pending_actions, public.koe_daily_notes,
-  public.koe_github_deliveries to service_role;
+  public.koe_github_deliveries from public;
 
 create or replace function public.koe_record_activity(
   p_owner text, p_session uuid, p_channel text, p_kind text, p_summary text, p_payload jsonb
@@ -108,9 +113,5 @@ $$;
 revoke execute on function public.koe_record_activity(text,uuid,text,text,text,jsonb),
   public.koe_propose_action(text,uuid,text,text,jsonb,text),
   public.koe_claim_action(text,uuid,uuid,boolean), public.koe_finish_action(text,uuid,uuid,boolean,jsonb)
-  from public, anon, authenticated;
-grant execute on function public.koe_record_activity(text,uuid,text,text,text,jsonb),
-  public.koe_propose_action(text,uuid,text,text,jsonb,text),
-  public.koe_claim_action(text,uuid,uuid,boolean), public.koe_finish_action(text,uuid,uuid,boolean,jsonb)
-  to service_role;
+  from public;
 commit;

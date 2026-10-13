@@ -1,4 +1,6 @@
 // The Koe app API (backend /api/app, SPEC §14). Every call carries the access token remembered on this device.
+import { httpUrl } from '../backend'
+
 export type Message = {
   id: number
   ts: string
@@ -30,7 +32,7 @@ export function saveToken(token: string): boolean {
 export class AuthError extends Error {}
 
 async function request(path: string, init: RequestInit = {}): Promise<Response> {
-  const r = await fetch(`/api/app${path}`, { ...init, headers: { ...init.headers, Authorization: `Bearer ${savedToken()}` } })
+  const r = await fetch(httpUrl(`/api/app${path}`), { ...init, headers: { ...init.headers, Authorization: `Bearer ${savedToken()}` } })
   if (r.status === 401) throw new AuthError('Enter your Koe access token.')
   if (!r.ok) throw new Error((await r.json().catch(() => null))?.detail ?? `Koe answered ${r.status}. Is the backend running?`)
   return r

@@ -22,7 +22,7 @@ class Hub:
         self.pending: dict[str, dict] = {}
         self.resolved: deque[str] = deque(maxlen=100)
         self.latencies: deque[dict] = deque(maxlen=100)
-        self.storage = "Not connected: add Supabase settings to save activity."
+        self.storage = "Not connected: configure Neon to save activity."
         self.calendar_dirty = False
 
     def subscribe(self) -> asyncio.Queue:

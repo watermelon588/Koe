@@ -2,6 +2,10 @@
 
 Add a row for every decision that changes scope, stack or behavior. Newest at the bottom.
 
+Current storage decision (2026-10-13): replace the unavailable Supabase project with Neon PostgreSQL in Singapore, using backend-only `DATABASE_URL` and `psycopg[binary]` 3. Preserve atomic approvals and their public Python interface; no hosted Supabase data exists to export. Supabase entries below describe the original implementation.
+
+Current sign-in direction (2026-10-13): the user rejects token copying as final UX. Document owner-only Google/GitHub sign-in and secure server sessions in [AUTH_FLOW.md](AUTH_FLOW.md). This turn implements the Neon storage migration and explains sign-in; provider login remains a required pre-hosting slice, not an implicitly completed feature.
+
 | Date | Decision | Why | Alternatives rejected |
 |---|---|---|---|
 | 2026-10-12 | Build a **dev-day agent** for a developer founder (GitHub-centric) | The user lives this problem daily, so the demo is honest | On-call incident agent; client bug hotline |
@@ -72,3 +76,4 @@ User confirmed Sheets with approval before every entry. Implement the five tools
 | 2026-10-13 | App chat history in **SQLite** (`backend/data/app.db`) | Works today without Supabase setup; one user, one server; stdlib | Supabase table (needs the user's migration first) |
 | 2026-10-13 | Voice notes recorded as **16 kHz WAV** in the browser (existing AudioWorklet mic) | Gemini accepts WAV; Chrome records WebM, which Gemini doesn't list; no ffmpeg on the server | MediaRecorder WebM + server-side conversion |
 | 2026-10-13 | Koe answers a voice note **with a voice note** (Gemini Live reading the reply), text replies stay text | WhatsApp-like feel in the same voice as calls, without a separate TTS service | Separate TTS model; voice for every reply |
+| 2026-10-13 | Frontend can be hosted on **Vercel** (`frontend/vercel.json`); it calls the backend at `VITE_BACKEND_URL`, and the backend allows that origin (`FRONTEND_ORIGINS`, CORS) | Free HTTPS hosting for the installable app; Vercel can't proxy WebSockets, so the browser talks to the backend directly | Proxying /api through Vercel rewrites (no WebSockets); hosting the backend on Vercel (serverless can't hold Live calls) |

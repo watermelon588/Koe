@@ -1,32 +1,48 @@
-# Phase 2 setup: Supabase and Google
+# Phase 2 setup: Neon and Google
 
 The code can be tested against fakes without your credentials. Real use needs the steps below.
 Do not paste passwords, keys, credentials.json, or token.json into chat. Keep them in the local files.
 
-## 1. Supabase (database)
+## 1. Neon (database)
 
-1. Open [Supabase](https://supabase.com/dashboard), create/select a Free project, and choose a region near the backend you expect to host. Choose a database password and keep it in your password manager.
-2. In the project Connect dialog copy **Project URL**. In **Settings → API Keys**, create/copy a backend **secret key** (`sb_secret_...`). The legacy `service_role` key also works. A publishable/anon key does not have the required database privileges.
-3. Add these lines to **backend/.env**, preserving your existing Gemini/GitHub values:
+1. Create a Free project in [Neon](https://console.neon.tech/), using AWS Singapore for the current India-based development setup. Only Postgres is required.
+2. Click Connect and copy the PostgreSQL connection string. Preserve its SSL and channel-binding parameters. Pooled connections work for the runtime; direct connections can also be used for administrative migrations.
+3. Add these values to `backend/.env`, preserving your other credentials:
 
    ```dotenv
-   SUPABASE_URL=https://YOUR-PROJECT.supabase.co
-   SUPABASE_SECRET_KEY=YOUR-BACKEND-SECRET-KEY
+   DATABASE_URL=postgresql://ROLE:PASSWORD@HOST/DATABASE?sslmode=require
    KOE_OWNER_ID=rohit
+   KOE_ACCESS_TOKEN=YOUR-PRIVATE-DEVELOPMENT-APP-PASSWORD
    ```
 
-4. In Supabase → **SQL Editor**, open a new query, paste the entire contents of `backend/migrations/001_phase2.sql`, and Run. It creates four `koe_` tables and restricted database functions. It is safe to re-run; it does not clear existing rows.
-5. Generate a private **Koe app access token**, locally:
+4. From `backend/`, install dependencies and apply the additive schema:
+
+   ```powershell
+   uv sync
+   uv run python -m scripts.migrate_store
+   ```
+
+   This creates four `koe_` tables and atomic approval functions. Re-running retains existing rows. The backend database role owns the objects; PUBLIC has no table or function privileges. RLS is enabled, but the owning backend role has implicit access. This is single-owner backend-only storage, not browser-accessible or multi-user RLS.
+
+5. Generate a development app password if needed:
 
    ```powershell
    python -c "import secrets; print(secrets.token_urlsafe(32))"
    ```
 
-   Save that generated value as `KOE_ACCESS_TOKEN` in backend/.env. Enter the same value into the password field on Koe's home screen before calling. This token is distinct from the Supabase key. Supabase secrets must never enter the browser.
+   Set it as `KOE_ACCESS_TOKEN`. Enter it into Koe for current local testing. This is distinct from the database password. The browser must never receive `DATABASE_URL`.
 
-We use Supabase's HTTPS REST API, so **no database connection string is required**. Tables have RLS enabled and no direct browser access. The backend service key bypasses RLS, so access is also checked at the application boundary. Supabase Auth login is a future UI/auth slice; Phase 2 keeps the app single-user and protects browser calls with the private token. The configurable owner namespace prepares the tables for an eventual Auth user ID without introducing multi-user behavior now.
+6. Verify without calling external write tools:
 
-[API key documentation](https://supabase.com/docs/guides/getting-started/api-keys) · [SQL function privileges](https://supabase.com/docs/guides/database/functions)
+   ```powershell
+   uv run python -m scripts.verify_neon_store
+   ```
+
+   This uses a fresh synthetic owner namespace, checks proposal/claim/finish, four simultaneous claims, replay, rejection, expiry and owner/conversation isolation, then removes only its synthetic rows. No meetings, messages or PR comments are created. For a fully local disposable PostgreSQL check, run `uv run python -m scripts.verify_store_sql` (PostgreSQL binaries required).
+
+Manual token entry is temporary. Final owner-only provider sign-in and secure browser sessions are described in [AUTH_FLOW.md](AUTH_FLOW.md); they are not implemented by the storage migration. Existing local app chat, push subscriptions and voice files are retained and still require persistent backend disk.
+
+[Connection instructions](https://github.com/neondatabase/website/blob/main/content/docs/get-started/connect-neon.md) · [Psycopg transactions](https://www.psycopg.org/psycopg3/docs/basic/transactions.html)
 
 ## 2. Google: one project and OAuth client for Calendar and Sheets
 
@@ -66,7 +82,7 @@ uv run python -m scripts.google_auth --reauthorize
 # Add --with-sheets if you want both permissions again.
 ```
 
-For the current single-owner deployment, credentials and token files must be provided securely on the hosted backend too. A Desktop OAuth client is for this developer-managed connection. A public user-facing Connect Google flow later needs a Web OAuth client and HTTPS callback; Supabase login alone does not grant Calendar permissions or manage Google's provider refresh tokens for us.
+For the current single-owner deployment, credentials and token files must be provided securely on the hosted backend too. A Desktop OAuth client is for this developer-managed connection. A public user-facing Connect Google flow later needs a Web OAuth client and HTTPS callback; Provider sign-in alone does not grant Calendar permissions or manage Google's provider refresh tokens for us.
 
 [Google credential setup](https://developers.google.com/workspace/guides/create-credentials) · [Calendar scopes](https://developers.google.com/workspace/calendar/api/auth) · [Refresh-token expiration](https://developers.google.com/identity/protocols/oauth2#expiration)
 
@@ -94,20 +110,20 @@ uv run uvicorn koe.main:app --reload --port 8000
 npm run dev
 ```
 
-In Koe enter your app access token, start a call, and request a meeting. The live call panel shows the real pending proposal with **Confirm / Cancel**, plus spoken or typed yes/no. The home dashboard's sample approvals remain mock data until Phase 3.
+In Koe enter your app access token, start a call, and request a meeting. The live call panel shows the real pending proposal with **Confirm / Cancel**, plus spoken or typed yes/no. The dashboard shows real data and approval cards; write controls remain bound to their original conversation.
 
 ## 4. Limits and recovery
 
-- Supabase Free currently includes 500 MB database storage, can pause for low activity over a week, and does not include automatic backups. Make regular exports; upgrading is not part of this phase. [Pricing](https://supabase.com/pricing) · [Pausing](https://supabase.com/docs/guides/platform/free-project-pausing)
-- The atomic database claim prevents two confirmations from executing the same action. Supabase and Google cannot share one transaction: if Google succeeds but saving the final audit fails, check the calendar before doing anything else. A create uses a stable event ID derived from its approval ID. The app never automatically retries an uncertain write.
+- Neon Free currently offers 100 projects and 1 GB database storage per project; compute quotas still apply and compute scales to zero when idle. The first query after inactivity can be slower. Stay on Free and monitor quota usage. [Storage update](https://neon.com/blog/neon-free-plan-1-gb-per-project).
+- The atomic database claim prevents two confirmations from executing the same action. PostgreSQL and Google cannot share one transaction: if Google succeeds but saving the final audit fails, check the calendar before doing anything else. A create uses a stable event ID derived from its approval ID. The app never automatically retries an uncertain write.
 - If a process stops with an action in `executing`, it is not automatically re-executed. Inspect the calendar and database record before manually resolving/reproposing it.
 - Approval expires after ten minutes and is scoped to its owner and original conversation. A new call does not silently inherit the previous call's proposal. Expired rows are marked on the next resolution/proposal; there is no cleanup scheduler in Phase 2.
 - The final overlap check and one-process write lock protect Koe's own requests. Google offers no atomic “reserve this free slot” API; another app could create an event between the check and the write. We cannot claim a cross-application lock.
-- SQL migration rollback: stop the app and retain the tables/data. To remove the API, revoke `service_role` EXECUTE on the four `koe_*` functions listed at the bottom of the migration, or drop those functions explicitly after backup. Do not drop populated tables as a routine rollback.
+- SQL migration rollback: stop the app and retain the tables/data. To remove the API, revert the application change while retaining the database; if retiring the store, revoke any explicitly granted runtime-role privileges or drop only its functions after backup. The current backend role owns the objects, so revoking PUBLIC does not revoke owner access. Do not drop populated tables as a routine rollback.
 
 ## What to tell the assistant
 
-Send **“Supabase migration done, env filled, Google consent done”** when ready. No secret values are needed in chat. If something fails, share the error message with keys/tokens removed.
+Send **“Neon schema applied, DATABASE_URL filled, Google consent done”** when ready. No secret values are needed in chat. If something fails, share the error message with keys/tokens removed.
 
 
 ## Live dashboard (Phase 3)

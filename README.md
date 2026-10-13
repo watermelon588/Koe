@@ -4,6 +4,8 @@
 
 **Status:** live voice, mascot, authenticated dashboard and Phase 4 tools built. PR summaries, shipped history, Notion daily logs and approved PR comments/Sheets entries are verified locally with fake APIs. Live account acceptance awaits setup: [Phase 2](docs/PHASE2_SETUP.md), [Phase 4](docs/PHASE4_SETUP.md), [phase plan](docs/PLAN.md).
 
+Storage migrated to **Neon PostgreSQL (Singapore)** on 2026-10-13. Live verification covers atomic approvals, concurrent claims and owner/conversation isolation. `DATABASE_URL` stays in `backend/.env`. Browser token entry remains development-only; [the final owner sign-in flow](docs/AUTH_FLOW.md) is a required pre-hosting slice. App chat, voice files and push subscriptions currently remain on the backend's persistent local disk.
+
 ## Docs
 - [Problem statement](docs/PROBLEM_STATEMENT.md): who it's for, what it solves, what it doesn't
 - [Spec](docs/SPEC.md): the contract (tools, channels, approvals, acceptance criteria)

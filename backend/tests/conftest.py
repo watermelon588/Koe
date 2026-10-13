@@ -12,8 +12,7 @@ from koe import agent, app_channel, events, whatsapp
 @pytest.fixture(autouse=True)
 def isolate_live_storage(monkeypatch, tmp_path):
     monkeypatch.setattr(events, "hub", events.Hub())
-    monkeypatch.setattr(settings, "supabase_url", "")
-    monkeypatch.setattr(settings, "supabase_secret_key", "")
+    monkeypatch.setattr(settings, "database_url", "")
     monkeypatch.setattr(settings, "koe_access_token", "")
     # The Koe app's chat history, voice notes and push keys live in backend/data: never touch the real ones.
     data = tmp_path / "data"

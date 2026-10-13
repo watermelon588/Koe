@@ -37,7 +37,7 @@ A single-user, voice-first agent for a developer founder. It works across GitHub
   | `{"type":"transcript","role":"user"|"koe","text":"…"}` | A piece of what was said (Gemini Live audio transcription, both directions); pieces arrive in order | Append to the current chat line of that speaker |
   | `{"type":"turn_complete"}` | Koe finished its reply | Close the current chat line |
 - **Browser → backend, text frames:** `{"type":"text","text":"…"}` = a typed chat message, sent into the same Live session (`send_realtime_input(text=…)`); trimmed, capped at 2000 characters; anything malformed is ignored, never fatal.
-- **Phase 2 authentication:** when `KOE_ACCESS_TOKEN` is configured, the first browser frame must be `{"type":"auth","token":"…"}` within 10 seconds. Supabase-enabled browser calls require this app token. Close code `1008` indicates missing/invalid authentication. The token never goes in the URL; Supabase secrets never go in the browser.
+- **Phase 2 authentication:** when `KOE_ACCESS_TOKEN` is configured, the first browser frame must be `{"type":"auth","token":"…"}` within 10 seconds. Neon-enabled browser calls require this app token. Close code `1008` indicates missing/invalid authentication. The token never goes in the URL; Neon secrets never go in the browser.
 - **Phase 2 approval:** backend sends `{"type":"approval_pending","id":"UUID","summary":"…","expires_ts":"…"}`. Browser may reply `{"type":"approval","action_id":"UUID","approve":true|false}`. Backend sends `approval_result` with authoritative `status`/`error` and any remaining `pending_action`. A complete, explicit spoken/typed yes or no also resolves the original conversation's proposal; model/tool text cannot authorize it.
 - **Close codes:** normal hang-up = 1000. `1011` with a `reason` such as `"Gemini error: …"` = the call failed; show the reason.
 - Unknown event types must be ignored (more come in Phase 3: dashboard events on `/ws/events`).
@@ -45,10 +45,10 @@ A single-user, voice-first agent for a developer founder. It works across GitHub
 **Allowed WhatsApp senders:** only numbers in `ALLOWED_WHATSAPP_NUMBERS` (env). Everything else is ignored and logged.
 
 ### `/ws/events` dashboard protocol (Phase 3)
-- The first frame is `{"type":"auth","token":"…"}` within 10 seconds. `KOE_ACCESS_TOKEN` is required even without Supabase. No dashboard data or external reads happen before authentication; invalid/missing tokens close with `1008`.
+- The first frame is `{"type":"auth","token":"…"}` within 10 seconds. `KOE_ACCESS_TOKEN` is required even without Neon. No dashboard data or external reads happen before authentication; invalid/missing tokens close with `1008`.
 - Backend sends a `snapshot` with today's Calendar, review queue, open PRs, recent activity, pending approvals and measured turn latencies. Incremental events are `panel`, `tool`, `approval_pending`, `approval_progress`, `approval_result`, `alert` and `latency`; each carries an ID, timestamp and optional original session/channel.
 - Browser may send `{"type":"refresh"}` for a read-only refresh. Refreshes are coalesced and limited to once per 30 seconds across clients, with a 60-second automatic refresh while connected. Missing services show explicit setup errors; there is no sample data fallback. Panels show their last update and become stale on disconnection.
-- This single-process, single-owner stream uses bounded client queues. Slow clients receive a fresh snapshot instead of blocking audio/tool work. Restart/reconnect reloads recent saved activity and pending proposals from Supabase when configured; read panels are fetched again. No Redis or new dependency is needed.
+- This single-process, single-owner stream uses bounded client queues. Slow clients receive a fresh snapshot instead of blocking audio/tool work. Restart/reconnect reloads recent saved activity and pending proposals from Neon when configured; read panels are fetched again. No Redis or new dependency is needed.
 - Dashboard approvals are informational outside their original conversation. Approve/Reject in the live call's dashboard view sends the existing `/ws/call` action-ID control; the events socket cannot authorize writes or approve another conversation's proposal. Expired cards are disabled locally and remain subject to the database expiry check.
 - During calls a Day/Chat switch keeps the dashboard accessible alongside the current call controls. The existing audio-driven mascot states remain on `/ws/call`; dashboard alerts can trigger a brief reaction only when idle.
 
@@ -89,11 +89,11 @@ Handled by rules, not the LLM, for speed and zero cost:
 Alerts outside the 24-hour WhatsApp window use one approved **template** (`koe_alert`). Duplicate deliveries (same `X-GitHub-Delivery` ID) are ignored.
 
 ## 5. Approval gate (human in the loop)
-- Tools marked **write: approval** never execute directly. The agent core creates a **pending action** (stored in Supabase PostgreSQL) and asks:
+- Tools marked **write: approval** never execute directly. The agent core creates a **pending action** (stored in Neon PostgreSQL) and asks:
   - **Web call:** Koe asks out loud ("Book 7:00–7:30 with Rahul. Shall I?"). A spoken yes or no resolves it, and the dashboard shows Approve/Reject buttons too.
   - **WhatsApp:** an interactive message with **Confirm / Cancel** buttons.
 - Pending actions expire after 10 minutes.
-- A restricted SQL function atomically claims the action before external execution. Only its owner and original conversation may resolve it. Claim/result-recording uncertainty never triggers an automatic write retry. The backend is still a single-user application; Supabase Auth login is a separate UI/auth slice.
+- A restricted SQL function atomically claims the action before external execution. Only its owner and original conversation may resolve it. Claim/result-recording uncertainty never triggers an automatic write retry. The backend is still a single-user application; Provider login is a separate UI/auth slice.
 - Every action (proposed, approved, rejected, executed, failed) goes to the activity log and the dashboard.
 
 ## 6. Mascot
@@ -115,7 +115,7 @@ Alerts outside the 24-hour WhatsApp window use one approved **template** (`koe_a
 - **UI:** one layout, **Engawa**: she stands on the left behind her desk; on the right the greeting, Call, a one-line Connect (hidden once the dashboard is live) and **your day as one card with four tabs** (Today, GitHub, Approvals with a count, Activity with response-time p50/p95), fixed height, scrolling inside, so Home fits one screen on desktop. A call raises a sheet on the right while she shows her full figure. Header: Home, Settings and theme as Phosphor icon buttons. Dark theme by default, light theme grey not white; flat backgrounds, light type, one accent per mascot. The call panel holds the live transcript (or the Day card), a text box (typed chat), mute and end. Don't ship the name "Miku": teal twin-tails + that name reads as Hatsune Miku (trademark).
 
 ## 7. Memory
-- **Supabase PostgreSQL**: `koe_activity` (actions/messages with channel and latency), `koe_pending_actions`, `koe_daily_notes`, `koe_github_deliveries`. Backend-only access through Supabase REST; no database secrets in the browser.
+- **Neon PostgreSQL**: `koe_activity` (actions/messages with channel and latency), `koe_pending_actions`, `koe_daily_notes`, `koe_github_deliveries`. Supported activity channels include web, CLI, WhatsApp, GitHub and the installed app. Backend-only access through `DATABASE_URL` and parameterized SQL; no database secrets in the browser. Atomic proposal/claim/finish functions preserve the existing approval contract. App chat history, push subscriptions and voice files remain local in this storage migration.
 - At the start of every web call or WhatsApp turn, the agent gets a **short summary of today's activity across both channels**, plus the last few WhatsApp turns. This is what lets the channels share one memory.
 - No vector database or long-term memory in v1.
 
@@ -163,7 +163,7 @@ Every turn records timestamps, stored in `activity` and shown on the dashboard:
 - PR summaries send at most 30,000 UTF-8 bytes of source JSON to Gemini, with explicit coverage/truncation and inferred risk notes. PR content is untrusted; the summarizer has no tools. Check the head revision before summarizing.
 - Shipped history covers configured repositories and the authenticated author's merged PRs plus default-branch commits. Today/week use the owner's timezone. Pagination limits and incomplete results are disclosed; commits and PRs can overlap. Never infer hours.
 - Comments are restricted to configured repositories. Show the complete comment and target before approval. Sheets shows date, client, hours, complete note and configured destination before every approval. Store normalized arguments; execute only through the existing atomic claim. Never retry an uncertain external write automatically.
-- Notion logs append bullets to one page per Date in the configured data source. Exact repeated entries are skipped; duplicate daily pages or incomplete reads fail closed. This own-log write follows the existing low-risk exception. Use one backend worker; Notion writes are not transactional with Supabase.
+- Notion logs append bullets to one page per Date in the configured data source. Exact repeated entries are skipped; duplicate daily pages or incomplete reads fail closed. This own-log write follows the existing low-risk exception. Use one backend worker; Notion writes are not transactional with Neon.
 - Sheets uses existing Google OAuth with additional Sheets consent. Require headers Date, Client, Hours, Note, Koe action ID in A1:E1. Append RAW values to avoid interpreting text as formulas. Bind proposals to the configured spreadsheet and tab; the internal action ID is an audit field.
 
 ## Frontend profile settings — 2026-10-12
@@ -179,3 +179,7 @@ The dedicated `#settings` page owns mascot selection: Kami, Miku, Aoi and Kobash
 - **Notifications:** every Koe reply and GitHub alert is pushed (Web Push, VAPID keys generated once into `backend/data/vapid.pem`). The service worker skips the notification when the chat is already open on screen.
 - **Security:** every `/api/app` endpoint requires `KOE_ACCESS_TOKEN` (Bearer), fail closed, because the phone reaches the backend through a public tunnel. The token is remembered on the device. Voice notes ≤ 3 MB; text ≤ 2000 characters; voice files are served only by exact generated names.
 - **Limits:** Koe's spoken reply is a reading of the text reply (it can differ slightly from the text). A server restart keeps the chat history but forgets the model's working memory and any open approvals (Phase 6 adds the persisted summary).
+
+
+## Pre-hosting owner sign-in (planned, 2026-10-13)
+Manual `KOE_ACCESS_TOKEN` entry is a development mechanism. Before public hosting, replace it with provider login restricted to the owner and an expiring, revocable, HttpOnly session cookie across the dashboard, calls, chat and voice-note endpoints. This is not multi-user signup, does not expose database credentials, and does not replace tool-specific consent or explicit write approvals. The flow and acceptance requirements are in [AUTH_FLOW.md](AUTH_FLOW.md); this storage migration does not implement OAuth login.

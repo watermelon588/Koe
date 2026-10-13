@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { startMic } from './mic'
 import { createPlayer } from './player'
 import type { createMascot, Mood } from '../mascot/mascot'
+import { wsUrl } from '../backend'
 
 // One live call over /ws/call: mic up, Koe's voice down, plus the chat transcript, typed messages,
 // mute, and the mascot's moods. Wire format: SPEC §2 "/ws/call wire format".
@@ -57,7 +58,7 @@ export function useCall(mascot: { current: Mascot | null }) {
     analyser.current = player.analyser
     mascot.current?.listen(player.analyser)
     setState('connecting')
-    const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws/call`)
+    const ws = new WebSocket(wsUrl('/ws/call'))
     ws.binaryType = 'arraybuffer'
     let stopMic = () => {}
     let failed = ''

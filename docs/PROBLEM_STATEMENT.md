@@ -10,7 +10,7 @@
 - logs what got done (for clients, invoices, standups);
 - is often away from the laptop: walking, commuting, between classes.
 
-It's single-user: one person, their own accounts. No teams, no login system.
+It's single-user: one person, their own accounts. No teams or public signup. Owner-only sign-in will replace development token entry before hosting; see AUTH_FLOW.md.
 
 ## The pain, concretely
 | Moment | What happens today | Cost |
@@ -51,7 +51,7 @@ Targets are goals, not promises. We report real measurements honestly, even if t
 | Phone-network calls (Twilio and similar) | Costs money or expires; the user has no card |
 | Site uptime monitoring | Dropped by the user: polling wastes free-tier resources; GitHub webhooks are event-driven |
 | Merging PRs by voice | One misheard word ships broken code |
-| Multi-user, login, teams | Single-user personal agent; auth is out of scope |
+| Multi-user signup, teams | Personal agent; owner-only sign-in is a separate required pre-hosting slice |
 | Email (Gmail) | Keeps the tool count small; possible v2 |
 | Mobile app | WhatsApp *is* the mobile app |
 | LangGraph / multi-agent orchestration | One agent with about 9 tools doesn't need it (see TECH_STACK) |

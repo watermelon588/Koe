@@ -280,8 +280,7 @@ def test_typed_text_goes_to_gemini_and_bad_frames_are_ignored(monkeypatch):
 
 
 def test_browser_call_requires_access_token_when_storage_enables_writes(monkeypatch):
-    monkeypatch.setattr(voice_call.settings, "supabase_url", "https://test.supabase.co")
-    monkeypatch.setattr(voice_call.settings, "supabase_secret_key", "sb_secret_test")
+    monkeypatch.setattr(voice_call.settings, "database_url", "postgresql://test@localhost/test?sslmode=require")
     async def scenario():
         browser = FakeBrowser()
         await voice_call.call(browser)

@@ -1,15 +1,18 @@
 # Services and costs: Koe (声)
 
-## Phase 2 storage update (2026-10-12)
-Supabase PostgreSQL replaces server-local SQLite by user request. The Free plan lists 500 MB database storage and 50,000 monthly active Auth users. Low-activity projects can pause after a week, and automatic backups are not included in Free. Use manual exports; no paid plan is required for the current development setup. Supabase Auth login is available for a later UI/auth slice; Phase 2 uses a private app token for browser calls. Database access uses the existing `httpx` library and a backend-only secret key, so no database password/connection string is required by the app.
+## Neon storage migration (2026-10-13)
+Neon PostgreSQL replaces Supabase because both available Supabase Free projects are occupied. The selected region is AWS Singapore. Only Postgres is required; object storage, Functions, AI gateway and Neon Auth are not required for this migration. The Free plan currently supports 100 projects and 1 GB database storage per project (increased on 2026-10-02). Compute has its own quota and scales to zero after inactivity; the first query after idle can take longer. Stay on Free and monitor limits; do not enable paid services for this project.
 
-Sources checked: [Supabase pricing](https://supabase.com/pricing), [project pausing](https://supabase.com/docs/guides/platform/free-project-pausing), [API keys](https://supabase.com/docs/guides/getting-started/api-keys). Setup: [PHASE2_SETUP.md](PHASE2_SETUP.md).
+The backend uses `psycopg[binary]` 3 and backend-only `DATABASE_URL`, including SSL parameters. PostgreSQL tables/functions remain private to the backend. Current token entry is a development flow; final owner sign-in is described in [AUTH_FLOW.md](AUTH_FLOW.md).
+
+Sources: [Neon storage update](https://neon.com/blog/neon-free-plan-1-gb-per-project), [Free signup](https://neon.com/blog/thousands-of-neon-projects-now-included-in-your-pricing-plan), [plan limits](https://github.com/neondatabase/website/blob/main/content/faqs/free-plan-limits-and-quotas.md). The October storage announcement supersedes the older 0.5 GB figure in the FAQ. Setup: [PHASE2_SETUP.md](PHASE2_SETUP.md).
 
 **Budget: ₹0. No credit card.** Every service below is free *and* needs no card. Figures were researched 2026-10-03 to 2026-10-12 and many come from third-party sources, so **re-verify on the official page when you first set each one up** and update this file.
 
 ## Summary
 | Service | What we use it for | Free? | Card? | The catch |
 |---|---|---|---|---|
+| Neon PostgreSQL | Durable activity and approval records | Free within quotas | No | Idle compute cold starts; limited storage and compute; keep database credentials backend-only |
 | Gemini API (Live + Flash) | Voice brain, WhatsApp brain, PR summaries | ✅ Free tier | No | Rate limits (not published; see AI Studio → Rate limit page); only a few concurrent Live sessions; Live audio sessions 15 min, connections about 10 min (use session resumption; tokens valid 2 h); **Google may use free-tier data to improve its products**, so don't say secrets on calls |
 | GitHub API + webhooks | Core feature | ✅ | No | API rate limit 5,000 req/h with a token, which is plenty |
 | Google Calendar + Sheets API | Scheduling, timesheet | ✅ | No | OAuth app in **Testing** mode: refresh tokens may expire after **7 days**, so re-login weekly (or publish the app later) |

@@ -77,3 +77,12 @@ Links behind the claims in these docs, gathered 2026-10-03 to 2026-10-12. Many a
 - Google [structured output](https://ai.google.dev/gemini-api/docs/structured-output): Pydantic response schema; local validation and tool-free summarizer.
 - Notion [versioning](https://developers.notion.com/reference/versioning), [retrieve database](https://developers.notion.com/reference/retrieve-a-database), [retrieve data source](https://developers.notion.com/reference/retrieve-a-data-source), [query data source](https://developers.notion.com/reference/query-a-data-source), [create page](https://developers.notion.com/reference/post-page), [append blocks](https://developers.notion.com/reference/patch-block-children). The last two HTML pages exceeded the browser fetch limit; read their official .md counterparts directly. Query request_status can mark a capped read incomplete even when has_more is false.
 - Sheets [append values](https://developers.google.com/workspace/sheets/api/reference/rest/v4/spreadsheets.values/append) and [ValueInputOption](https://developers.google.com/workspace/sheets/api/reference/rest/v4/ValueInputOption): configured A1 range, RAW values and returned updates.updatedRange.
+
+
+## Neon migration and final sign-in (2026-10-13)
+- [Neon storage update, 2026-10-02](https://neon.com/blog/neon-free-plan-1-gb-per-project): 100 Free projects, 1 GB database storage each.
+- [Neon connection instructions](https://github.com/neondatabase/website/blob/main/content/docs/get-started/connect-neon.md): connection strings, SSL, direct and pooled connections.
+- [Psycopg transactions](https://www.psycopg.org/psycopg3/docs/basic/transactions.html): commit/rollback/close on connection contexts.
+- [Psycopg concurrency](https://www.psycopg.org/psycopg3/docs/advanced/async.html): async/event-loop considerations; Koe uses worker threads for Windows compatibility.
+- [OWASP session management](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html): HttpOnly, Secure, SameSite and session expiry.
+- [OWASP CSRF prevention](https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html): protect authenticated mutations.

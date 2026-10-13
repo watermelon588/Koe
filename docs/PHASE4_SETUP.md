@@ -17,7 +17,7 @@ PR summaries use the existing `GEMINI_API_KEY` and `GEMINI_TEXT_MODEL`. They ana
 3. Put its token into `NOTION_TOKEN` and database ID into `NOTION_DATABASE_ID`. The ID is the UUID in the database URL; omit URL query parameters.
 4. If the database has several data sources, set `NOTION_DATA_SOURCE_ID` explicitly from the [retrieve database API](https://developers.notion.com/reference/retrieve-a-database) response. Otherwise Koe resolves its single source automatically. Data sources have their own IDs; they are different from database IDs.
 
-Koe queries Date before creating a daily page and appends plain-text bullets. Exact repeats are skipped. It never replaces existing content. Two pages for the same date cause a setup error. Run **one backend worker** so concurrent log requests serialize. After an uncertain timeout, check Notion before asking to write again; external writes cannot share a transaction with Supabase. API version: `2026-03-11` ([versioning](https://developers.notion.com/reference/versioning)).
+Koe queries Date before creating a daily page and appends plain-text bullets. Exact repeats are skipped. It never replaces existing content. Two pages for the same date cause a setup error. Run **one backend worker** so concurrent log requests serialize. After an uncertain timeout, check Notion before asking to write again; external writes cannot share a transaction with Neon. API version: `2026-03-11` ([versioning](https://developers.notion.com/reference/versioning)).
 
 ## Google Sheets hours
 
@@ -44,7 +44,7 @@ Every row requires its own confirmation. The preview contains the full note and 
 
 ## Try later, after setup
 
-Restart the backend after changing `.env`. Apply Phase 2's Supabase migration and set `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `KOE_ACCESS_TOKEN` before testing approvals. No additional Phase 4 migration is needed.
+Restart the backend after changing `.env`. Apply Phase 2's Neon migration and set `DATABASE_URL`, `KOE_ACCESS_TOKEN` before testing approvals. No additional Phase 4 migration is needed.
 
 - “Summarize PR 42 in your-name/your-repo.”
 - “What did I ship today?” — reads GitHub, then writes the factual Notion daily log; errors/partial history remain visible.
