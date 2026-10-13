@@ -1,11 +1,14 @@
 """Koe app channel (SPEC §14): the installable web app on the phone. A WhatsApp-style chat with Koe
 (text and voice notes both ways, Confirm/Cancel approvals) plus push notifications. No store, no Meta.
 
-  GET  /api/app/messages?after=ID   history (newest last)
-  POST /api/app/messages            {"text"} → your message + Koe's reply
-  POST /api/app/voice               raw WAV body → your voice note (+ transcript) + Koe's spoken reply
+  GET  /api/app/messages?after=ID   history (newest last); after=0 also returns the open proposal's `workspace`
+  POST /api/app/messages            {"text"} → your message + Koe's reply + `workspace` events
+  POST /api/app/voice               raw WAV body → your voice note (+ transcript) + Koe's spoken reply + `workspace`
   GET  /api/app/voice/{name}        a stored voice note (audio lives in the database)
-  POST /api/app/approvals/{id}      {"approve": bool} → resolve a proposal
+  POST /api/app/approvals/{id}      {"approve": bool} → resolve a proposal (+ its `workspace` result)
+
+`workspace` is a list of live-workspace events (SPEC §2 "Live workspace") in the same shape the call sends over
+/ws/call, built by call_work.project: what Koe read, proposed or wrote in Calendar, Sheets or Notion. No tokens.
   GET  /api/app/push/key            VAPID public key for the browser's PushManager.subscribe
   POST /api/app/push/subscribe      the browser's PushSubscription JSON
   POST /api/app/push/test           a test notification to every device → {"sent": n}
@@ -32,7 +35,7 @@ from py_vapid import Vapid02, b64urlencode
 from pydantic import BaseModel
 from pywebpush import WebPushException, webpush_async
 
-from koe import agent, auth, gemini, identity, text_agent, usage, voice_call, whatsapp
+from koe import agent, auth, call_work, gemini, identity, text_agent, usage, voice_call, whatsapp
 from koe.config import settings
 from koe.db import sql
 
@@ -99,11 +102,33 @@ def chat() -> whatsapp.Chat:
 _background: set[asyncio.Task] = set()
 
 
-async def reply(text: str, spoken: bool) -> dict:
-    mine = chat()
+def workspace(seen=(), before: dict | None = None, result: dict | None = None, pending: dict | None = None) -> list[dict]:
+    """One chat turn as live-workspace events, in the /ws/call shape so the app reuses the call's reducer.
+    seen = (tool, args, result) from text_agent; before/pending = the proposal before and after the turn."""
+    out = []
+    for name, args, outcome in seen:
+        if work := call_work.project(name, args, outcome):
+            op = uuid4().hex
+            out += [{"type": "tool", "phase": "start", "operation_id": op, "work": call_work.project(name, args)},
+                    {"type": "tool", "phase": "end", "operation_id": op, "work": work}]
+    decided = (result or {}).get("approval_result")  # a typed "yes"/"no" resolved `before`
+    if decided and before and (work := call_work.project(before["tool"], before["args_json"], decided, before["id"])):
+        out.append({"type": "approval_result", "status": decided.get("status", "failed"), "work": work})
+    if pending and (not before or before["id"] != pending["id"]) and (
+            work := call_work.project(pending["tool"], pending["args_json"], action_id=pending["id"])):
+        out.append({"type": "approval_pending", "id": pending["id"], "work": work})
+    return out
+
+
+async def reply(text: str, spoken: bool) -> tuple[dict, list[dict]]:
+    mine, seen = chat(), []
     async with mine.lock:
-        result = await text_agent.chat(text, mine.history, mine.context)  # gemini.py picks a working model and key
+        before = mine.context.pending
+        result = await text_agent.chat(text, mine.history, mine.context, seen=seen)  # gemini.py picks a working model and key
         whatsapp.trim(mine.history)
+        work = workspace(seen, before, result, mine.context.pending)
+    if before and result.get("approval_result"):  # a typed yes/no: the proposal's bubble shows the outcome too
+        await set_action_status(before["id"], result["approval_result"].get("status") or "unavailable")
     voice = None
     if spoken:
         try:
@@ -113,7 +138,7 @@ async def reply(text: str, spoken: bool) -> dict:
     pending = result.get("pending_action")
     message = await add_message("koe", result["text"], voice=voice, action_id=pending["id"] if pending else None)
     later(notify(message["text"], tag="koe-reply"))  # the app skips it if the chat is already on screen
-    return message
+    return message, work
 
 
 async def speak(text: str) -> str:
@@ -173,7 +198,8 @@ async def _over_quota() -> str:
 
 @router.get("/messages")
 async def get_messages(after: int = 0):
-    return {"messages": await list_messages(after)}
+    pending = chat().context.pending if after == 0 else None  # reopening the app shows the open proposal again
+    return {"messages": await list_messages(after), "workspace": workspace(pending=pending)}
 
 
 @router.post("/messages")
@@ -184,7 +210,8 @@ async def post_message(body: TextIn):
     mine = await add_message("you", text)
     if over := await _over_quota():
         return {"messages": [mine, await add_message("koe", over)]}
-    return {"messages": [mine, await reply(text, spoken=False)]}
+    message, work = await reply(text, spoken=False)
+    return {"messages": [mine, message], "workspace": work}
 
 
 @router.post("/voice")
@@ -207,7 +234,8 @@ async def post_voice(request: Request):
     mine = await add_message("you", heard, voice=name)
     if not heard:
         return {"messages": [mine, await add_message("koe", "I couldn't make out that voice note. Could you try again, or type it?")]}
-    return {"messages": [mine, await reply(heard, spoken=True)]}
+    message, work = await reply(heard, spoken=True)
+    return {"messages": [mine, message], "workspace": work}
 
 
 @router.get("/voice/{name}")
@@ -225,10 +253,14 @@ async def get_voice(name: str):
 async def decide(action_id: str, body: Decision):
     mine = chat()
     async with mine.lock:
+        before = mine.context.pending
         result = await agent.confirm(mine.context, body.approve, action_id)
     status = result.get("status") or "unavailable"  # e.g. expired, or forgotten after a server restart
     await set_action_status(action_id, status)
-    return {"messages": [await add_message("koe", text_agent.approval_text(result))], "action": {"id": action_id, "status": status}}
+    work = (call_work.project(before["tool"], before["args_json"], result, action_id)
+            if before and before["id"] == action_id else None)
+    return {"messages": [await add_message("koe", text_agent.approval_text(result))], "action": {"id": action_id, "status": status},
+            "workspace": [{"type": "approval_result", "status": status, "work": work}] if work else []}
 
 
 # ── Push notifications ────────────────────────────────────────────────────────────────────────────

@@ -57,3 +57,17 @@ def test_approval_progress_and_result_use_original_stored_row_even_on_failure(mo
     assert sent[0]['work']['details']['client'] == 'Original'
     assert sent[1]['work']['error']['message'] == 'Uncertain write'
     assert sent[1]['work']['action_id'] == 'a'
+
+
+def test_notion_projection_keeps_the_record_and_only_notion_links():
+    args = {'title': 'Planning', 'date': '2026-10-13', 'kind': 'Task', 'status': 'Open', 'body': 'Agenda',
+            'expected_edited': 'x', 'destination': 'db-secret', 'page_id': ''}
+    saved = call_work.project('notion_save', args, {'id': 'p1', 'title': 'Planning', 'kind': 'Task', 'record_status': 'Open',
+        'date': {'start': '2026-10-13', 'end': None}, 'url': 'https://app.notion.com/p/Planning-p1', 'status': 'executed'}, 'a1')
+    assert saved['service'] == 'notion' and saved['page_id'] == 'p1' and saved['date'] == '2026-10-13'
+    assert saved['url'] == 'https://app.notion.com/p/Planning-p1' and saved['action_id'] == 'a1'
+    assert 'db-secret' not in str(saved) and 'expected_edited' not in saved['details']
+    assert call_work.project('notion_save', args, {'url': 'https://evil.example/p1'})['url'] == ''
+    log = call_work.project('notion_log', {'date': '2026-10-13', 'entries': ['Shipped #4']},
+                            {'page_id': 'p2', 'url': 'https://www.notion.so/p2', 'added': 1, 'date': '2026-10-13'})
+    assert log['details']['entries'] == ['Shipped #4'] and log['added'] == 1 and log['page_id'] == 'p2'

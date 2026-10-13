@@ -14,6 +14,7 @@ Everything here is free and needs no credit card. Adding anything not on this pa
 | **three.js** + **`@pixiv/three-vrm`** (MIT) | 3D anime mascot (VRM model: mouth shapes, blink, gaze, expressions built in) | Standard for anime avatars; ~1.2 ms per frame measured; lazy-loaded chunk (186 kB gzip) |
 | **Web app manifest + service worker** (built into browsers) | Install Koe on the phone like an app; receive push notifications | No app store, no card, one codebase |
 | **`@phosphor-icons/react`** (MIT) | UI icons (header, call controls, dashboard tabs) | Light weight matches the light type; tree-shaken, only used icons ship. Added 2026-10-13 with Rohit's OK |
+| **`gsap` 3.15.0** + **`@gsap/react` 2.1.2** (GSAP standard license, free incl. plugins) | Live workspace motion: panel slide, proposal settle, saved-row drop + pulse + receipt timeline | Rohit asked for GSAP (2026-10-13). `useGSAP` cleans up on unmount; only transform/opacity; off under reduced motion. Pinned exact versions |
 | **VRoid Studio** (desktop app, free) | Making the mascot's VRM model | Free, commercial use allowed, exports VRM |
 
 ## Backend

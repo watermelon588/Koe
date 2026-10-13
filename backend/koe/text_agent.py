@@ -38,9 +38,10 @@ def _reply(text: str, context: agent.Conversation) -> dict:
     return {"text": text, "pending_action": context.pending}
 
 
-async def chat(text: str, history: list, context: agent.Conversation, client: genai.Client | None = None) -> dict:
+async def chat(text: str, history: list, context: agent.Conversation, client: genai.Client | None = None,
+               seen: list | None = None) -> dict:
     """One turn. Without `client`, Gemini runs through gemini.py's model/key fallbacks (the app, WhatsApp);
-    tests and scripts may pass one client."""
+    tests and scripts may pass one client. `seen` (optional) collects (tool, args, result) for the app's live workspace."""
     text = text.strip()[:2000]
     if not text:
         return {"text": "Please enter a message."}
@@ -90,6 +91,8 @@ async def chat(text: str, history: list, context: agent.Conversation, client: ge
             parts = []
             for fc in calls:
                 result = await agent.run_tool(fc.name, fc.args, context=context)
+                if seen is not None:
+                    seen.append((fc.name, fc.args, result))
                 parts.append(types.Part(function_response=types.FunctionResponse(name=fc.name, id=fc.id, response=result)))
             history.append(types.Content(role="user", parts=parts))
     except text_fallback.FallbackError:
