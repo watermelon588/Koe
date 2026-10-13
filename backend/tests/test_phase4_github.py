@@ -10,6 +10,25 @@ from koe.config import settings
 from koe.tools import github, github_work
 
 
+def test_pr_analysis_uses_bounded_gemini_generation_without_tools(monkeypatch):
+    from types import SimpleNamespace
+    from google import genai
+    from koe import gemini
+    seen = []
+    async def generate(**kwargs):
+        seen.append(kwargs)
+        return SimpleNamespace(text='{"summary":"Synthetic summary.","risk_notes":[]}'), 'backup-model'
+    monkeypatch.setattr(gemini, 'generate', generate)
+    def forbidden_client(*args, **kwargs):
+        pytest.fail('PR analysis bypassed the shared provider; no real client may be created in this test.')
+    monkeypatch.setattr(genai, 'Client', forbidden_client)
+    result = asyncio.run(github_work._summarize('Synthetic PR evidence'))
+    assert result['summary'] == 'Synthetic summary.'
+    assert seen[0]['contents'] == 'Synthetic PR evidence'
+    assert seen[0]['config']['response_schema'] is github_work.Summary
+    assert 'tools' not in seen[0]['config']
+
+
 @pytest.fixture(autouse=True)
 def account(monkeypatch):
     monkeypatch.setattr(settings, 'github_token', 'fake')

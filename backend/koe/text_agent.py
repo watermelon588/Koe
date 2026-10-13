@@ -62,7 +62,7 @@ async def chat(text: str, history: list, context: agent.Conversation, client: ge
                         events.publish('model', provider='gemini', message=f'{settings.gemini_text_model} is busy; using {model}.')
                 except errors.APIError as exc:
                     # Only switch before this turn has executed any tools. Never restart/replay a turn.
-                    if round_index != 0 or exc.code not in {429, 503} or not settings.openrouter_api_key:
+                    if round_index != 0 or exc.code not in {429, *gemini.OVERLOADED} or not settings.openrouter_api_key:
                         raise
                     response = await text_fallback.generate(history)
                     provider = 'openrouter'
@@ -87,7 +87,7 @@ async def chat(text: str, history: list, context: agent.Conversation, client: ge
         return _reply('Gemini and the free backup text model are unavailable. You can still manage records from the Notion workspace. No tools were replayed.', context)
     except errors.APIError as exc:
         log.warning("model call failed: %s %s", exc.code, exc.status)
-        if exc.code in {429, 503}:  # free-tier rate limit or "high demand": temporary, say so
+        if exc.code in {429, *gemini.OVERLOADED}:  # temporary provider availability, including exhausted fallbacks
             return _reply("Gemini is busy right now. Please try again in a minute. No approval was inferred.", context)
         return _reply("The model could not complete this turn. No approval was inferred.", context)
     except Exception:

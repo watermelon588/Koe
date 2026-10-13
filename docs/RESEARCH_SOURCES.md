@@ -93,3 +93,9 @@ Links behind the claims in these docs, gathered 2026-10-03 to 2026-10-12. Many a
 - Notion [update data source](https://developers.notion.com/reference/update-a-data-source), [update page](https://developers.notion.com/reference/patch-page), [retrieve blocks](https://developers.notion.com/reference/get-block-children): additive schema, reversible trash and paginated preview. Existing properties and body blocks are retained.
 - OpenRouter [free router](https://openrouter.ai/docs/guides/routing/routers/free-router) and [tool calling](https://openrouter.ai/docs/guides/features/tool-calling): optional free text inference using the existing tool loop. Free routing still has quotas and is not a voice transport.
 - OpenRouter [provider logging](https://openrouter.ai/docs/guides/privacy/provider-logging): retention varies by provider; optional fallback processing is disclosed in the public privacy page.
+
+## Backend reliability and deployment diagnostics (2026-10-13)
+- Google [rate limits](https://ai.google.dev/gemini-api/docs/rate-limits): quotas apply per project and vary by model, not per API key; do not promise extra quota from a second same-project key.
+- Google [troubleshooting](https://ai.google.dev/gemini-api/docs/troubleshooting): distinguish transient 500/503/504 failures from authentication and request errors.
+- Render [deploys](https://render.com/docs/deploys): build failure retains the previous live build; restart does not deploy the latest commit; CI-gated auto-deploy requires detected checks.
+- Render [default environment variables](https://render.com/docs/environment-variables): `RENDER_GIT_COMMIT` identifies a deployment. Public health exposes only a validated SHA; configuration-presence diagnostics require owner authentication.

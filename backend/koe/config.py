@@ -8,7 +8,7 @@ class Settings(BaseSettings):
 
     # Required: the app refuses to start without it.
     gemini_api_key: str = Field(repr=False)
-    gemini_api_key_2: str = Field(default="", repr=False)  # a second key with its own quota: used when the first hits 429 (gemini.py)
+    gemini_api_key_2: str = Field(default="", repr=False)  # optional fallback credential; same-project keys share quota
 
     # Optional until their phase; empty means "not set up yet".
     github_token: str = Field(default="", repr=False)

@@ -1,5 +1,13 @@
 # Architecture: Koe (声)
 
+## Backend reliability update — 2026-10-13
+
+All Gemini text generation, including structured tool-free PR analysis, uses `gemini.generate`: individual SDK attempts have a 15-second timeout and the complete model/key selection has a 30-second budget. Cold credential lookups run in a worker thread. Exhausted transient HTTP and transport failures can reach the existing OpenRouter text fallback only at the start of an agent turn; no tool turn is restarted or replayed. PR analysis retains its structured JSON schema and no-tools policy, using Gemini model/key fallback. Voice-note generation discards partial audio before trying a replacement key.
+
+`store.record_later` has a 128-task best-effort backlog. Saturation is logged and skipped, unexpected task errors are consumed without private exception bodies, and the FastAPI lifespan drains for up to five seconds on shutdown. SQL already in a worker thread may finish after cancellation; connection/statement timeouts apply. Durable proposal, claim and finish writes remain awaited, atomic and never automatically retried.
+
+`/health` preserves its response body and adds a validated `X-Koe-Revision` from Render's `RENDER_GIT_COMMIT`. Owner-only `/api/backend/status` reports configuration presence and bounded-work limits with no-store headers, without external service calls or secrets. It diagnoses what was deployed/configured, not provider availability or remaining quota. The frontend is unchanged in this pass.
+
 ## 1. The big idea: one brain, many entrances
 The **agent core** (system prompt, tool registry, approval gate, memory) is written once. The web call, WhatsApp and GitHub webhooks are just different **entrances** to it. That's why something done on WhatsApp in the morning is known on the web call in the evening.
 

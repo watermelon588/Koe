@@ -1,12 +1,14 @@
 """Gemini with fallbacks, so one overloaded model or one used-up key doesn't stop Koe.
 
-- 429 RESOURCE_EXHAUSTED: this *key* is out of quota → try the next key (GEMINI_API_KEY, GEMINI_API_KEY_2).
+- 429 RESOURCE_EXHAUSTED: try the next configured key, then another model. Quotas are per Google project/model;
+  two keys in the same project do not provide independent quota.
 - 500/503/504 or a timeout: this *model* is overloaded for everyone (seen live: gemini-3.8-flash 503 on both keys
   while gemini-3.6-flash answered in ~3 s) → try the next model in GEMINI_FALLBACK_MODELS.
 A key or model that failed sits out for a while, so the next turn goes straight to one that works.
 Google's client retries 503s by itself for minutes (one turn took 185 s); here every attempt is single and short,
 and Koe decides where to go next. https://ai.google.dev/gemini-api/docs/troubleshooting#error-codes
 """
+import asyncio
 import logging
 import time
 
@@ -23,6 +25,7 @@ MODEL_REST = 300  # an overloaded model sits out 5 minutes
 # One attempt. Measured 2026-10-13: a healthy model answers a tool request in 3–5 s, but a busy one can hang ~42 s
 # before a 504, so waiting longer than this only delays the fallback.
 TIMEOUT_MS = 15_000
+GENERATION_SECONDS = 30  # total budget across models/keys, before the optional text backup
 OVERLOADED = {500, 503, 504}
 
 _clients: dict[str, genai.Client] = {}
@@ -76,6 +79,17 @@ def rest_client(c: genai.Client) -> None:
 
 
 async def generate(*, contents, config=None, models: list[str] | None = None, only: genai.Client | None = None):
+    """Bound one generation chain; the caller decides whether a provider switch is safe."""
+    try:
+        return await asyncio.wait_for(_generate(contents=contents, config=config, models=models, only=only),
+                                      timeout=GENERATION_SECONDS)
+    except (TimeoutError, httpx.TransportError):
+        # A different provider may be reachable; never expose transport diagnostics or credentials.
+        raise errors.APIError(503, {'error': {'message': 'Gemini unavailable within the generation budget.',
+                                            'status': 'UNAVAILABLE'}}) from None
+
+
+async def _generate(*, contents, config=None, models: list[str] | None = None, only: genai.Client | None = None):
     """generate_content across models × keys. Returns (response, model). Raises the last error if all fail.
     `models=[m]` pins a model (later tool rounds of a turn stay on the model that started it).
     `only` uses one given client (tests, the CLI) with model fallback but no key rotation."""
@@ -84,10 +98,12 @@ async def generate(*, contents, config=None, models: list[str] | None = None, on
     order = models or text_models()
     if not models and _last_good in order:
         order = [_last_good, *[m for m in order if m != _last_good]]
+    # A cold per-person credential cache can read Neon; keep that I/O off the audio/event loop.
+    credentials = [None] if only else await asyncio.to_thread(keys)
     for model in _ordered("model", order):
-        for key in ([None] if only else _ordered("key", keys())):
+        for key in _ordered("key", credentials) if not only else credentials:
             started = time.perf_counter()
-            which = "given client" if only else f"key {keys().index(key) + 1}"
+            which = "given client" if only else f"key {credentials.index(key) + 1}"
             try:
                 c = only or client(key)
                 response = await c.aio.models.generate_content(model=model, contents=contents, config=config)

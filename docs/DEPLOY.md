@@ -21,6 +21,8 @@ You need values for these. Never commit them and never paste them in chat.
 | Variable | Where it comes from |
 |---|---|
 | `GEMINI_API_KEY` | AI Studio (same as `backend/.env`) |
+| `GEMINI_API_KEY_2` (optional) | Second configured Gemini credential. Keys in the same Google project share quota; a second key does not automatically double the free allowance. |
+| `OPENROUTER_API_KEY` (optional) | OpenRouter free fallback key. Legacy `OPEN_ROUTER_API_KEY` is also accepted; prefer one nonempty spelling. Copy locally, never into Git or chat. |
 | `KOE_ACCESS_TOKEN` | Your app password (same as `.env`, or a new long random string) |
 | `VAPID_PRIVATE_KEY` | `uv run python -m scripts.vapid_key` (from `backend/`). Generate it once and keep it, because changing it means turning notifications off and on again on the phone |
 | `DATABASE_URL` | Neon (same as `.env`) |
@@ -91,6 +93,22 @@ Koe asks for `repo read:user` (to read PRs and CI, and to post the PR comments y
 
 ## Updating
 Push to `main`, and both Render and Vercel rebuild by themselves. The URLs stay the same.
+
+### Verify which backend is actually running
+
+`/health` still returns `{"ok":true}`. New backend builds add `X-Koe-Revision`, using Render's `RENDER_GIT_COMMIT`, and `Cache-Control: no-store`. Read it without model calls:
+
+```powershell
+(Invoke-WebRequest 'https://koe-backend-dt5m.onrender.com/health').Headers['X-Koe-Revision']
+```
+
+Compare the full SHA with the commit you intended to deploy. An absent header indicates a build without these diagnostics; `unknown` means the revision environment variable is unavailable. A healthy process does not prove that the latest commit or every service key is installed.
+
+Owner-authenticated `GET /api/backend/status` reports revision, configuration-presence booleans, generation/audit limits and pending best-effort audit count. It performs no provider/database calls and returns no secrets or user data. Friends and signed-out requests cannot read it. Use the existing owner session or app token; never include a token in a URL. Presence is not a quota or credential-validity check.
+
+If a revision is stale, inspect Render's **Deploys/Events** and the linked branch, auto-deploy setting and build filters. **After CI Checks Pass** will not deploy if the repo has zero detected checks. **Manual Deploy → Deploy latest commit** starts a fresh build; **Restart service** uses the currently deployed commit. Failed builds keep the last successful deployment running. See [Render deploys](https://render.com/docs/deploys).
+
+Read-only live probes on 2026-10-13 returned HTTP 200 for health and the owner Notion status (`connected=true`, `workflow_ready=true`); the schema contains Notion and Connections routes. The earlier report that Render was still pre-Notion is no longer current. The exact deployed SHA and fallback-key presence were not available from that older diagnostics surface. No production environment changes or deploy were performed in this backend pass.
 
 ## Local development with a cloudflared tunnel (unchanged)
 ```bash

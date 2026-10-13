@@ -3,7 +3,16 @@
 > **Status:** v0.1, 2026-10-12. This file is the contract. Change it before changing behavior, and log the change in [DECISIONS.md](DECISIONS.md).
 
 ## 1. Objective
+
 A single-user, voice-first agent for a developer founder. It works across GitHub, Google Calendar, Notion and Google Sheets, through two channels: a **live web voice call with a mascot** and **WhatsApp**. Every write that affects others or the calendar waits for the user's approval. Accuracy and latency are measured.
+
+### Backend reliability pass (2026-10-13; UI frozen)
+
+- Exhausted transient Gemini errors (429/500/503/504 and transport failures) can reach the configured free text fallback only before any tool executes. Bound the Gemini generation chain as well as individual attempts; never restart or replay a tool turn. Invalid credentials/arguments are not treated as overload.
+- Voice-note retries discard incomplete audio from the failed attempt before recording a replacement.
+- Background best-effort audit writes have a bounded backlog and a shutdown drain. Durable proposal/claim/finish writes remain synchronous and are never retried automatically.
+- Preserve `/health`'s existing body; expose a validated deployment revision header and authenticated owner-only configuration-presence diagnostics. Never expose secrets, user records, token prefixes or provider exception bodies. Deployment checks are read-only unless separately authorized.
+- Frontend/UI files remain unchanged. No extra paid service or runtime dependency is introduced.
 
 ### User stories
 1. *At my desk*, I click **Call** and ask "What's my day?". Koe speaks a summary of today's meetings, PRs waiting on me, and my open PRs' CI status, while the dashboard highlights each item.

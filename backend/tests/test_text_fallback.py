@@ -210,3 +210,42 @@ def test_quota_failure_without_backup_key_never_contacts_another_provider(monkey
     result = asyncio.run(text_agent.chat('Hello', [], agent.Conversation('cli'), client))
     assert len(calls) == 1 and not respx.calls
     assert result['text'].startswith('Gemini is busy')
+
+
+@pytest.mark.parametrize('failure', [
+    errors.ServerError(500, {'error': {'message': 'busy'}}),
+    errors.ServerError(504, {'error': {'message': 'deadline'}}),
+    httpx.ConnectError('private transport details'),
+])
+@respx.mock
+def test_exhausted_transient_failures_reach_the_backup_before_any_tools(monkeypatch, failure):
+    monkeypatch.setattr(settings, 'gemini_fallback_models', '')
+    client, _ = client_from([failure])
+    backup = respx.post(URL).respond(200, json=answer({'content': 'Backup answer.'}))
+    result = asyncio.run(text_agent.chat('Hello', [], agent.Conversation('cli'), client))
+    assert result['text'] == 'Backup answer.' and backup.call_count == 1
+
+
+@respx.mock
+def test_transient_failure_after_a_tool_does_not_replay_or_switch_provider(monkeypatch):
+    monkeypatch.setattr(settings, 'gemini_fallback_models', '')
+    writes = []
+    async def write(**kwargs):
+        writes.append(kwargs)
+        return {'added': 1}
+    monkeypatch.setitem(agent.TOOLS, 'notion_log', agent.TOOLS['notion_log']._replace(fn=write))
+    client, calls = client_from([types.Content(role='model', parts=[call('notion_log', {
+        'date': '2026-10-13', 'entries': ['Synthetic entry']})]), errors.ServerError(504, {'error': {'message': 'busy'}})])
+    result = asyncio.run(text_agent.chat('Log work', [], agent.Conversation('cli'), client))
+    assert len(writes) == 1 and len(calls) == 2 and not respx.calls
+    assert result['text'].startswith('Gemini is busy')
+
+
+@pytest.mark.parametrize('code', [400, 401, 403])
+@respx.mock
+def test_request_and_auth_errors_do_not_trigger_a_provider_switch(monkeypatch, code):
+    monkeypatch.setattr(settings, 'gemini_fallback_models', '')
+    client, calls = client_from([errors.ClientError(code, {'error': {'message': 'private diagnostic'}})])
+    result = asyncio.run(text_agent.chat('Hello', [], agent.Conversation('cli'), client))
+    assert len(calls) == 1 and not respx.calls
+    assert 'private diagnostic' not in result['text']

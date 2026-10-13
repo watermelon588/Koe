@@ -89,3 +89,29 @@ def test_the_model_that_answered_last_is_tried_first(calls):
     calls.tried.clear()
     run()
     assert calls.tried[0] == ("key-1", "backup-a")  # …the last good model goes first: no wasted seconds on main
+
+
+def test_the_entire_generation_chain_has_a_deadline(monkeypatch):
+    async def stalled(**kwargs):
+        await asyncio.Event().wait()
+    fake = SimpleNamespace(aio=SimpleNamespace(models=SimpleNamespace(generate_content=stalled)))
+    monkeypatch.setattr(gemini, 'GENERATION_SECONDS', .01, raising=False)
+    async def scenario():
+        with pytest.raises(errors.APIError) as caught:
+            await asyncio.wait_for(gemini.generate(contents='Synthetic input', only=fake), timeout=.2)
+        assert caught.value.code == 503
+    asyncio.run(scenario())
+
+
+def test_cold_credential_lookup_does_not_block_the_event_loop(monkeypatch):
+    import threading
+    main_thread, seen = threading.get_ident(), []
+    def keys():
+        seen.append(threading.get_ident())
+        return ['synthetic-key']
+    async def generated(**kwargs): return SimpleNamespace(text='Synthetic answer')
+    monkeypatch.setattr(gemini, 'keys', keys)
+    monkeypatch.setattr(gemini, 'client', lambda key: SimpleNamespace(aio=SimpleNamespace(
+        models=SimpleNamespace(generate_content=generated))))
+    response, _ = run()
+    assert response.text == 'Synthetic answer' and seen and all(t != main_thread for t in seen)

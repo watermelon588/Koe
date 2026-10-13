@@ -121,6 +121,7 @@ async def speak(text: str) -> str:
     pcm = bytearray()
     config = {"response_modalities": ["AUDIO"], "system_instruction": SPEAK_PROMPT}
     for attempt in range(2):  # a used-up key (429): rest it and read the reply on the other key
+        pcm.clear()  # an incomplete first recording must not be prefixed to the replacement
         live = gemini.live_client()
         try:
             async with live.aio.live.connect(model=voice_call.LIVE_MODEL, config=config) as session:

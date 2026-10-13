@@ -2,6 +2,8 @@
 
 Add a row for every decision that changes scope, stack or behavior. Newest at the bottom.
 
+2026-10-13 backend takeover: user freezes the UI and authorizes necessary backend fixes. Add regression coverage for transient provider failures and partial voice retries, bound/drain best-effort audit tasks, and expose secret-free owner deployment diagnostics. Preserve approval semantics and existing provider keys/models; avoid quota-consuming acceptance repeats. Read-only Render probes now show Notion/Connections routes, so the earlier pre-Notion deployment report must be rechecked rather than assumed current.
+
 2026-10-13 call work windows: user requests visible Calendar/Sheets operations alongside the mascot. Extend the existing call sheet with service tabs that follow actual call tool/approval events, using a bounded display projection and original stored proposal fields. Calendar timeline and Sheets row preview show pending/saving/confirmed/error truthfully. No new tools, dependencies, provider iframes or automatic writes; existing approval gate remains authoritative.
 
 2026-10-13 Notion expansion: user authorizes completion plus a dedicated workspace and persistent navigation. Add scoped read/save/archive tools, approved task/note/meeting-record writes, additive workflow schema and previews; retain append-only daily logs. Calendar owns actual slots. Direct workspace works without an LLM; optional free OpenRouter fallback is restricted to before tool execution. Implementation/verification contract: NOTION_PLAN.md. Existing visual identity is preserved.

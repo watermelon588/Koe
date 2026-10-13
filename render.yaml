@@ -19,6 +19,11 @@ services:
       # Secrets: Render asks for these once when the Blueprint is created (sync: false = never in Git).
       - key: GEMINI_API_KEY
         sync: false
+      # Optional fallback credentials. Existing services add these through Environment; keep values out of Git.
+      - key: GEMINI_API_KEY_2
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
       - key: KOE_ACCESS_TOKEN
         sync: false
       - key: VAPID_PRIVATE_KEY

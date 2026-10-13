@@ -133,14 +133,45 @@ async def record_best_effort(*args, **kwargs):
 
 
 _background: set[asyncio.Task] = set()
+MAX_BACKGROUND = 128
 
 
-def record_later(*args, **kwargs) -> None:
+def record_later(*args, **kwargs) -> bool:
     """The activity log is an audit trail, not part of the answer: write it without making the turn wait
     (~0.4 s per record). Proposals, claims and results are never written this way."""
+    if not configured():
+        return False
+    if len(_background) >= MAX_BACKGROUND:
+        log.warning('Activity backlog full; best-effort record skipped')
+        return False
     task = asyncio.create_task(record_best_effort(*args, **kwargs))
     _background.add(task)  # keep a reference so it isn't garbage-collected mid-write
-    task.add_done_callback(_background.discard)
+    task.add_done_callback(_audit_done)
+    return True
+
+
+def _audit_done(task):
+    _background.discard(task)
+    if not task.cancelled() and task.exception() is not None:
+        log.warning('Background activity record failed')  # never log private exception bodies
+
+
+async def drain_background(timeout=5) -> int:
+    """Best-effort shutdown drain; durable approval writes never enter this queue.
+
+    Cancelling a to_thread await cannot interrupt an SQL request already in flight.
+    Existing connection/statement timeouts still bound that work; it is never replayed.
+    """
+    tasks = {t for t in _background if t.get_loop() is asyncio.get_running_loop() and not t.done()}
+    if not tasks:
+        return 0
+    _, pending = await asyncio.wait(tasks, timeout=timeout)
+    if pending:
+        log.warning('Shutdown activity drain expired; %d best-effort records remain', len(pending))
+        for task in pending:
+            task.cancel()
+        await asyncio.gather(*pending, return_exceptions=True)
+    return len(pending)
 
 
 async def dashboard_read() -> dict:
