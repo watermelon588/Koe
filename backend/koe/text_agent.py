@@ -15,7 +15,16 @@ log = logging.getLogger("koe.text_agent")
 
 def approval_text(result: dict) -> str:
     if result.get("status") == "executed":
-        return f"Saved: {result.get('title', 'Approved action')}. {result.get('url', '')}".strip()
+        if result.get('cancelled'):
+            return f"Cancelled Calendar {result.get('scope', 'event')}: {result.get('title', 'Approved event')}. Guest cancellation notifications requested."
+        text = f"Saved: {result.get('title', 'Approved action')}. {result.get('url', '')}".strip()
+        conference = result.get('conference') or {}
+        state = conference.get('status')
+        if state == 'success' and conference.get('url'):
+            text += ' Meet: ' + conference['url']
+        elif state in ('pending', 'failure', 'unavailable'):
+            text += f' Meet status: {state}. The event is saved; read it again to check the link. Do not recreate the event.'
+        return text
     if result.get("status") == "rejected":
         return "Cancelled. Nothing was changed."
     error = result.get("error", {})

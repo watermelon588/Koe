@@ -85,7 +85,8 @@ def test_write_is_proposed_then_explicit_confirmation_executes_once(fake_store):
         ctx = agent.Conversation("cli")
         proposed = await agent.run_tool("calendar_upsert_event", ARGS, context=ctx)
         assert not fake_store[1]
-        assert proposed["pending_action"]["summary"].endswith("Asia/Kolkata; attendees: none")
+        assert "Asia/Kolkata; attendees: none" in proposed["pending_action"]["summary"]
+        assert 'Guest notifications: all' in proposed['pending_action']['summary']
         ctx.approval_ready = True
         first, second = await asyncio.gather(agent.confirm(ctx, True), agent.confirm(ctx, True))
         assert len(fake_store[1]) == 1

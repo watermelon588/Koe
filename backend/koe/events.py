@@ -42,7 +42,7 @@ class Hub:
                 "session_id": data.get("session_id"), "channel": data.get("channel")}
         elif event_type == "approval_result":
             result = data.get('result', {})
-            if result.get("status") == "executed" and result.get('tool', 'calendar_upsert_event') == 'calendar_upsert_event':
+            if result.get("status") == "executed" and result.get('tool', 'calendar_upsert_event') in ('calendar_upsert_event', 'calendar_cancel_event'):
                 self.calendar_dirty = True
             if data.get("clear"):
                 self.pending.pop(data["action_id"], None)

@@ -979,3 +979,17 @@ Next phase: approved schema creation and safe Sheets row editing is tracked in [
 **Try it:** Ask for a new meeting with a Meet link. After approval, use its actual returned conference state. Ask Koe to read the event again when pending.
 
 **Interview line:** “I model asynchronous provider readiness separately from mutation success and bound the data used for decisions.”
+
+## 2026-10-14 — Explicit versioned Calendar cancellation
+
+**Files:** Calendar adapter/registry, call display projection, events, text confirmations and cancellation regressions.
+
+**What it does:** Reads and freezes a regular event's etag, exact cancellation scope, destination and complete bounded guest preview. Single events, individual recurring instances and whole series require distinct explicit approval. Only meetings organized by the caller are cancellable; guest invitations must be declined in Calendar. Execution rereads and checks the preview/version, sends one conditional DELETE with guest notifications and invalidates availability. Individual moves now freeze their etag at proposal time too.
+
+**Core concept:** The application approves a specific read version and scope. An instance ID cannot accidentally cancel its whole series. Call projections and deterministic text distinguish cancellation from rejection, and Meet readiness from event-save success.
+
+**Verification:** Thirteen cancellation and two display/wording regressions failed before implementation; **85 focused Calendar/approval/call/text tests passed**. JSON storage roundtrips, stale versions, destination/timezone changes, organizer restrictions, incomplete guests and internal-argument injection are covered. No real meetings or invitations were changed.
+
+**Try it:** Ask Koe to read a meeting, then cancel that one event/occurrence or explicitly the whole series. A series confirmation warns that past occurrences are included. Review the actual event and guest list before confirming.
+
+**Interview line:** “I bind destructive operations to exact event versions and explicit scopes, and make the UI result follow the application's outcome.”

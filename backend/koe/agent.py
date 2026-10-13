@@ -108,6 +108,11 @@ TOOLS.update({
         "type": "object", "properties": {"date": {"type": "string"}}, "required": ["date"]}),
     'calendar_get_event': Tool(calendar.calendar_get_event, 'Read one exact Calendar event/series/instance ID, etag and current conference readiness. No writes.',
         {'type': 'object', 'properties': {'event_id': {'type': 'string'}}, 'required': ['event_id']}),
+    'calendar_cancel_event': Tool(calendar.calendar_cancel_event,
+        'Propose cancellation of a regular event you organize. Read first, exact event_id/etag and explicit single/instance/series scope. Series means ALL occurrences including past; never silently promote an instance to its series. Separate approval required.',
+        {'type': 'object', 'properties': {'event_id': {'type': 'string'}, 'expected_etag': {'type': 'string'},
+            'scope': {'type': 'string', 'enum': ['single', 'instance', 'series']}},
+            'required': ['event_id', 'expected_etag', 'scope']}, needs_approval=True),
     "calendar_find_free": Tool(calendar.calendar_find_free, "Find free ranges inside working hours on an ISO date.", {
         "type": "object", "properties": {"date": {"type": "string"}, "duration_min": {"type": "integer"},
         "between": {"type": "string", "description": "Optional HH:MM-HH:MM in the owner's timezone."}},
@@ -201,10 +206,12 @@ TOOLS['notion_add_properties'] = Tool(notion.notion_add_properties,
             'options': {'type': 'array', 'items': {'type': 'string'}, 'maxItems': 30}},
         'required': ['name', 'type'], 'additionalProperties': False}}}, 'required': ['properties']}, needs_approval=True)
 
-APPROVED_WRITERS = {'calendar_upsert_event', 'github_comment', 'sheets_log_hours', 'notion_save', 'notion_archive', 'sheets_add_columns', 'sheets_update_row', 'notion_add_properties'}
+APPROVED_WRITERS = {'calendar_upsert_event', 'calendar_cancel_event', 'github_comment', 'sheets_log_hours', 'notion_save', 'notion_archive', 'sheets_add_columns', 'sheets_update_row', 'notion_add_properties'}
 
 
 def prepare_write(name: str, args: dict) -> tuple[dict, str]:
+    if name == 'calendar_cancel_event':
+        return calendar.prepare_cancel(**args), ''
     if name == 'notion_add_properties':
         return schema_ops.prepare_write(**args), ''
     if name in ('sheets_add_columns', 'sheets_update_row'):
@@ -301,6 +308,8 @@ async def _run_tool(name: str, args: dict | None, *, context: Conversation | Non
             return _error("approval_busy", "The existing approval is being resolved.", "Wait for its result.")
         try:
             normalized, summary = await asyncio.to_thread(prepare_write, name, args or {})
+            if name in ('calendar_upsert_event', 'calendar_cancel_event'):
+                normalized, summary = await calendar.prepare_proposal(name, normalized, summary)
             if name in ('sheets_add_columns', 'sheets_update_row'):
                 normalized, summary = await sheet_workspace.prepare_proposal(name, normalized)
             if name == 'notion_add_properties':
@@ -322,6 +331,8 @@ async def _run_tool(name: str, args: dict | None, *, context: Conversation | Non
             return _error("storage_unavailable", "The proposal could not be saved; nothing was executed.", "Check Neon setup.")
         except notion_service.NotionError as exc:
             return exc.result()
+        except calendar.CalendarError as exc:
+            return exc.result
         except (ValueError, TypeError) as exc:
             return _error("bad_args", str(exc), "Clarify the request; don't invent missing information.")
     try:

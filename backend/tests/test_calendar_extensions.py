@@ -122,3 +122,103 @@ def test_incomplete_or_repeating_calendar_pages_are_not_treated_as_free(monkeypa
     monkeypatch.setattr(calendar, 'request', request)
     result = asyncio.run(calendar.calendar_upsert_event(**ARGS))
     assert result['error']['code'] == 'calendar_too_large'
+
+
+@pytest.fixture
+def cancel_api(monkeypatch):
+    event = {'id': 'event', 'etag': '"v1"', 'summary': 'Exact review', 'organizer': {'self': True},
+        'start': {'dateTime': ARGS['start']}, 'end': {'dateTime': ARGS['end']},
+        'attendees': [{'email': 'guest@example.com'}]}
+    calls = []
+    async def request(method, path, **kwargs):
+        calls.append((method, path, kwargs))
+        if method == 'GET' and path.endswith('/events'): return {'items': []}
+        if method == 'GET': return dict(event)
+        if method == 'DELETE': return {}
+        return {'id': event['id']}
+    monkeypatch.setattr(calendar, 'request', request)
+    return event, calls
+
+
+@pytest.mark.parametrize('scope', ['single', 'instance', 'series'])
+def test_cancel_exact_scope_uses_frozen_etag_and_one_delete(fake_store, cancel_api, scope):
+    import json
+    from koe import agent
+    event, calls = cancel_api
+    if scope == 'instance': event.update(recurringEventId='parent', originalStartTime={'dateTime': ARGS['start']})
+    if scope == 'series': event['recurrence'] = ['RRULE:FREQ=WEEKLY;COUNT=3']
+    async def scenario():
+        ctx = agent.Conversation('app')
+        proposed = await agent.run_tool('calendar_cancel_event', {'event_id': 'event', 'expected_etag': '"v1"', 'scope': scope}, context=ctx)
+        summary = proposed['pending_action']['summary']
+        assert 'Exact review' in summary and 'guest@example.com' in summary and scope in summary
+        assert all(c[0] == 'GET' for c in calls)
+        action = fake_store[0][proposed['pending_action']['id']]
+        action['args_json'] = json.loads(json.dumps(action['args_json']))
+        ctx.approval_ready = True
+        result = await agent.confirm(ctx, True)
+        assert result['status'] == 'executed' and result['cancelled'] and result['scope'] == scope
+        delete = calls[-1]
+        assert delete[0] == 'DELETE' and delete[1].endswith('/event')
+        assert delete[2] == {'headers': {'If-Match': '"v1"'}, 'params': {'sendUpdates': 'all'}}
+        assert 'error' in await agent.confirm(ctx, True)
+        assert sum(c[0] == 'DELETE' for c in calls) == 1
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize('drift', ['etag', 'calendar', 'timezone'])
+def test_cancel_rejects_drift_after_preview(fake_store, cancel_api, monkeypatch, drift):
+    from koe import agent
+    event, calls = cancel_api
+    async def scenario():
+        ctx = agent.Conversation('app')
+        assert 'pending_action' in await agent.run_tool('calendar_cancel_event', {'event_id': 'event', 'expected_etag': '"v1"', 'scope': 'single'}, context=ctx)
+        if drift == 'etag': event['etag'] = '"v2"'
+        else: monkeypatch.setattr(settings, 'google_calendar_id' if drift == 'calendar' else 'timezone', 'changed')
+        ctx.approval_ready = True
+        result = await agent.confirm(ctx, True)
+        assert result['status'] == 'failed' and not any(c[0] == 'DELETE' for c in calls)
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize('invalid', ['wrong_scope', 'stale', 'cancelled', 'guest', 'omitted', 'type', 'internal'])
+def test_unsafe_cancellations_never_get_a_proposal(fake_store, cancel_api, invalid):
+    from koe import agent
+    event, calls = cancel_api
+    args = {'event_id': 'event', 'expected_etag': '"v1"', 'scope': 'single'}
+    if invalid == 'wrong_scope': args['scope'] = 'series'
+    if invalid == 'stale': args['expected_etag'] = '"old"'
+    if invalid == 'cancelled': event['status'] = 'cancelled'
+    if invalid == 'guest': event['organizer']['self'] = False
+    if invalid == 'omitted': event['attendeesOmitted'] = True
+    if invalid == 'type': event['eventType'] = 'birthday'
+    if invalid == 'internal': args['expected_calendar'] = 'evil'
+    async def scenario():
+        assert (await agent.run_tool('calendar_cancel_event', args))['error']['code'] == 'approval_required'
+        result = await agent.run_tool('calendar_cancel_event', args, context=agent.Conversation('app'))
+        assert 'error' in result and not fake_store[0] and all(c[0] == 'GET' for c in calls)
+    asyncio.run(scenario())
+
+
+def test_cancellation_call_projection_and_dashboard_refresh_follow_executed_action(fake_store, cancel_api):
+    from types import SimpleNamespace
+    from koe import agent, events, voice_call
+    sent = []
+    async def send_json(data): sent.append(data)
+    async def scenario():
+        state = voice_call.CallState()
+        await agent.run_tool('calendar_cancel_event', {'event_id': 'event', 'expected_etag': '"v1"', 'scope': 'single'}, context=state.context)
+        state.context.approval_ready = True
+        await voice_call._approval_result(SimpleNamespace(send_json=send_json), state, True)
+        assert [e['type'] for e in sent] == ['approval_progress', 'approval_result']
+        assert sent[-1]['work']['cancelled'] and sent[-1]['work']['details']['title'] == 'Exact review'
+        assert events.hub.calendar_dirty
+    asyncio.run(scenario())
+
+
+def test_text_confirmation_does_not_claim_pending_meet_ready_or_cancelled_event_saved():
+    from koe.text_agent import approval_text
+    text = approval_text({'status': 'executed', 'title': 'Review', 'conference': {'status': 'pending', 'url': None}})
+    assert 'pending' in text.lower() and 'saved' in text.lower()
+    text = approval_text({'status': 'executed', 'title': 'Review', 'scope': 'series', 'cancelled': True})
+    assert 'series' in text and 'cancel' in text.lower() and 'saved' not in text.lower()

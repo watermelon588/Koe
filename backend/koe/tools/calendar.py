@@ -90,7 +90,8 @@ def _iso(value: str) -> datetime:
 def prepare_event(title: str, start: str, end: str, attendees: list[str] | None = None,
                   event_id: str | None = None, description: str | None = None,
                   location: str | None = None, reminders: list[dict] | None = None,
-                  all_day: bool = False, recurrence: dict | None = None, create_meet: bool = False) -> dict:
+                  all_day: bool = False, recurrence: dict | None = None, create_meet: bool = False,
+                  expected_etag: str | None = None) -> dict:
     if not isinstance(title, str) or not title.strip() or len(title) > 200:
         raise ValueError("Provide a title of 1 to 200 characters.")
     if type(all_day) is not bool:
@@ -110,6 +111,9 @@ def prepare_event(title: str, start: str, end: str, attendees: list[str] | None 
         raise ValueError("Attendees must be explicit email addresses; don't guess an address from a name.")
     if event_id is not None and (not isinstance(event_id, str) or not re.fullmatch(r"[a-zA-Z0-9_-]{1,1024}", event_id)):
         raise ValueError("Invalid event_id.")
+    if expected_etag is not None:
+        _valid_etag(expected_etag)
+        if not event_id: raise ValueError('An expected_etag requires an existing event ID.')
     for label, value, limit in [('description', description, 6000), ('location', location, 500)]:
         if value is not None and (not isinstance(value, str) or len(value) > limit):
             raise ValueError(f'{label} must be text of at most {limit} characters.')
@@ -123,7 +127,7 @@ def prepare_event(title: str, start: str, end: str, attendees: list[str] | None 
             "end": end if all_day else end_dt.isoformat(),
             "attendees": attendees, "event_id": event_id, 'description': description,
             'location': location, 'reminders': reminders, 'all_day': all_day, 'recurrence': recurrence,
-            'create_meet': create_meet}
+            'create_meet': create_meet, 'expected_etag': expected_etag}
     event_plan(result)  # Validate and bound the entire plan before any API access.
     return result
 
@@ -272,6 +276,91 @@ async def calendar_get_event(event_id: str):
         return error('bad_args', str(exc))
 
 
+def prepare_cancel(event_id, expected_etag, scope):
+    if scope not in ('single', 'instance', 'series'):
+        raise ValueError('Choose explicit single, instance or series cancellation scope.')
+    return {'event_id': _valid_id(event_id), 'expected_etag': _valid_etag(expected_etag), 'scope': scope}
+
+
+async def checked_existing(identifier, expected_etag=None):
+    event = await request('GET', _path() + '/' + quote(identifier, safe=''))
+    if event.get('id') != identifier or event.get('status') == 'cancelled' or event.get('eventType', 'default') != 'default':
+        raise CalendarError('calendar_evidence', 'The requested regular event is missing, cancelled or different.')
+    try:
+        version = _valid_etag(event.get('etag'))
+    except ValueError:
+        raise CalendarError('calendar_changed', 'Calendar did not return an exact event version.') from None
+    if expected_etag is not None and version != expected_etag:
+        raise CalendarError('calendar_changed', 'That event changed since it was read. Refresh and propose again.')
+    return event
+
+
+def cancellation_preview(event, scope):
+    actual_scope = 'instance' if event.get('recurringEventId') else 'series' if event.get('recurrence') else 'single'
+    if actual_scope != scope:
+        raise CalendarError('calendar_scope', 'The requested cancellation scope does not match that event ID. Read the correct event or series first.')
+    if event.get('organizer', {}).get('self') is not True:
+        raise CalendarError('calendar_scope', 'Koe only cancels regular meetings you organize. Open Google Calendar to decline another organizer’s invitation.')
+    shown = display_event(event)
+    attendees = event.get('attendees', [])
+    rules = event.get('recurrence', [])
+    if (shown['attendees_omitted'] or any(not isinstance(a.get('email'), str) or not 1 <= len(a['email']) <= 254 for a in attendees)
+        or not isinstance(event.get('summary', 'Untitled'), str) or len(event.get('summary', 'Untitled')) > 200
+        or not isinstance(rules, list) or len(rules) > 20 or any(not isinstance(r, str) or len(r) > 500 for r in rules)):
+        raise CalendarError('calendar_preview', 'The full cancellation scope/attendee preview exceeds supported bounds. Open Calendar directly.')
+    preview = {k: shown[k] for k in ('title', 'start', 'end', 'all_day', 'attendees', 'recurring_event_id', 'original_start', 'recurrence')}
+    summary = f"Cancel {scope}: {shown['title']} ({shown['id']})\n" + json.dumps(preview, ensure_ascii=False)
+    summary += '\nGuest cancellation notifications: all. This deletes the event from Calendar.'
+    if scope == 'series':
+        summary += '\nENTIRE SERIES: all occurrences, including past ones; not just this and following. Individual exceptions are not enumerated; this approval targets the whole series.'
+    if len(summary.encode()) > 16000: raise CalendarError('calendar_preview', 'Cancellation preview is too large.')
+    return preview, summary
+
+
+async def prepare_proposal(name, args, summary=''):
+    try:
+        async with asyncio.timeout(OPERATION_SECONDS):
+            frozen = {**args, 'expected_calendar': settings.google_calendar_id, 'expected_timezone': settings.timezone}
+            if name == 'calendar_cancel_event':
+                event = await checked_existing(args['event_id'], args['expected_etag'])
+                preview, summary = cancellation_preview(event, args['scope'])
+                frozen['approved_event'] = preview
+            elif args.get('event_id'):
+                event = await checked_existing(args['event_id'], args.get('expected_etag'))
+                if event.get('recurrence') or event.get('recurringEventId'):
+                    raise CalendarError('recurring_event', 'Moving recurring series/instances is not supported in this phase.')
+                shown = display_event(event)
+                if shown['attendees_omitted']: raise CalendarError('calendar_preview', 'Existing attendees could not be previewed completely.')
+                frozen['expected_etag'] = event['etag']
+                summary += '\nExisting event: ' + json.dumps({k: shown[k] for k in ('title', 'start', 'end', 'attendees')}, ensure_ascii=False)
+            summary += f"\nCalendar: {settings.google_calendar_id}. Timezone: {settings.timezone}. Guest notifications: all."
+            return frozen, summary
+    except TimeoutError:
+        raise CalendarError('calendar_timeout', 'Calendar proposal validation timed out. No mutation was attempted.') from None
+
+
+def check_destination(expected_calendar, expected_timezone):
+    if expected_calendar is not None and (expected_calendar != settings.google_calendar_id or expected_timezone != settings.timezone):
+        raise CalendarError('calendar_destination', 'The Calendar destination or timezone changed. Propose again.')
+
+
+@bounded
+async def calendar_cancel_event(event_id, expected_etag, scope, *, expected_calendar, expected_timezone,
+                                approved_event, request_id):
+    args = prepare_cancel(event_id, expected_etag, scope)
+    check_destination(expected_calendar, expected_timezone)
+    async with _write_lock:
+        event = await checked_existing(args['event_id'], args['expected_etag'])
+        preview, _ = cancellation_preview(event, args['scope'])
+        if preview != approved_event:
+            raise CalendarError('calendar_changed', 'The cancellation preview changed. Read and approve again.')
+        await request('DELETE', _path() + '/' + quote(event_id, safe=''),
+                      headers={'If-Match': expected_etag}, params={'sendUpdates': 'all'})
+        return {'id': event_id, 'title': preview['title'], 'cancelled': True, 'scope': scope,
+                'start': preview['start'], 'end': preview['end'], 'all_day': preview['all_day'],
+                'url': event.get('htmlLink'), 'timezone': settings.timezone}
+
+
 @bounded
 async def calendar_list(date: str) -> dict:
     try:
@@ -325,17 +414,19 @@ async def calendar_upsert_event(title: str, start: str, end: str, attendees: lis
                                 event_id: str | None = None, description: str | None = None,
                                 location: str | None = None, reminders: list[dict] | None = None,
                                 all_day: bool = False, recurrence: dict | None = None, create_meet: bool = False, *,
-                                request_id: str | None = None) -> dict:
+                                request_id: str | None = None, expected_etag: str | None = None,
+                                expected_calendar: str | None = None, expected_timezone: str | None = None) -> dict:
     """Only agent.resolve may invoke a write after claiming its stored approval."""
     try:
-        args = prepare_event(title, start, end, attendees, event_id, description, location, reminders, all_day, recurrence, create_meet)
+        args = prepare_event(title, start, end, attendees, event_id, description, location, reminders, all_day, recurrence, create_meet, expected_etag)
+        check_destination(expected_calendar, expected_timezone)
         if create_meet and (not isinstance(request_id, str) or not re.fullmatch(r'[a-zA-Z0-9-]{1,100}', request_id)):
             raise ValueError('Meet creation requires the persisted approval request ID.')
         plan = event_plan(args)
         intervals = [(_day(p['start'])[0], _day(p['end'])[0]) if all_day else (_iso(p['start']), _iso(p['end']))
                      for p in plan['occurrences']]
         async with _write_lock:
-            old = await request("GET", _path() + "/" + quote(event_id, safe="")) if event_id else None
+            old = await checked_existing(event_id, expected_etag) if event_id else None
             if old and (old.get("recurrence") or old.get("recurringEventId")):
                 return error("recurring_event", "Moving recurring events isn't supported in v1.")
             # Paginated event overlap check can exclude the event being moved, unlike freeBusy.
