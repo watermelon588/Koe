@@ -101,6 +101,10 @@ TOOLS.update({
         "Times must include offsets. Attendees must be explicit email addresses, not names.", {
         "type": "object", "properties": {"title": {"type": "string"}, "start": {"type": "string"},
         "end": {"type": "string"}, "attendees": {"type": "array", "items": {"type": "string"}},
+        'description': {'type': 'string', 'maxLength': 6000}, 'location': {'type': 'string', 'maxLength': 500},
+        'reminders': {'type': 'array', 'maxItems': 5, 'description': 'Override event notifications; [] disables reminders. Omit to preserve defaults/existing settings. Not a phone alarm.',
+            'items': {'type': 'object', 'properties': {'method': {'type': 'string', 'enum': ['popup', 'email']},
+                'minutes': {'type': 'integer', 'minimum': 0, 'maximum': 40320}}, 'required': ['method', 'minutes'], 'additionalProperties': False}},
         "event_id": {"type": "string", "description": "ID from calendar_list when moving an event."}},
         "required": ["title", "start", "end"]}, needs_approval=True),
 })
@@ -174,6 +178,12 @@ def prepare_write(name: str, args: dict) -> tuple[dict, str]:
                f"{normalized['start']} to {normalized['end']} {settings.timezone}; attendees: "
                + (", ".join(normalized['attendees']) if normalized['attendees'] else
                   'existing attendees kept' if normalized['event_id'] and normalized['attendees'] is None else 'none'))
+    for field in ('description', 'location'):
+        if normalized[field] is not None:
+            summary += f"\n{field.capitalize()}: {normalized[field] or '(clear)'}"
+    if normalized['reminders'] is not None:
+        summary += '\nReminders: ' + (', '.join(f"{r['method']} {r['minutes']} minutes before" for r in normalized['reminders']) or 'disabled')
+        summary += '. Delivery depends on Calendar/device settings.'
     return normalized, summary
 
 

@@ -58,7 +58,8 @@ def _iso(value: str) -> datetime:
 
 
 def prepare_event(title: str, start: str, end: str, attendees: list[str] | None = None,
-                  event_id: str | None = None) -> dict:
+                  event_id: str | None = None, description: str | None = None,
+                  location: str | None = None, reminders: list[dict] | None = None) -> dict:
     if not isinstance(title, str) or not title.strip() or len(title) > 200:
         raise ValueError("Provide a title of 1 to 200 characters.")
     start_dt, end_dt = _iso(start), _iso(end)
@@ -69,8 +70,18 @@ def prepare_event(title: str, start: str, end: str, attendees: list[str] | None 
         raise ValueError("Attendees must be explicit email addresses; don't guess an address from a name.")
     if event_id is not None and (not isinstance(event_id, str) or not re.fullmatch(r"[a-zA-Z0-9_-]{1,1024}", event_id)):
         raise ValueError("Invalid event_id.")
+    for label, value, limit in [('description', description, 6000), ('location', location, 500)]:
+        if value is not None and (not isinstance(value, str) or len(value) > limit):
+            raise ValueError(f'{label} must be text of at most {limit} characters.')
+    # https://developers.google.com/workspace/calendar/api/v3/reference/events/insert
+    if reminders is not None:
+        if not isinstance(reminders, list) or len(reminders) > 5 or any(
+            not isinstance(r, dict) or set(r) != {'method', 'minutes'} or r['method'] not in ('popup', 'email')
+            or type(r['minutes']) is not int or not 0 <= r['minutes'] <= 40320 for r in reminders):
+            raise ValueError('Use at most five popup/email reminders with integer minutes from 0 to 40320.')
     return {"title": title.strip(), "start": start_dt.isoformat(), "end": end_dt.isoformat(),
-            "attendees": attendees, "event_id": event_id}
+            "attendees": attendees, "event_id": event_id, 'description': description,
+            'location': location, 'reminders': reminders}
 
 
 async def _events(start: datetime, end: datetime) -> list[dict]:
@@ -113,7 +124,9 @@ async def calendar_list(date: str) -> dict:
         events = await _events(start, end)
         return {"date": date, "timezone": settings.timezone, "events": [
             {"id": e["id"], "title": e.get("summary", "Untitled"), "start": e["start"],
-             "end": e["end"], "url": e.get("htmlLink")} for e in events if e.get("status") != "cancelled"]}
+             "end": e["end"], "url": e.get("htmlLink"), 'description': e.get('description', ''),
+             'location': e.get('location', ''), 'reminders': e.get('reminders', {})}
+            for e in events if e.get("status") != "cancelled"]}
     except CalendarError as exc:
         return exc.result
     except (ValueError, TypeError):
@@ -155,10 +168,12 @@ async def calendar_find_free(date: str, duration_min: int, between: str | None =
 
 
 async def calendar_upsert_event(title: str, start: str, end: str, attendees: list[str] | None = None,
-                                event_id: str | None = None, *, request_id: str | None = None) -> dict:
+                                event_id: str | None = None, description: str | None = None,
+                                location: str | None = None, reminders: list[dict] | None = None, *,
+                                request_id: str | None = None) -> dict:
     """Only agent.resolve may invoke a write after claiming its stored approval."""
     try:
-        args = prepare_event(title, start, end, attendees, event_id)
+        args = prepare_event(title, start, end, attendees, event_id, description, location, reminders)
         start_dt, end_dt = _iso(args["start"]), _iso(args["end"])
         async with _write_lock:
             old = await request("GET", _path() + "/" + quote(event_id, safe="")) if event_id else None
@@ -175,6 +190,11 @@ async def calendar_upsert_event(title: str, start: str, end: str, attendees: lis
                     "end": {"dateTime": args["end"], "timeZone": settings.timezone}}
             if attendees is not None:
                 body["attendees"] = [{"email": e} for e in attendees]
+            for field in ('description', 'location'):
+                if args[field] is not None:
+                    body[field] = args[field]
+            if reminders is not None:
+                body['reminders'] = {'useDefault': False, 'overrides': args['reminders']}
             params = {"sendUpdates": "all"}
             if old:
                 if not old.get("etag"):

@@ -109,3 +109,37 @@ def test_conflict_on_second_page_is_not_missed(monkeypatch):
         "Call", "2026-10-12T19:30:00+05:30", "2026-10-12T20:00:00+05:30"))
     assert result["error"]["code"] == "calendar_conflict"
     assert len(calls) == 2 and all(method == "GET" for method, _ in calls)
+
+
+def test_event_details_and_reminders_are_validated_and_sent_exactly(api):
+    from koe import agent
+    args = {'title': 'Call', 'start': '2026-10-14T19:00:00+05:30', 'end': '2026-10-14T19:30:00+05:30',
+            'description': 'Review release', 'location': 'Library',
+            'reminders': [{'method': 'popup', 'minutes': 15}, {'method': 'email', 'minutes': 60}]}
+    normalized, preview = agent.prepare_write('calendar_upsert_event', args)
+    assert 'Review release' in preview and 'Library' in preview and '15' in preview and 'email' in preview
+    result = asyncio.run(calendar.calendar_upsert_event(**normalized))
+    assert 'error' not in result
+    body = api[0][-1][2]['json']
+    assert body['reminders'] == {'useDefault': False, 'overrides': args['reminders']}
+    assert body['description'] == args['description'] and body['location'] == 'Library'
+
+
+@pytest.mark.parametrize('reminders', [[{'method': 'sms', 'minutes': 10}], [{'method': 'popup', 'minutes': True}],
+    [{'method': 'popup', 'minutes': -1}], [{'method': 'popup', 'minutes': 40321}],
+    [{'method': 'popup', 'minutes': 10, 'unexpected': 'value'}], [{'method': 'popup', 'minutes': 10}] * 6])
+def test_invalid_reminders_never_reach_google(api, reminders):
+    result = asyncio.run(calendar.calendar_upsert_event('Call', '2026-10-14T19:00:00+05:30',
+        '2026-10-14T19:30:00+05:30', reminders=reminders))
+    assert result['error']['code'] == 'bad_args' and not api[0]
+
+
+def test_omitted_details_preserved_and_explicit_clearing_supported(api):
+    args = ('Call', '2026-10-14T19:00:00+05:30', '2026-10-14T19:30:00+05:30')
+    asyncio.run(calendar.calendar_upsert_event(*args, event_id='moving'))
+    body = api[0][-1][2]['json']
+    assert all(k not in body for k in ('reminders', 'description', 'location'))
+    asyncio.run(calendar.calendar_upsert_event(*args, description='', location='', reminders=[]))
+    body = api[0][-1][2]['json']
+    assert body['description'] == body['location'] == ''
+    assert body['reminders'] == {'useDefault': False, 'overrides': []}

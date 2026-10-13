@@ -861,3 +861,16 @@ Each had its own fix. No guessing.
 **Try it yourself:** Ask “What did I ship yesterday?”, “Show my commits by repository yesterday, including added/deleted lines”, or “What is my contribution streak over the last 30 days?” Results disclose their window and scope. No UI changes.
 
 **Interview line:** "The model selects the metric, while Python computes it from bounded, deduplicated evidence and reports what it could not verify."
+
+## Step 53: approved Calendar details and reminders (2026-10-13)
+**Files:** tools/calendar.py, agent.py, test_calendar.py, test_agent.py and the feature checklist.
+
+**What it does:** Optional description/location and up to five popup/email reminders, with integer lead times between 0 and 40320 minutes. Every changed field appears in the existing approval summary. Omitted fields preserve existing/default settings; empty strings clear text and an empty reminder list disables notifications. Calendar list responses expose existing details/reminder settings.
+
+**Core concept:** Omitted and empty values are different intents. Python validates both and builds the exact API payload; the LLM cannot bypass approval or change notification rules. Existing overlap rechecks, stable action IDs and event-version checks remain.
+
+**Verification:** Eight new regressions first failed on unsupported arguments. Focused Calendar/approval/call tests exercise exact payloads, invalid reminders and preservation versus clearing. No invitations or events were sent to real accounts. Notification delivery depends on Google/device settings; this is not a guaranteed phone alarm.
+
+**Try it yourself:** “Book a review tomorrow at 7 PM for 30 minutes, at the library, and remind me 15 minutes before.” Koe must present the complete proposal before writing.
+
+**Interview line:** "A voice request becomes a typed, approved Calendar payload with explicit preservation and clearing semantics."
