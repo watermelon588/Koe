@@ -24,7 +24,8 @@ from fastapi.responses import PlainTextResponse
 from google import genai
 from google.genai import errors, types
 
-from koe import agent, store, text_agent, usage
+from koe import agent, store, text_agent
+from koe import gemini as gemini_fallback
 from koe.config import settings
 
 log = logging.getLogger("koe.whatsapp")
@@ -110,7 +111,6 @@ class Chat:
 # ponytail: one in-memory chat per sender; a restart forgets the history and any pending button
 # (the user just asks again). Phase 6 adds the cross-channel memory summary.
 CHATS: dict[str, Chat] = {}
-_clients: dict[str, genai.Client] = {}
 _http: httpx.AsyncClient | None = None
 
 
@@ -123,11 +123,8 @@ def http() -> httpx.AsyncClient:
 
 
 def gemini() -> genai.Client:
-    """One reused client per key: the person's own Gemini key if they added one (usage.py), else the shared key."""
-    key = usage.gemini_key()
-    if key not in _clients:
-        _clients[key] = genai.Client(api_key=key)
-    return _clients[key]
+    """A Gemini Live client on a key that isn't resting (koe/gemini.py: the person's own key, else the shared keys)."""
+    return gemini_fallback.live_client()
 
 
 async def handle_message(msg: dict, received: float | None = None) -> None:
@@ -228,11 +225,9 @@ async def transcribe(audio: bytes, mime: str) -> str:
     https://ai.google.dev/gemini-api/docs/audio
     ponytail: transcribe, then run the text loop (two model calls). One call with the audio part in the
     conversation would be faster; this keeps one agent path, and "yes"/"no" voice notes work for free."""
-    response = await gemini().aio.models.generate_content(
-        model=settings.gemini_text_model,
+    response, _ = await gemini_fallback.generate(  # any healthy model/key: transcription isn't tied to one
         contents=[types.Part.from_bytes(data=audio, mime_type=mime.split(";")[0].strip() or "audio/ogg"),
-                  "Transcribe this voice note exactly, in the language spoken. Reply with the transcript only."],
-    )
+                  "Transcribe this voice note exactly, in the language spoken. Reply with the transcript only."])
     return (response.text or "").strip()
 
 

@@ -14,7 +14,7 @@ from fastapi import WebSocketDisconnect  # noqa: E402
 from google.genai import errors  # noqa: E402
 
 from koe.config import settings
-from koe import voice_call  # noqa: E402
+from koe import gemini, voice_call  # noqa: E402
 
 SILENT = b"\x00\x00" * 640
 VOICED = struct.pack("<640h", *[3000] * 640)  # 40 ms mic chunks
@@ -116,7 +116,7 @@ def fake_gemini(monkeypatch):
     connections = []
 
     class FakeClient:
-        def __init__(self, api_key):
+        def __init__(self, api_key, http_options=None):
             self.aio = SimpleNamespace(live=SimpleNamespace(connect=self.connect))
 
         @asynccontextmanager
@@ -126,7 +126,7 @@ def fake_gemini(monkeypatch):
             connections.append((config, session))
             yield session
 
-    monkeypatch.setattr(voice_call.genai, "Client", FakeClient)
+    monkeypatch.setattr(gemini.genai, "Client", FakeClient)  # clients are made in koe/gemini.py
     return connections
 
 

@@ -28,7 +28,7 @@ def client(monkeypatch):
 
 def fake_agent(monkeypatch, result):
     asked = []
-    async def chat(text, history, context, client):
+    async def chat(text, history, context, client=None):
         asked.append(text)
         return result
     monkeypatch.setattr(app_channel.text_agent, "chat", chat)

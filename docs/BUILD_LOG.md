@@ -759,3 +759,25 @@ A QR code is just a URL drawn as squares. Since the URL is fixed, the image is g
 - 242 backend tests and 18 frontend tests pass.
 - In the browser with a temporary test account (deleted afterwards), the Connections section shows Google and GitHub connected, Notion "Coming soon", Timesheet, Repositories → Choose, and the Gemini key form. The dashboard stays Live.
 **Interview line:** "Every integration follows the same pattern: OAuth with PKCE, an encrypted token per user, non-secret choices as preferences, and tools that resolve credentials from the request's identity with an owner-only fallback, which a test proves can't leak."
+
+## Step 48: the chat wasn't broken, Gemini was busy: a real fallback chain  (2026-10-13)
+**Files:** backend/koe/gemini.py (new) · backend/tests/test_gemini.py (new) · backend/koe/{text_agent,whatsapp,app_channel,voice_call,usage,config}.py · backend/.env.example · backend/tests/{conftest,test_app_channel,test_isolation,test_usage,test_voice_call,test_whatsapp_turns}.py
+**What it does:** Koe's text answers, voice-note transcription and spoken replies no longer fail when one Gemini model is overloaded or one key runs out. Calls start on a key that isn't resting.
+**Core concept:** *Read the error code before choosing a fallback.*
+- **429** RESOURCE_EXHAUSTED means *this key's* quota is used up, so switch key.
+- **503** UNAVAILABLE ("high demand") means *the model* is overloaded for everyone, so switch model. A second key gets the same 503.
+
+A failed key or model "rests" (10 min / 2 min), so the next turn doesn't wait on it again. Google's SDK retries 503s by itself for minutes, so each attempt is now single and short, and Koe chooses where to go next.
+
+The OpenRouter backup never ran, because `.env` said `OPEN_ROUTER_API_KEY` while the setting read `OPENROUTER_API_KEY`. Both spellings are accepted now.
+**How it connects:** `text_agent.chat()` → `gemini.generate()` (round 0 may switch; later tool rounds stay on that model) → OpenRouter if every Gemini option fails → "busy" message. `whatsapp.transcribe()` → `gemini.generate()`. `speak()` and calls → `gemini.live_client()`.
+**Try it yourself:** `uv run pytest -q tests/test_gemini.py` runs 5 tests.
+**Gotchas:** A turn keeps one model after it starts using tools, because the model's own tool calls and thought signatures are in the history.
+**Measured (live, both keys):**
+- gemini-3.8-flash: 503.
+- gemini-3.6-flash: OK in 2.4–3.1 s. gemini-3.5-flash: OK 2.7 s. gemini-3-flash-preview: OK 1.7 s.
+- gemini-3.7-flash took 185 s with the SDK's retries.
+- A real chat turn now: 11 s, with the notice "gemini-3.8-flash is busy; using gemini-3.6-flash".
+- OpenRouter: OK in 4.6 s.
+- 273 backend tests pass.
+**Interview line:** "I distinguished per-key quota errors from model-wide overload and routed each to the right fallback, with circuit-breaker rests and the SDK's hidden retries turned off, so a busy model costs seconds instead of minutes."

@@ -39,7 +39,7 @@ def test_each_person_has_their_own_conversation_with_koe(monkeypatch):
     monkeypatch.setattr(settings, "koe_access_token", "tok")
     seen = []
 
-    async def chat(text, history, context, client):
+    async def chat(text, history, context, client=None):
         seen.append((settings.koe_owner_id, id(history), id(context)))
         history.append(text)
         return {"text": "ok"}

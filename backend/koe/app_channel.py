@@ -32,7 +32,7 @@ from py_vapid import Vapid02, b64urlencode
 from pydantic import BaseModel
 from pywebpush import WebPushException, webpush_async
 
-from koe import agent, auth, identity, text_agent, usage, voice_call, whatsapp
+from koe import agent, auth, gemini, identity, text_agent, usage, voice_call, whatsapp
 from koe.config import settings
 from koe.db import sql
 
@@ -102,7 +102,7 @@ _background: set[asyncio.Task] = set()
 async def reply(text: str, spoken: bool) -> dict:
     mine = chat()
     async with mine.lock:
-        result = await text_agent.chat(text, mine.history, mine.context, whatsapp.gemini())
+        result = await text_agent.chat(text, mine.history, mine.context)  # gemini.py picks a working model and key
         whatsapp.trim(mine.history)
     voice = None
     if spoken:
@@ -120,14 +120,22 @@ async def speak(text: str) -> str:
     """Koe's voice note: Gemini Live (the call voice) reads the reply; saved as 24 kHz mono WAV."""
     pcm = bytearray()
     config = {"response_modalities": ["AUDIO"], "system_instruction": SPEAK_PROMPT}
-    async with whatsapp.gemini().aio.live.connect(model=voice_call.LIVE_MODEL, config=config) as session:
-        await session.send_realtime_input(text=text)
-        async for msg in session.receive():
-            content = msg.server_content
-            if content and content.model_turn:
-                pcm += b"".join(p.inline_data.data for p in content.model_turn.parts if p.inline_data)
-            if content and content.turn_complete:
-                break
+    for attempt in range(2):  # a used-up key (429): rest it and read the reply on the other key
+        live = gemini.live_client()
+        try:
+            async with live.aio.live.connect(model=voice_call.LIVE_MODEL, config=config) as session:
+                await session.send_realtime_input(text=text)
+                async for msg in session.receive():
+                    content = msg.server_content
+                    if content and content.model_turn:
+                        pcm += b"".join(p.inline_data.data for p in content.model_turn.parts if p.inline_data)
+                    if content and content.turn_complete:
+                        break
+            break
+        except errors.APIError as exc:
+            if exc.code != 429 or attempt:
+                raise
+            gemini.rest_client(live)
     if not pcm:
         raise RuntimeError("no audio")
     wav = io.BytesIO()

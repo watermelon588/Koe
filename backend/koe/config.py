@@ -1,6 +1,6 @@
 """Settings loaded from backend/.env (see .env.example for the names)."""
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import Field
+from pydantic import AliasChoices, Field
 
 
 class Settings(BaseSettings):
@@ -8,6 +8,7 @@ class Settings(BaseSettings):
 
     # Required: the app refuses to start without it.
     gemini_api_key: str = Field(repr=False)
+    gemini_api_key_2: str = Field(default="", repr=False)  # a second key with its own quota: used when the first hits 429 (gemini.py)
 
     # Optional until their phase; empty means "not set up yet".
     github_token: str = Field(default="", repr=False)
@@ -35,7 +36,10 @@ class Settings(BaseSettings):
     working_hours_start: str = "09:00"
     working_hours_end: str = "21:00"
     gemini_text_model: str = "gemini-3.8-flash"
-    openrouter_api_key: str = Field(default="", repr=False)
+    # Tried in order when the main model is overloaded (503); all answered live on 2026-10-13 (gemini.py).
+    gemini_fallback_models: str = "gemini-3.6-flash,gemini-3.5-flash,gemini-3-flash-preview"
+    # Both spellings work: .env had OPEN_ROUTER_API_KEY while this read OPENROUTER_API_KEY, so the backup never ran.
+    openrouter_api_key: str = Field(default="", repr=False, validation_alias=AliasChoices("OPENROUTER_API_KEY", "OPEN_ROUTER_API_KEY"))
     openrouter_model: str = 'openrouter/free'  # free-only optional text fallback; voice still Gemini
     # Web Push asks every sender for a contact (mailto: or https:), shown only to push services.
     koe_push_contact: str = "mailto:koe@example.com"

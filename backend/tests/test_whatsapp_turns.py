@@ -108,10 +108,11 @@ def test_a_voice_note_is_downloaded_transcribed_and_answered(monkeypatch):
         return_value=httpx.Response(200, content=b"OGGS!"))
     respx.post(SEND).mock(return_value=httpx.Response(200, json={"messages": [{"id": "wamid.r"}]}))
     heard = []
-    async def generate_content(model, contents):
+    async def generate_content(model, contents, config=None):
         heard.append(contents[0])
         return SimpleNamespace(text=" Am I free at seven? ")
-    monkeypatch.setattr(whatsapp, "gemini", lambda: SimpleNamespace(aio=SimpleNamespace(models=SimpleNamespace(generate_content=generate_content))))
+    fake = SimpleNamespace(aio=SimpleNamespace(models=SimpleNamespace(generate_content=generate_content)))
+    monkeypatch.setattr(whatsapp.gemini_fallback, "client", lambda key: fake)  # clients come from koe/gemini.py
 
     asyncio.run(whatsapp.handle_message({"from": ME, "id": "wamid.3", "type": "audio", "audio": {"id": "media-1"}}))
 

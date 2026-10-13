@@ -6,7 +6,7 @@ import logging
 from google import genai
 from google.genai import errors, types
 
-from koe import agent, store, events, text_fallback
+from koe import agent, gemini, store, events, text_fallback
 from koe.config import settings
 
 MAX_TOOL_ROUNDS = 8
@@ -29,7 +29,9 @@ def _reply(text: str, context: agent.Conversation) -> dict:
     return {"text": text, "pending_action": context.pending}
 
 
-async def chat(text: str, history: list, context: agent.Conversation, client: genai.Client) -> dict:
+async def chat(text: str, history: list, context: agent.Conversation, client: genai.Client | None = None) -> dict:
+    """One turn. Without `client`, Gemini runs through gemini.py's model/key fallbacks (the app, WhatsApp);
+    tests and scripts may pass one client."""
     text = text.strip()[:2000]
     if not text:
         return {"text": "Please enter a message."}
@@ -42,17 +44,21 @@ async def chat(text: str, history: list, context: agent.Conversation, client: ge
         history.append(types.Content(role="model", parts=[types.Part.from_text(text=reply)]))
         return {"text": reply, "approval_result": result}
     try:
-        provider = 'gemini'
+        provider, model = 'gemini', None
         for round_index in range(MAX_TOOL_ROUNDS):
             if provider == 'openrouter':
                 response = await text_fallback.generate(history)
             else:
                 try:
-                    response = await client.aio.models.generate_content(
-                        model=settings.gemini_text_model, contents=history,
+                    # Round 0 may fall back across models and keys; later rounds stay on the model that started the
+                    # turn (its tool calls and thought signatures are already in the history).
+                    response, model = await gemini.generate(
+                        contents=history, models=[model] if model else None, only=client,
                         config={"system_instruction": agent.system_prompt(),
                                 "tools": [{"function_declarations": agent.declarations()}],
                                 "automatic_function_calling": {"disable": True}})
+                    if round_index == 0 and model != settings.gemini_text_model:
+                        events.publish('model', provider='gemini', message=f'{settings.gemini_text_model} is busy; using {model}.')
                 except errors.APIError as exc:
                     # Only switch before this turn has executed any tools. Never restart/replay a turn.
                     if round_index != 0 or exc.code not in {429, 503} or not settings.openrouter_api_key:

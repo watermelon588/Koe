@@ -30,10 +30,6 @@ def own_key(owner: str | None = None) -> str:
     return _own_keys[owner]
 
 
-def gemini_key() -> str:
-    return own_key() or settings.gemini_api_key
-
-
 def forget(owner: str) -> None:
     _own_keys.pop(owner, None)
 

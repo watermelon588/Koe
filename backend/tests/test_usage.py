@@ -7,7 +7,7 @@ import pytest
 import respx
 from fastapi.testclient import TestClient
 
-from koe import app_channel, connections, identity, usage, whatsapp
+from koe import app_channel, connections, gemini, identity, usage, whatsapp
 from koe.config import settings
 from koe.main import app
 
@@ -42,11 +42,11 @@ def test_a_friends_own_key_removes_the_limit_and_is_the_key_koe_uses():
     try:
         for _ in range(5):
             asyncio.run(usage.spend())
-        assert usage.gemini_key() == "AIza-friends-own-key-abcd"
+        assert gemini.keys() == ["AIza-friends-own-key-abcd"]  # their quota only, never the shared keys
         assert whatsapp.gemini() is whatsapp.gemini()  # one reused client per key
     finally:
         identity.OWNER.reset(token)
-    assert usage.gemini_key() == settings.gemini_api_key  # everyone else: the shared key
+    assert gemini.keys()[0] == settings.gemini_api_key  # everyone else: the shared keys
 
 
 def test_saving_a_key_checks_it_with_google_first(monkeypatch):

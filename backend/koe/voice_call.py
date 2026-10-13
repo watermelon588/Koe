@@ -23,10 +23,9 @@ import struct
 import time
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
-from google import genai
 from google.genai import errors, types
 
-from koe import agent, auth, events, identity, store, usage, call_work
+from koe import agent, auth, events, gemini, identity, store, usage, call_work
 
 router = APIRouter()
 log = logging.getLogger("uvicorn.error")
@@ -284,6 +283,8 @@ async def _relay_gemini(ws: WebSocket, mic: asyncio.Queue, state: CallState, cli
             quick_drops = 1 if stable else quick_drops + 1
             if state.resume_handle is None or quick_drops > MAX_QUICK_DROPS:
                 raise
+            if any(isinstance(e, errors.APIError) and e.code == 429 for e in eg.exceptions):
+                gemini.rest_client(client)  # quota used up: the next call starts on the other key
             log.warning("Gemini connection lost (%s): resuming, attempt %d", eg.exceptions[0], quick_drops)
             await asyncio.sleep(0.5 * quick_drops)
 
@@ -309,7 +310,7 @@ async def call(ws: WebSocket):
     except usage.OverQuota as exc:
         await ws.close(code=1008, reason=str(exc)[:120])
         return
-    client = genai.Client(api_key=usage.gemini_key())  # the caller's own key if they added one
+    client = gemini.live_client()  # the caller's own key, else a shared key that isn't resting (gemini.py)
     state = CallState()
     mic: asyncio.Queue[bytes | str] = asyncio.Queue()
     try:
