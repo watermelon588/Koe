@@ -179,7 +179,7 @@ The dedicated `#settings` page owns mascot selection: Kami, Miku, Aoi and Kobash
   2. **Connect**: saves the token, then checks it against the backend.
   3. **Notifications**: turns them on and sends a real test push (`POST /api/app/push/test`).
   4. **Open chat.**
-- **Messages:** text, or a **voice note** recorded in the app (16 kHz mono WAV). Voice notes are transcribed by Gemini and answered **with a voice note** in Koe's call voice (Gemini Live), plus the text. History persists in `backend/data/app.db` (SQLite, git-ignored); audio in `backend/data/voice/`.
+- **Messages:** text, or a **voice note** recorded in the app (16 kHz mono WAV). Voice notes are transcribed by Gemini and answered **with a voice note** in Koe's call voice (Gemini Live), plus the text. History, voice-note audio and push subscriptions persist in **Neon** (`koe_app_messages`, `koe_app_voice`, `koe_app_push`; migration 002) when `DATABASE_URL` is set, so a Render restart loses nothing; otherwise in `backend/data/app.db` (SQLite, local development). Every row has an owner (ACCOUNTS_SPEC.md).
 - **Approvals:** a proposed write arrives as a message with **Confirm / Cancel**, resolved through the same gate as voice and CLI (§5).
 - **Notifications:** every Koe reply and GitHub alert is pushed (Web Push, VAPID keys generated once into `backend/data/vapid.pem`). The service worker skips the notification when the chat is already open on screen.
 - **Security:** every `/api/app` endpoint requires `KOE_ACCESS_TOKEN` (Bearer), fail closed, because the phone reaches the backend through a public tunnel. The token is remembered on the device. Voice notes ≤ 3 MB; text ≤ 2000 characters; voice files are served only by exact generated names.

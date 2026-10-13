@@ -538,3 +538,25 @@ A QR code is just a URL drawn as squares. Since the URL is fixed, the image is g
 - An app route added later must not reuse these three paths.
 **Measured:** No horizontal overflow at 320 px or 1280 px (the reading column is 760 px). Footer links work. Light and dark themes both render, with no console errors. 10 frontend tests pass; types check.
 **Interview line:** "Before adding multi-user auth, I wrote a capability map with a dependency order and shipped the decision-free slice first: the public policy pages that the OAuth providers require."
+
+## Step 40: the app chat survives restarts and knows whose it is  (Phase 5c, task 5 · 2026-10-13)
+**Files:** backend/migrations/002_app_chat.sql (new) · backend/koe/app_channel.py (storage section) · backend/koe/store.py (`TABLES`) · backend/scripts/migrate_store.py (applies every migration in order) · backend/tests/{conftest.py,test_app_channel.py} · docs/{SPEC,DECISIONS,PLAN}.md
+**What it does:**
+- Chat messages, voice-note audio and push subscriptions now live in Neon, so a Render restart no longer erases them.
+- Every row records its owner. Today that's the one configured owner; after sign-in it will be the signed-in person.
+- Without `DATABASE_URL`, the same code falls back to a local SQLite file, so tests and offline development still work.
+**Core concept:**
+- *Stateless servers.* Render's free disk is temporary, so anything that must last goes to a real database.
+- *Multi-tenancy by column.* Each table has `owner_id`, and every query filters on it, including the voice-note download. Guessing another person's file name returns 404.
+- *Connection reuse.* A database connection costs a TLS handshake plus authentication, which takes about 1 s to Singapore. One open connection makes each query take about 120 ms instead. If Neon drops an idle connection, Koe reconnects; only reads are retried, because a write whose commit is uncertain must never run twice.
+**How it connects:** `/api/app/*` → `add_message` / `list_messages` / `save_voice` / push → `sql()` → `asyncio.to_thread` → Neon (or SQLite). `speak()` builds the WAV in memory and saves it as a row.
+**Try it yourself:**
+- `uv run python -m scripts.migrate_store` applies 001 and 002.
+- `uv run pytest -q tests/test_app_channel.py` includes the owner-isolation test.
+- On the phone: send a message, redeploy Render, and the chat is still there.
+**Gotchas:**
+- Render runs in the US and Neon in Singapore, so each query from Render pays about 170 ms per network round trip. Moving the Render service to Singapore (a new service, same blueprint) would cut that.
+- Voice audio in Postgres is fine at this scale (about 48 KB per second of Koe's voice; Neon's free plan has about 0.5 GB). Object storage is the upgrade if it ever grows.
+- Old local SQLite chats aren't copied; on Render they had already been wiped.
+**Measured (laptop → Neon):** first query 951 ms (connect), then 119 ms per query, 324 ms for a 200 KB voice note, 966 ms to reconnect after a forced drop. Round trip, owner scoping and cleanup all verified with a throwaway owner. 157 backend tests pass (1 new).
+**Interview line:** "I moved the chat off an ephemeral disk into Postgres with an owner column on every row, proved isolation with a test, and measured connection reuse taking queries from about 1.1 s to about 120 ms."

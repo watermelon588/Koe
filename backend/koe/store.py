@@ -21,7 +21,8 @@ RPC_PARAMS = {
     "koe_finish_action": ("p_id", "p_session", "p_ok", "p_result"),
     "koe_record_activity": ("p_channel", "p_session", "p_kind", "p_summary", "p_payload"),
 }
-TABLES = ("koe_activity", "koe_pending_actions", "koe_daily_notes", "koe_github_deliveries")
+TABLES = ("koe_activity", "koe_pending_actions", "koe_daily_notes", "koe_github_deliveries",
+          "koe_app_messages", "koe_app_voice", "koe_app_push")
 
 
 class StoreError(Exception):

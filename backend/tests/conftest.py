@@ -14,9 +14,8 @@ def isolate_live_storage(monkeypatch, tmp_path):
     monkeypatch.setattr(events, "hub", events.Hub())
     monkeypatch.setattr(settings, "database_url", "")
     monkeypatch.setattr(settings, "koe_access_token", "")
-    # The Koe app's chat history, voice notes and push keys live in backend/data: never touch the real ones.
+    # With DATABASE_URL cleared above, the Koe app's chat falls back to SQLite: point it at a temp file.
     data = tmp_path / "data"
     monkeypatch.setattr(app_channel, "DATA", data)
-    monkeypatch.setattr(app_channel, "VOICE", data / "voice")
     monkeypatch.setattr(app_channel, "DB", data / "app.db")
     monkeypatch.setattr(app_channel, "CHAT", whatsapp.Chat(context=agent.Conversation("app")))  # fresh lock per test loop

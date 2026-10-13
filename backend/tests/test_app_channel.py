@@ -92,15 +92,13 @@ def test_a_voice_note_is_transcribed_and_answered_with_a_voice_note(client, monk
         return "Am I free at seven?"
     monkeypatch.setattr(app_channel.whatsapp, "transcribe", transcribe)
     async def speak(text):
-        name = "f" * 32 + ".wav"
-        (app_channel.VOICE / name).write_bytes(wav_bytes())
-        return name
+        return await app_channel.save_voice(wav_bytes())
     monkeypatch.setattr(app_channel, "speak", speak)
 
     r = client.post("/api/app/voice", content=wav_bytes(), headers={**AUTH, "Content-Type": "audio/wav"})
     mine, koe = r.json()["messages"]
     assert mine["text"] == "Am I free at seven?" and mine["voice"].endswith(".wav")
-    assert koe["voice"] == "f" * 32 + ".wav" and asked == ["Am I free at seven?"]
+    assert koe["voice"].endswith(".wav") and koe["voice"] != mine["voice"] and asked == ["Am I free at seven?"]
     got = client.get(f"/api/app/voice/{mine['voice']}", headers=AUTH)
     assert got.status_code == 200 and got.headers["content-type"] == "audio/wav" and got.content[:4] == b"RIFF"
 
@@ -134,10 +132,9 @@ def test_push_subscriptions_are_validated(client):
 
 
 def test_notify_pushes_to_each_device_and_forgets_gone_ones(monkeypatch):
-    with app_channel.db() as con:
-        for name in ("gone", "live"):
-            con.execute("insert into push values (?, ?)", (f"https://push.example/{name}",
-                        '{"endpoint": "https://push.example/%s", "keys": {"p256dh": "k", "auth": "a"}}' % name))
+    for name in ("gone", "live"):
+        asyncio.run(app_channel.sql("insert into koe_app_push values (%s, %s, %s)", f"https://push.example/{name}",
+                    app_channel.owner(), '{"endpoint": "https://push.example/%s", "keys": {"p256dh": "k", "auth": "a"}}' % name))
     sent = []
     async def webpush_async(subscription, data, **kwargs):
         sent.append((subscription["endpoint"], data, kwargs["vapid_claims"]))
@@ -147,8 +144,8 @@ def test_notify_pushes_to_each_device_and_forgets_gone_ones(monkeypatch):
     assert asyncio.run(app_channel.notify("hello")) == 1  # the gone device doesn't count
     assert {e for e, _, _ in sent} == {"https://push.example/gone", "https://push.example/live"}
     assert '"body": "hello"' in sent[0][1] and sent[0][2] == {"sub": settings.koe_push_contact}
-    with app_channel.db() as con:
-        assert [r["endpoint"] for r in con.execute("select endpoint from push")] == ["https://push.example/live"]
+    left = asyncio.run(app_channel.sql("select endpoint from koe_app_push"))
+    assert [r["endpoint"] for r in left] == ["https://push.example/live"]
 
 
 def test_a_github_alert_lands_in_the_chat_and_is_pushed(monkeypatch):
@@ -159,7 +156,7 @@ def test_a_github_alert_lands_in_the_chat_and_is_pushed(monkeypatch):
     monkeypatch.setattr(settings, "allowed_whatsapp_numbers", "")
     asyncio.run(github_hooks.send_alert("CI failed on #20"))
     assert pushed == [("GitHub", "CI failed on #20")]
-    assert [(m["role"], m["text"]) for m in app_channel.list_messages()] == [("alert", "CI failed on #20")]
+    assert [(m["role"], m["text"]) for m in asyncio.run(app_channel.list_messages())] == [("alert", "CI failed on #20")]
 
 
 def test_the_push_key_can_come_from_the_environment(monkeypatch):
@@ -179,3 +176,22 @@ def test_the_install_page_can_send_a_test_notification(client, monkeypatch):
     monkeypatch.setattr(app_channel, "notify", notify)
     assert client.post("/api/app/push/test").status_code == 401
     assert client.post("/api/app/push/test", headers=AUTH).json() == {"sent": 2}
+
+
+def test_each_owner_sees_only_their_own_chat_voice_notes_and_devices(client, monkeypatch):
+    # ACCOUNTS_SPEC.md task 5: rows belong to an owner; another owner gets nothing, not even by guessing a name.
+    me = settings.koe_owner_id
+    sub = {"endpoint": "https://fcm.googleapis.com/fcm/send/mine", "keys": {"p256dh": "k", "auth": "a"}}
+    assert client.post("/api/app/push/subscribe", json=sub, headers=AUTH).status_code == 200
+    asyncio.run(app_channel.add_message("you", "my secret plan"))
+    note = asyncio.run(app_channel.save_voice(wav_bytes()))
+
+    monkeypatch.setattr(settings, "koe_owner_id", "friend")
+    assert client.get("/api/app/messages", headers=AUTH).json() == {"messages": []}
+    assert client.get(f"/api/app/voice/{note}", headers=AUTH).status_code == 404
+    assert asyncio.run(app_channel.sql("select endpoint from koe_app_push where owner_id = %s", "friend")) == []
+    assert client.get("/api/app/messages", headers=AUTH).json()["messages"] == []
+
+    monkeypatch.setattr(settings, "koe_owner_id", me)
+    assert [m["text"] for m in client.get("/api/app/messages", headers=AUTH).json()["messages"]] == ["my secret plan"]
+    assert "owner_id" not in client.get("/api/app/messages", headers=AUTH).json()["messages"][0]

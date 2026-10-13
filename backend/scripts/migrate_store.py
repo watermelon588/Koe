@@ -12,10 +12,13 @@ from koe import store
 def main():
     try:
         options = store.connection_options()
-        migration = (Path(__file__).resolve().parents[1] / "migrations/001_phase2.sql").read_text(encoding="utf-8")
-        # The file owns BEGIN/COMMIT. No runtime request applies schema changes.
+        # Every file is additive and rerunnable, applied in name order; each owns its BEGIN/COMMIT.
+        # No runtime request applies schema changes.
+        migrations = sorted((Path(__file__).resolve().parents[1] / "migrations").glob("*.sql"))
         with psycopg.connect(**options, autocommit=True) as con:
-            con.execute(migration, prepare=False)
+            for migration in migrations:
+                con.execute(migration.read_text(encoding="utf-8"), prepare=False)
+                print(f"applied {migration.name}")
         print("PASS Neon: schema applied; existing rows retained. No external tools were called.")
         return 0
     except (psycopg.Error, store.StoreError):

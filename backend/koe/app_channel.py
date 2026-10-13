@@ -4,7 +4,7 @@
   GET  /api/app/messages?after=ID   history (newest last)
   POST /api/app/messages            {"text"} → your message + Koe's reply
   POST /api/app/voice               raw WAV body → your voice note (+ transcript) + Koe's spoken reply
-  GET  /api/app/voice/{name}        a stored voice note
+  GET  /api/app/voice/{name}        a stored voice note (audio lives in the database)
   POST /api/app/approvals/{id}      {"approve": bool} → resolve a proposal
   GET  /api/app/push/key            VAPID public key for the browser's PushManager.subscribe
   POST /api/app/push/subscribe      the browser's PushSubscription JSON
@@ -16,10 +16,12 @@ Web Push: https://developer.mozilla.org/en-US/docs/Web/API/Push_API · pywebpush
 import asyncio
 import contextlib
 import hmac
+import io
 import json
 import logging
 import re
 import sqlite3
+import threading
 import wave
 from contextlib import closing
 from datetime import datetime, timezone
@@ -28,18 +30,19 @@ from uuid import uuid4
 
 from cryptography.hazmat.primitives import serialization
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
-from fastapi.responses import FileResponse
+from fastapi.responses import Response
 from google.genai import errors
 from py_vapid import Vapid02, b64urlencode
 from pydantic import BaseModel
+import psycopg
+from psycopg.rows import dict_row
 from pywebpush import WebPushException, webpush_async
 
-from koe import agent, text_agent, voice_call, whatsapp
+from koe import agent, store, text_agent, voice_call, whatsapp
 from koe.config import settings
 
 log = logging.getLogger("koe.app")
-DATA = Path(__file__).resolve().parent.parent / "data"  # backend/data, git-ignored
-VOICE = DATA / "voice"
+DATA = Path(__file__).resolve().parent.parent / "data"  # backend/data, git-ignored: SQLite fallback + vapid.pem
 DB = DATA / "app.db"
 MAX_VOICE_BYTES = 3 * 1024 * 1024  # ~90 s of 16 kHz mono 16-bit WAV
 MAX_TEXT = 2000
@@ -57,36 +60,92 @@ def authorized(authorization: str = Header(default="")) -> None:
 router = APIRouter(prefix="/api/app", dependencies=[Depends(authorized)])
 
 
-# ── Storage: one SQLite file, opened per call (tiny and fast for one user) ─────────────────────────
+# ── Storage: Neon when DATABASE_URL is set (survives Render's disk wipes), else one local SQLite file ──
+# The same SQL runs on both (%s placeholders; SQLite gets ?). Every row has an owner: today the single
+# configured owner, after sign-in the signed-in user (ACCOUNTS_SPEC.md). Neon tables: migrations/002_app_chat.sql.
 
-def db() -> sqlite3.Connection:
-    VOICE.mkdir(parents=True, exist_ok=True)
-    con = sqlite3.connect(DB)
-    con.row_factory = sqlite3.Row
-    con.execute("""create table if not exists messages (
-        id integer primary key autoincrement, ts text not null, role text not null,
-        text text not null default '', voice text, action_id text, action_status text)""")
-    con.execute("create table if not exists push (endpoint text primary key, subscription text not null)")
-    return con
-
-
-def add_message(role: str, text: str, voice: str | None = None, action_id: str | None = None) -> dict:
-    with closing(db()) as con, con:
-        cur = con.execute("insert into messages (ts, role, text, voice, action_id) values (?, ?, ?, ?, ?)",
-                          (datetime.now(timezone.utc).isoformat(), role, text, voice, action_id))
-        return dict(con.execute("select * from messages where id = ?", (cur.lastrowid,)).fetchone())
+SQLITE_SCHEMA = """
+create table if not exists koe_app_messages (id integer primary key autoincrement, owner_id text not null,
+  ts text not null, role text not null, text text not null default '', voice text, action_id text, action_status text);
+create table if not exists koe_app_voice (name text primary key, owner_id text not null, created text not null,
+  audio blob not null);
+create table if not exists koe_app_push (endpoint text primary key, owner_id text not null, subscription text not null);
+"""
 
 
-def list_messages(after: int = 0, limit: int = 200) -> list[dict]:
-    with closing(db()) as con:
-        rows = con.execute("select * from (select * from messages where id > ? order by id desc limit ?) order by id",
-                           (after, limit)).fetchall()
-    return [dict(r) for r in rows]
+def owner() -> str:
+    return settings.koe_owner_id  # ponytail: one owner until sign-in passes the user in (ACCOUNTS_SPEC.md task 2)
 
 
-def set_action_status(action_id: str, status: str) -> None:
-    with closing(db()) as con, con:
-        con.execute("update messages set action_status = ? where action_id = ?", (status, action_id))
+# One reused Neon connection. Measured from the laptop: a new connection ~950 ms (TLS + auth to Singapore), a query
+# on an open one ~120 ms, a 200 KB voice note ~320 ms. autocommit: each statement is its own transaction. prepare_threshold=None: Neon's pooler.
+# ponytail: one connection behind a lock serializes queries; use psycopg_pool if chat traffic ever queues.
+_neon: psycopg.Connection | None = None
+_neon_lock = threading.Lock()
+
+
+def _run_neon(query: str, params: tuple) -> list[dict]:
+    global _neon
+    with _neon_lock:
+        for attempt in (1, 2):
+            if _neon is None or _neon.closed or _neon.broken:
+                _neon = psycopg.connect(**store.connection_options(), row_factory=dict_row, autocommit=True,
+                                        prepare_threshold=None)
+            try:
+                cur = _neon.execute(query, params)
+                return cur.fetchall() if cur.description else []
+            except psycopg.OperationalError:
+                _neon.close()  # Neon closes idle connections (compute suspend): reconnect next time
+                _neon = None
+                # Only a read is retried: a write whose commit is uncertain must never run twice (store.py rule).
+                if attempt == 2 or not query.lstrip().lower().startswith("select"):
+                    raise
+    return []
+
+
+def _run(query: str, params: tuple) -> list[dict]:
+    if store.configured():
+        return _run_neon(query, params)
+    DATA.mkdir(parents=True, exist_ok=True)
+    with closing(sqlite3.connect(DB)) as con, con:
+        con.row_factory = sqlite3.Row
+        con.executescript(SQLITE_SCHEMA)
+        cur = con.execute(query.replace("%s", "?"), params)
+        return [dict(r) for r in cur.fetchall()] if cur.description else []
+
+
+async def sql(query: str, *params) -> list[dict]:
+    """One statement, off the event loop: a Neon round trip must not stall a call or other requests."""
+    return await asyncio.to_thread(_run, query, params)
+
+
+def _public(row: dict) -> dict:
+    return {k: v for k, v in row.items() if k != "owner_id"}
+
+
+async def add_message(role: str, text: str, voice: str | None = None, action_id: str | None = None) -> dict:
+    rows = await sql("insert into koe_app_messages (owner_id, ts, role, text, voice, action_id) "
+                     "values (%s, %s, %s, %s, %s, %s) returning *",
+                     owner(), datetime.now(timezone.utc).isoformat(), role, text, voice, action_id)
+    return _public(rows[0])
+
+
+async def list_messages(after: int = 0, limit: int = 200) -> list[dict]:
+    rows = await sql("select * from (select * from koe_app_messages where owner_id = %s and id > %s "
+                     "order by id desc limit %s) newest order by id", owner(), after, limit)
+    return [_public(r) for r in rows]
+
+
+async def set_action_status(action_id: str, status: str) -> None:
+    await sql("update koe_app_messages set action_status = %s where owner_id = %s and action_id = %s",
+              status, owner(), action_id)
+
+
+async def save_voice(audio: bytes) -> str:
+    name = f"{uuid4().hex}.wav"
+    await sql("insert into koe_app_voice (name, owner_id, created, audio) values (%s, %s, %s, %s)",
+              name, owner(), datetime.now(timezone.utc).isoformat(), audio)
+    return name
 
 
 # ── The conversation ──────────────────────────────────────────────────────────────────────────────
@@ -106,7 +165,7 @@ async def reply(text: str, spoken: bool) -> dict:
         except Exception:
             log.warning("spoken reply failed; sending text only", exc_info=True)
     pending = result.get("pending_action")
-    message = add_message("koe", result["text"], voice=voice, action_id=pending["id"] if pending else None)
+    message = await add_message("koe", result["text"], voice=voice, action_id=pending["id"] if pending else None)
     later(notify(message["text"], tag="koe-reply"))  # the app skips it if the chat is already on screen
     return message
 
@@ -125,13 +184,13 @@ async def speak(text: str) -> str:
                 break
     if not pcm:
         raise RuntimeError("no audio")
-    name = f"{uuid4().hex}.wav"
-    with wave.open(str(VOICE / name), "wb") as out:
+    wav = io.BytesIO()
+    with wave.open(wav, "wb") as out:
         out.setnchannels(1)
         out.setsampwidth(2)
         out.setframerate(24000)
         out.writeframes(bytes(pcm))
-    return name
+    return await save_voice(wav.getvalue())
 
 
 def later(coro) -> None:
@@ -149,8 +208,8 @@ class Decision(BaseModel):
 
 
 @router.get("/messages")
-def get_messages(after: int = 0):
-    return {"messages": list_messages(after)}
+async def get_messages(after: int = 0):
+    return {"messages": await list_messages(after)}
 
 
 @router.post("/messages")
@@ -158,7 +217,7 @@ async def post_message(body: TextIn):
     text = body.text.strip()[:MAX_TEXT]
     if not text:
         raise HTTPException(400, "Type a message first.")
-    mine = add_message("you", text)
+    mine = await add_message("you", text)
     return {"messages": [mine, await reply(text, spoken=False)]}
 
 
@@ -169,27 +228,29 @@ async def post_voice(request: Request):
         raise HTTPException(413, "Voice notes can be up to about 90 seconds.")
     if audio[:4] != b"RIFF" or audio[8:12] != b"WAVE":
         raise HTTPException(415, "Send the voice note as WAV audio.")
-    name = f"{uuid4().hex}.wav"
-    VOICE.mkdir(parents=True, exist_ok=True)
-    (VOICE / name).write_bytes(audio)
+    name = await save_voice(audio)
     try:
         heard = await whatsapp.transcribe(audio, "audio/wav")
     except Exception as exc:
         log.warning("transcription failed", exc_info=True)
         busy = isinstance(exc, errors.APIError) and exc.code in {429, 503}
-        mine = add_message("you", "", voice=name)
-        return {"messages": [mine, add_message("koe", BUSY if busy else "I couldn't hear that one. Try again?")]}
-    mine = add_message("you", heard, voice=name)
+        mine = await add_message("you", "", voice=name)
+        return {"messages": [mine, await add_message("koe", BUSY if busy else "I couldn't hear that one. Try again?")]}
+    mine = await add_message("you", heard, voice=name)
     if not heard:
-        return {"messages": [mine, add_message("koe", "I couldn't make out that voice note. Could you try again, or type it?")]}
+        return {"messages": [mine, await add_message("koe", "I couldn't make out that voice note. Could you try again, or type it?")]}
     return {"messages": [mine, await reply(heard, spoken=True)]}
 
 
 @router.get("/voice/{name}")
-def get_voice(name: str):
-    if not VOICE_NAME.match(name) or not (VOICE / name).is_file():
+async def get_voice(name: str):
+    rows = await sql("select audio from koe_app_voice where name = %s and owner_id = %s", name, owner()) \
+        if VOICE_NAME.match(name) else []
+    if not rows:
         raise HTTPException(404, "No such voice note.")
-    return FileResponse(VOICE / name, media_type="audio/wav")
+    # A note never changes once saved: the phone may keep it, but never a shared cache.
+    return Response(bytes(rows[0]["audio"]), media_type="audio/wav",
+                    headers={"Cache-Control": "private, max-age=31536000, immutable"})
 
 
 @router.post("/approvals/{action_id}")
@@ -197,8 +258,8 @@ async def decide(action_id: str, body: Decision):
     async with CHAT.lock:
         result = await agent.confirm(CHAT.context, body.approve, action_id)
     status = result.get("status") or "unavailable"  # e.g. expired, or forgotten after a server restart
-    set_action_status(action_id, status)
-    return {"messages": [add_message("koe", text_agent.approval_text(result))], "action": {"id": action_id, "status": status}}
+    await set_action_status(action_id, status)
+    return {"messages": [await add_message("koe", text_agent.approval_text(result))], "action": {"id": action_id, "status": status}}
 
 
 # ── Push notifications ────────────────────────────────────────────────────────────────────────────
@@ -224,13 +285,14 @@ def push_key():
 
 
 @router.post("/push/subscribe")
-def push_subscribe(subscription: dict):
+async def push_subscribe(subscription: dict):
     endpoint = subscription.get("endpoint", "")
     keys = subscription.get("keys") or {}
     if not endpoint.startswith("https://") or not keys.get("p256dh") or not keys.get("auth"):
         raise HTTPException(400, "Not a push subscription.")
-    with closing(db()) as con, con:
-        con.execute("insert or replace into push (endpoint, subscription) values (?, ?)", (endpoint, json.dumps(subscription)))
+    await sql("insert into koe_app_push (endpoint, owner_id, subscription) values (%s, %s, %s) on conflict (endpoint) "
+              "do update set owner_id = excluded.owner_id, subscription = excluded.subscription",
+              endpoint, owner(), json.dumps(subscription))
     return {"ok": True}
 
 
@@ -243,8 +305,8 @@ async def push_test():
 async def notify(body: str, title: str = "Koe", tag: str = "koe") -> int:
     """Push to every subscribed device; returns how many accepted it.
     Gone subscriptions (404/410) are removed; other failures are logged."""
-    with closing(db()) as con:
-        subs = [(r["endpoint"], json.loads(r["subscription"])) for r in con.execute("select * from push")]
+    subs = [(r["endpoint"], json.loads(r["subscription"]))
+            for r in await sql("select endpoint, subscription from koe_app_push where owner_id = %s", owner())]
     if not subs:
         return 0
     sent = 0
@@ -257,8 +319,7 @@ async def notify(body: str, title: str = "Koe", tag: str = "koe") -> int:
         except WebPushException as exc:
             status = getattr(exc.response, "status", None) or getattr(exc.response, "status_code", None)
             if status in {404, 410}:
-                with closing(db()) as con, con:
-                    con.execute("delete from push where endpoint = ?", (endpoint,))
+                await sql("delete from koe_app_push where endpoint = %s", endpoint)
             else:
                 log.warning("push failed (%s)", status)
         except Exception:
@@ -269,5 +330,5 @@ async def notify(body: str, title: str = "Koe", tag: str = "koe") -> int:
 async def alert(text: str) -> None:
     """A GitHub alert: saved in the chat and pushed to the phone."""
     with contextlib.suppress(Exception):
-        add_message("alert", text)
+        await add_message("alert", text)
     await notify(text, title="GitHub", tag="koe-alert")
