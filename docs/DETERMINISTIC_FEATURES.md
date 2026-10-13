@@ -20,8 +20,8 @@ Every Calendar, Sheets and Notion record/property change uses the existing persi
 | C2 | Event notification reminders | Explicit minutes-before-start, popup/email, at most five; device delivery cannot be guaranteed | Implemented; synthetic tests pass |
 | S1 | Discover actual timesheet headers | Read configured sheet only; validate unique headers and preserve required base columns | Implemented; synthetic tests pass |
 | S2 | Fill optional existing columns | Named scalar fields, RAW input, leave unspecified cells blank in new rows; no arbitrary destination or formula execution | Implemented; synthetic tests pass |
-| N1 | Discover editable Notion properties/options | Configured data source only; type and option validation; no arbitrary workspace traversal | Pending |
-| N2 | Fill optional existing Notion properties | Text, finite number, checkbox, date, URL, email, select/multi-select; reserved workflow fields and computed results protected | Pending |
+| N1 | Discover editable Notion properties/options | Configured owner data source only; type and option validation; no arbitrary workspace traversal | Implemented; synthetic tests pass |
+| N2 | Fill optional existing Notion properties | Text, finite number, checkbox, date, URL, email, select/multi-select/status; reserved workflow fields and computed results protected | Implemented; synthetic tests pass |
 | C3 | Google Meet link creation | Doable; requires supported conference type, asynchronous result handling and exact proposal semantics | Queued |
 | C4 | Recurring events / all-day creation / cancellation | Doable; separate series/instance approval, recurrence conflict checks and cancellation previews required | Queued |
 | S3 | Add optional columns / edit existing rows | Doable; separate schema-change approval, row identity and concurrent-edit protection required | Queued |

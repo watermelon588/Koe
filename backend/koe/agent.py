@@ -14,7 +14,7 @@ from typing import Awaitable, Callable, NamedTuple
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
-from koe import events, store, notion_service
+from koe import events, identity, store, notion_service
 from koe.config import settings
 from koe.tools import calendar, github, github_work, github_stats, notion, sheets
 
@@ -48,6 +48,8 @@ SYSTEM_PROMPT = (
     "Use returned Python totals, coverage and metric definitions; never compute or invent statistics yourself. "
     "For yesterday use since='yesterday'; until is exclusive. Default-branch history is not every branch."
     " For optional Sheets columns call sheets_schema first. Use exact existing headers; never invent columns, values or hours."
+    " For optional Notion properties call notion_schema first. Match exact property types and existing option names. "
+    "Never invent priorities, dates, URLs or people. Omit unknown optional values; never modify tracking or computed fields."
 )
 
 
@@ -92,6 +94,8 @@ TOOLS: dict[str, Tool] = {
 }
 
 TOOLS.update({
+    'notion_schema': Tool(notion.notion_schema, 'Read editable property names/types/existing options in the configured owner Notion source. No writes.',
+        {'type': 'object', 'properties': {}}),
     "calendar_list": Tool(calendar.calendar_list, "List the owner's events for an ISO date (YYYY-MM-DD).", {
         "type": "object", "properties": {"date": {"type": "string"}}, "required": ["date"]}),
     "calendar_find_free": Tool(calendar.calendar_find_free, "Find free ranges inside working hours on an ISO date.", {
@@ -151,6 +155,9 @@ TOOLS.update({
     'notion_save': Tool(notion.notion_save, 'Propose a task, note or meeting RECORD in Notion; does NOT book Calendar time. Explicit approval required. Meeting date/end require ISO timestamps with offsets; other dates YYYY-MM-DD. Updates require page_id/expected_edited from notion_read; body is appended.',
         {'type': 'object', 'properties': {'title': {'type': 'string'}, 'date': {'type': 'string'},
             'kind': {'type': 'string', 'enum': ['Task', 'Meeting', 'Note']}, 'status': {'type': 'string', 'enum': list(notion_service.STATUSES)},
+            'fields': {'type': 'object', 'description': 'Optional exact property names from notion_schema; scalar, existing option-name list or null. No computed/tracking fields.',
+                'additionalProperties': {'anyOf': [{'type': 'string'}, {'type': 'number'}, {'type': 'boolean'},
+                    {'type': 'array', 'items': {'type': 'string'}}, {'type': 'null'}]}},
             **{k: {'type': 'string'} for k in ('body', 'end', 'page_id', 'expected_edited')}}, 'required': ['title', 'date']}, needs_approval=True),
     'notion_archive': Tool(notion.notion_archive, 'Propose moving a configured Notion record to reversible trash. Read first; exact title and last_edited_time required. Explicit approval required.',
         {'type': 'object', 'properties': {k: {'type': 'string'} for k in ('page_id', 'expected_edited', 'title')},
@@ -167,6 +174,7 @@ def prepare_write(name: str, args: dict) -> tuple[dict, str]:
                    f"Date: {n['date']}{' to ' + n['end'] if n['end'] else ''}. Status: {n['status']}.\n"
                    f"Destination: {n['destination']}. {'Page: ' + n['page_id'] if n['page_id'] else ''}\n"
                    + ('Notes to append:\n' if n['page_id'] else 'Notes:\n') + n['body']
+                   + ('\nOptional properties: ' + json.dumps(n['fields'], ensure_ascii=False) if n['fields'] else '')
                    + ('\nMeeting record only; no Calendar slot is booked.' if n['kind'] == 'Meeting' else ''))
     if name == 'notion_archive':
         n = notion_service.prepare_archive(**args)
@@ -230,6 +238,8 @@ async def run_tool(name: str, args: dict | None, *, context: Conversation | None
 
 
 async def _run_tool(name: str, args: dict | None, *, context: Conversation | None = None) -> dict:
+    if name.startswith('notion_') and not identity.is_owner():
+        return _error('notion_scope', 'Notion is currently connected for the owner only.', 'Connect your own Notion account when that workflow is available.')
     tool = TOOLS.get(name)
     if tool is None:
         return _error("unknown_tool", f"No tool named {name!r}.", f"Available: {', '.join(TOOLS)}.")
@@ -244,6 +254,8 @@ async def _run_tool(name: str, args: dict | None, *, context: Conversation | Non
             normalized, summary = prepare_write(name, args or {})
             if name == 'sheets_log_hours' and normalized.get('fields'):
                 normalized = await sheets.freeze_fields(normalized)
+            if name == 'notion_save' and normalized.get('fields'):
+                normalized = await notion_service.freeze_fields(normalized)
             pending = await store.propose(context.session_id, context.channel, name, normalized, summary)
             if "error" in pending:
                 return pending

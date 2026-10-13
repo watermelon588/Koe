@@ -53,6 +53,11 @@ async def status():
     return await checked(notion_service.status())
 
 
+@router.get('/schema')
+async def schema():
+    return await checked(notion_service.schema_fields())
+
+
 @router.get('/activity')
 async def activity():
     return {'activity': await checked(store.notion_activity())}

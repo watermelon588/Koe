@@ -887,3 +887,16 @@ Each had its own fix. No guessing.
 **Try it yourself:** Add optional headers such as Project, Billable or Amount after the five base columns in your sheet. Ask “Log one hour for Client tomorrow; Project Koe and Billable true.” Koe reads the schema and presents the complete approved row.
 
 **Interview line:** "Optional spreadsheet fields are bound to verified headers and a frozen approval, not model-invented cell addresses."
+
+## Step 55: typed optional Notion properties (2026-10-13)
+**Files:** notion_service.py, tools/notion.py, notion_api.py, agent.py, new test_notion_fields.py and the feature checklist.
+
+**What it does:** notion_schema and owner-authenticated GET /api/notion/schema expose editable existing property names, types and option names. notion_save accepts up to 20 optional values: text, finite number, checkbox, ISO date/offset timestamp, HTTP(S) URL, email and existing select/multi-select/status options. Python resolves property/option IDs, freezes the requested property's schema/source with the proposal, and rechecks before writing. Existing record reads expose optional values. Unrelated properties remain untouched.
+
+**Core concept:** The model supplies intent, not Notion API objects. Python rejects invented properties/options, computed results and tracking-field overrides before proposing. The approved values are the values sent. Notion remains owner-only until per-user Notion OAuth is implemented; that restriction is enforced in tool routing and the service boundary.
+
+**Verification:** Sixteen new regressions first failed; 94 Notion/workspace/API/approval tests then passed with synthetic responses. Tests cover all supported scalar types/options, stale property IDs, invalid values, read-only fields, proposal previews and owner isolation. No real Notion records were created.
+
+**Try it yourself:** Add a Priority select property with a High option in Notion, then ask “Create a review task for tomorrow with Priority High.” Koe discovers the existing property and previews its exact value for approval.
+
+**Interview line:** "Schema discovery becomes a typed approval contract, so optional fields cannot silently change meaning before execution."

@@ -119,6 +119,13 @@ async def notion_read(query: str = '', kind: str = '', cursor: str = '', page_id
         return exc.result()
 
 
+async def notion_schema() -> dict:
+    try:
+        return await notion_service.schema_fields()
+    except notion_service.NotionError as exc:
+        return exc.result()
+
+
 async def notion_save(*, request_id: str, **args) -> dict:
     try:
         result = await notion_service.save(**args, request_id=request_id)

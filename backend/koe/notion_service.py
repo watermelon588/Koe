@@ -4,13 +4,17 @@ https://developers.notion.com/reference/query-a-data-source
 https://developers.notion.com/reference/patch-page
 """
 import asyncio
+import math
+import re
 from contextlib import asynccontextmanager
 from datetime import date as Date, datetime
 from uuid import UUID
+from urllib.parse import urlparse
 
 import httpx
 
 from koe.config import settings
+from koe import identity
 
 VERSION = '2026-03-11'
 KINDS = ('Daily log', 'Task', 'Meeting', 'Note')
@@ -20,6 +24,7 @@ WORKFLOW = {
     'Koe status': {'select': {'options': [{'name': s} for s in STATUSES]}},
     'Koe action ID': {'rich_text': {}},
 }
+EDITABLE_FIELDS = {'rich_text', 'number', 'checkbox', 'date', 'url', 'email', 'select', 'multi_select', 'status'}
 _locks: dict[asyncio.AbstractEventLoop, asyncio.Lock] = {}
 
 
@@ -50,6 +55,8 @@ def lock():
 
 @asynccontextmanager
 async def client():
+    if not identity.is_owner():
+        raise NotionError('Notion is currently connected for the owner only.', 'notion_scope')
     if not settings.notion_token:
         raise NotionError('Connect Notion with NOTION_TOKEN and a database ID.', 'notion_setup')
     async with httpx.AsyncClient(timeout=15, trust_env=False, headers={
@@ -124,6 +131,105 @@ async def setup():
         return {'added': missing, 'message': 'Database ready. Existing properties and records retained.'}
 
 
+def optional_fields(fields):
+    if fields is None:
+        return {}
+    if not isinstance(fields, dict) or len(fields) > 20:
+        raise ValueError('Use at most 20 optional Notion properties.')
+    for key, value in fields.items():
+        if not isinstance(key, str) or not 1 <= len(key) <= 100 or key.casefold() in {k.casefold() for k in ('Date', *WORKFLOW)}:
+            raise ValueError('Optional fields cannot replace workflow properties or the Koe action ID.')
+        if value is not None and type(value) not in (str, int, float, bool, list):
+            raise ValueError('Use text, numbers, booleans, option-name lists or null for optional properties.')
+        if isinstance(value, str) and len(value) > 2000:
+            raise ValueError('Optional property text must be at most 2000 characters.')
+        if type(value) in (int, float) and (not math.isfinite(value) or abs(value) > 1e15):
+            raise ValueError('Optional property numbers must be finite and at most 1e15 in magnitude.')
+        if isinstance(value, list) and (len(value) > 30 or any(not isinstance(v, str) or len(v) > 100 for v in value)):
+            raise ValueError('Use at most 30 existing option names.')
+    return dict(fields)
+
+
+def field_contract(schema, fields):
+    props, result = schema['properties'], {}
+    protected_ids = {v.get('id') for k, v in props.items() if k in ('Date', *WORKFLOW) or v.get('type') == 'title'}
+    for key in fields:
+        prop = props.get(key, {})
+        kind, prop_id = prop.get('type'), prop.get('id')
+        if kind not in EDITABLE_FIELDS or not isinstance(prop_id, str) or not prop_id or prop_id in protected_ids:
+            raise NotionError('An optional property is unknown, reserved or read-only. Read notion_schema.', 'notion_property')
+        contract = {'id': prop_id, 'type': kind}
+        if kind in ('select', 'multi_select', 'status'):
+            options = prop.get(kind, {}).get('options', [])
+            if not isinstance(options, list) or any(not isinstance(o, dict) or not isinstance(o.get('name'), str)
+                or not isinstance(o.get('id'), str) for o in options):
+                raise NotionError('Notion returned incomplete property options.', 'notion_incomplete')
+            contract['options'] = {o['name']: o['id'] for o in options}
+            if len(contract['options']) != len(options):
+                raise NotionError('Notion option names are ambiguous.', 'notion_incomplete')
+        result[key] = contract
+    return result
+
+
+def field_payload(fields, contracts):
+    result = {}
+    for key, value in fields.items():
+        contract = contracts[key]
+        kind = contract['type']
+        if kind == 'rich_text' and (value is None or isinstance(value, str)):
+            encoded = rich(value or '')
+        elif kind == 'number' and (value is None or type(value) in (int, float)):
+            encoded = value
+        elif kind == 'checkbox' and type(value) is bool:
+            encoded = value
+        elif kind in ('select', 'status') and (value is None or isinstance(value, str) and value in contract['options']):
+            encoded = {'id': contract['options'][value]} if value is not None else None
+        elif kind == 'multi_select' and isinstance(value, list) and all(v in contract['options'] for v in value):
+            encoded = [{'id': contract['options'][v]} for v in dict.fromkeys(value)]
+        elif kind == 'date' and (value is None or isinstance(value, str)):
+            if value is not None:
+                if 'T' in value:
+                    if datetime.fromisoformat(value.replace('Z', '+00:00')).utcoffset() is None:
+                        raise ValueError('Optional date timestamps require an explicit offset.')
+                elif Date.fromisoformat(value).isoformat() != value:
+                    raise ValueError('Optional dates require YYYY-MM-DD.')
+            encoded = {'start': value} if value is not None else None
+        elif kind == 'email' and (value is None or isinstance(value, str) and re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+', value)):
+            encoded = value
+        elif kind == 'url' and (value is None or isinstance(value, str) and urlparse(value).scheme in ('http', 'https')
+                               and urlparse(value).hostname and not urlparse(value).username):
+            encoded = value
+        else:
+            raise ValueError(f'Invalid value for Notion property {key}; use its exact type and existing options.')
+        result[contract['id']] = {kind: encoded}
+    return result
+
+
+async def freeze_fields(args):
+    async with client() as api:
+        if args['destination'] != configured_destination():
+            raise NotionError('Notion destination changed; propose again.', 'notion_destination')
+        source_id, schema, _ = await source(api)
+        contracts = field_contract(schema, args['fields'])
+        field_payload(args['fields'], contracts)  # validate before a proposal is stored
+        return {**args, 'expected_properties': contracts, 'expected_source': source_id}
+
+
+async def schema_fields():
+    async with client() as api:
+        source_id, schema, _ = await source(api)
+        editable, protected = [], []
+        props = schema['properties']
+        for name in list(props)[:100]:
+            try:
+                contract = field_contract(schema, {name: None})[name]
+                editable.append({'name': name, 'type': contract['type'], 'options': list(contract.get('options', {}))})
+            except NotionError:
+                protected.append(name)
+        return {'source_id': source_id, 'editable': editable, 'read_only_or_reserved': protected,
+            'partial': len(props) > 100, 'note': 'Exact existing names/options only. Computed results and workflow fields cannot be overridden. No properties are created.'}
+
+
 def plain(rich):
     return ''.join(r.get('plain_text', r.get('text', {}).get('content', '')) for r in rich if isinstance(r, dict))
 
@@ -141,7 +247,10 @@ def display(page, title):
             'date': day, 'kind': (p.get('Koe type', {}).get('select') or {}).get('name', 'Daily log' if legacy_log else 'Note'),
             'status': (p.get('Koe status', {}).get('select') or {}).get('name', 'Open'),
             'url': safe_url(page.get('url', '')), 'last_edited_time': page.get('last_edited_time', ''),
-            'in_trash': bool(page.get('in_trash'))}
+            'in_trash': bool(page.get('in_trash')), 'fields': {
+                key: plain(value.get('rich_text', [])) if value.get('type') == 'rich_text' else value.get(value.get('type'))
+                for key, value in p.items() if isinstance(value, dict) and key not in ('Date', *WORKFLOW)
+                and value.get('type') in EDITABLE_FIELDS}}
 
 
 def safe_url(value):
@@ -220,7 +329,7 @@ async def read(query='', kind='', cursor='', page_id=''):
                 'next_cursor': data.get('next_cursor'), 'has_more': data['has_more']}
 
 
-def prepare_save(title, date, kind='Note', status='Open', body='', end='', page_id='', expected_edited=''):
+def prepare_save(title, date, kind='Note', status='Open', body='', end='', page_id='', expected_edited='', fields=None):
     if not isinstance(title, str) or not 1 <= len(title.strip()) <= 200 or kind not in ('Task', 'Meeting', 'Note') or status not in STATUSES:
         raise ValueError('Use a title of 1–200 characters, type Task/Meeting/Note and a valid status.')
     if not isinstance(body, str) or len(body) > 6000:
@@ -238,7 +347,8 @@ def prepare_save(title, date, kind='Note', status='Open', body='', end='', page_
     if page_id and (not isinstance(expected_edited, str) or not expected_edited):
         raise ValueError('Read the record first and provide its last_edited_time before editing.')
     return {'title': title.strip(), 'date': date, 'kind': kind, 'status': status, 'body': body.strip(), 'end': end,
-            'page_id': uid(page_id) if page_id else '', 'expected_edited': expected_edited, 'destination': configured_destination()}
+            'page_id': uid(page_id) if page_id else '', 'expected_edited': expected_edited, 'destination': configured_destination(),
+            'fields': optional_fields(fields)}
 
 
 def prepare_archive(page_id, expected_edited, title):
@@ -253,17 +363,28 @@ def paragraphs(text):
             for i in range(0, len(text), 1800)]
 
 
-async def save(*, title, date, kind, status, body, end, page_id, expected_edited, destination, request_id):
-    prepared = prepare_save(title, date, kind, status, body, end, page_id, expected_edited)
+async def save(*, title, date, kind, status, body, end, page_id, expected_edited, destination, request_id,
+               fields=None, expected_properties=None, expected_source=None):
+    prepared = prepare_save(title, date, kind, status, body, end, page_id, expected_edited, fields)
     if destination != prepared['destination']:
         raise NotionError('The Notion destination changed. Propose this action again.', 'notion_destination')
     async with lock(), client() as api:
         source_id, schema, title_key = await source(api)
         if missing_properties(schema):
             raise NotionError('Prepare the Notion workspace first; required workflow properties are missing.', 'notion_setup')
+        extra_props = {}
+        if prepared['fields']:
+            contracts = field_contract(schema, prepared['fields'])
+            if expected_properties != contracts or expected_source != source_id:
+                raise NotionError('Optional property schema changed or was not approved. Propose again.', 'notion_stale')
+            try:
+                extra_props = field_payload(prepared['fields'], contracts)
+            except ValueError:
+                raise NotionError('Optional property values no longer match the schema.', 'notion_property') from None
         props = {title_key: {'title': rich(title)}, 'Date': {'date': {'start': date, **({'end': end} if end else {})}},
                  'Koe type': {'select': {'name': kind}}, 'Koe status': {'select': {'name': status}},
                  'Koe action ID': {'rich_text': rich(request_id)}}
+        props.update(extra_props)
         if page_id:
             page = await scoped_page(api, page_id, source_id)
             if page.get('last_edited_time') != expected_edited:
