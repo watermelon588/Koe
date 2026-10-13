@@ -15,7 +15,7 @@ from zoneinfo import ZoneInfo
 
 from koe import events, store, notion_service
 from koe.config import settings
-from koe.tools import calendar, github, github_work, notion, sheets
+from koe.tools import calendar, github, github_work, github_stats, notion, sheets
 
 SYSTEM_PROMPT = (
     "You are Koe (声, 'voice'), a warm, upbeat voice assistant for Rohit, a developer founder "
@@ -43,6 +43,9 @@ SYSTEM_PROMPT = (
     "it does not book time, invite people or check availability. For booking use Calendar tools and its approval. "
     "Notion save/archive require explicit approval; read a record first and use its exact last_edited_time. "
     "Edits append notes and preserve existing content. Never imply a pending action is saved."
+    " For GitHub activity counts/changed lines use github_activity; use github_contributions for contribution streaks. "
+    "Use returned Python totals, coverage and metric definitions; never compute or invent statistics yourself. "
+    "For yesterday use since='yesterday'; until is exclusive. Default-branch history is not every branch."
 )
 
 
@@ -108,7 +111,15 @@ TOOLS.update({
         {'type': 'object', 'properties': {'repo': {'type': 'string'}, 'number': {'type': 'integer'}}, 'required': ['repo', 'number']}),
     'github_shipped': Tool(github_work.github_shipped,
         'Read authored merged PRs and default-branch commits in configured repositories. Can overlap; disclose partial results.',
-        {'type': 'object', 'properties': {'since': {'type': 'string', 'description': 'today, this week, ISO date or offset timestamp'}}}),
+        {'type': 'object', 'properties': {'since': {'type': 'string', 'description': 'today, yesterday, this week, ISO date or offset timestamp'},
+            'until': {'type': 'string', 'description': 'Optional exclusive end date/timestamp; yesterday defaults to today midnight.'}}}),
+    'github_activity': Tool(github_stats.github_activity,
+        'Read exact GitHub activity counts per selected repository. Default-branch authored commits and merged PRs are separate. Optional bounded line-change totals; disclose partial coverage.',
+        {'type': 'object', 'properties': {'since': {'type': 'string'}, 'until': {'type': 'string', 'description': 'Exclusive end'},
+            'include_lines': {'type': 'boolean', 'description': 'Only true when changed-line totals are requested; adds API reads.'}}}),
+    'github_contributions': Tool(github_stats.github_contributions,
+        'Read GitHub contribution days and Python-calculated current/longest streak within 1–365 days. Not a commit-only streak or lifetime longest. Disclose window and visibility limits.',
+        {'type': 'object', 'properties': {'days': {'type': 'integer', 'minimum': 1, 'maximum': 365}}}),
     'github_comment': Tool(github_work.github_comment,
         'Propose the complete PR comment in a configured repository. Separate user approval required.',
         {'type': 'object', 'properties': {'repo': {'type': 'string'}, 'number': {'type': 'integer'}, 'body': {'type': 'string'}},

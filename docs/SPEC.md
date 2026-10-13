@@ -15,6 +15,9 @@ A single-user, voice-first agent for a developer founder. It works across GitHub
 - Frontend/UI files remain unchanged. No extra paid service or runtime dependency is introduced.
 
 ### User stories
+
+Integration expansion (2026-10-13): [DETERMINISTIC_FEATURES.md](DETERMINISTIC_FEATURES.md) defines the implementation order and acceptance contract for exact GitHub history/statistics/streaks, Calendar details/reminders and typed optional Sheets/Notion fields. Python validates and executes; the LLM chooses tools and explains evidence. The UI remains frozen. Queued features are not advertised as implemented.
+
 1. *At my desk*, I click **Call** and ask "What's my day?". Koe speaks a summary of today's meetings, PRs waiting on me, and my open PRs' CI status, while the dashboard highlights each item.
 2. *At my desk*, I say "Summarize PR #42, is it risky?" and get a spoken summary with the main risk.
 3. *Walking*, I send a WhatsApp voice note: "Am I free at 7? Book a call with Rahul." Koe replies with the slot and **Confirm / Cancel** buttons; I tap Confirm and it's booked.

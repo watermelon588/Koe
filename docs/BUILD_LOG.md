@@ -848,3 +848,16 @@ Each had its own fix. No guessing.
 **Try it yourself:** Run `uv run pytest -q` from backend. After deploying, compare `(Invoke-WebRequest 'https://koe-backend-dt5m.onrender.com/health').Headers['X-Koe-Revision']` with the intended commit. Use the existing owner authentication to read `/api/backend/status`; do not put credentials in URLs. Deployment steps and the current live probe findings are in DEPLOY.md.
 
 **Interview line:** "I reproduced provider and shutdown edge cases with synthetic regressions, bounded work without replaying tools, and added secret-free deployment evidence so a healthy old build cannot be mistaken for the latest backend."
+
+## Step 52: deterministic GitHub reports (2026-10-13)
+**Files:** DETERMINISTIC_FEATURES.md, SPEC.md, DECISIONS.md; github_work.py, new github_stats.py, agent.py, new test_github_stats.py.
+
+**What it does:** Exact yesterday and exclusive-end date ranges; Python-calculated counts by selected repository; opt-in bounded additions/deletions/net changes; current and longest contribution streak within an explicit window. No model performs arithmetic. GitHub contribution days are not a commit-only streak. Default-branch commits and merged PRs remain separate measures.
+
+**Core concept:** Trust evidence coverage, not a plausible answer. Duplicate pages are deduplicated, dates are filtered locally, missing commit details remain unknown, and missing contribution days fail instead of being filled with zero. The agent exposes these reads through the shared text/Live registry.
+
+**Verification:** Six new regressions failed before implementation; 17 focused GitHub tests then passed using synthetic API responses. Windows sandbox temp-directory failure required running pytest outside the filesystem sandbox; no real provider calls or account changes were used. Full-suite verification follows the remaining slices.
+
+**Try it yourself:** Ask “What did I ship yesterday?”, “Show my commits by repository yesterday, including added/deleted lines”, or “What is my contribution streak over the last 30 days?” Results disclose their window and scope. No UI changes.
+
+**Interview line:** "The model selects the metric, while Python computes it from bounded, deduplicated evidence and reports what it could not verify."

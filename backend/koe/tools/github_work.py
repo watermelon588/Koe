@@ -137,8 +137,8 @@ async def github_pr_summary(repo: str, number: int) -> dict:
 
 def interval(since: str, now: datetime) -> datetime:
     local = now.astimezone(ZoneInfo(settings.timezone))
-    if since in {'today', 'this week'}:
-        day = local.date() - timedelta(days=local.weekday() if since == 'this week' else 0)
+    if since in {'today', 'yesterday', 'this week'}:
+        day = local.date() - timedelta(days=local.weekday() if since == 'this week' else 1 if since == 'yesterday' else 0)
         start = datetime.combine(day, time.min, tzinfo=local.tzinfo)
     elif len(since) == 10:
         start = datetime.combine(date.fromisoformat(since), time.min, tzinfo=local.tzinfo)
@@ -151,10 +151,29 @@ def interval(since: str, now: datetime) -> datetime:
     return start.astimezone(timezone.utc)
 
 
-async def github_shipped(since: str = 'today', now: datetime | None = None) -> dict:
+def history_window(since, until, now):
+    if not isinstance(since, str) or not isinstance(until, str) or now.utcoffset() is None:
+        raise ValueError('Use a date or timestamp with an offset.')
+    start = interval(since, now)
+    end = interval(until, now) if until else interval('today', now) if since == 'yesterday' else now
+    end = end.astimezone(timezone.utc)
+    if start > end or (start == end and since != 'today') or end - start > timedelta(days=366):
+        raise ValueError('Use an ordered date range of at most 366 days. The end is exclusive.')
+    return start, end
+
+
+def _in_window(value, start, end):
+    when = datetime.fromisoformat(value.replace('Z', '+00:00'))
+    if when.utcoffset() is None:
+        raise ValueError('GitHub returned a timestamp without an offset.')
+    return start <= when < end
+
+
+async def github_shipped(since: str = 'today', now: datetime | None = None, until: str = '') -> dict:
     try:
         now = now or datetime.now(timezone.utc)
-        start = interval(since, now)
+        start, end = history_window(since, until, now)
+        query_end = end - timedelta(microseconds=1)  # GitHub's range ends are inclusive; ours is exclusive.
         repos = repositories()
         login = connections.github_account()['login'] or (await request('GET', '/user')).json()['login']
         if not _LOGIN.fullmatch(login):
@@ -166,7 +185,7 @@ async def github_shipped(since: str = 'today', now: datetime | None = None) -> d
                 prs, commits, partial = [], [], False
                 for page in range(1, 11):
                     r = await request('GET', '/search/issues', params={'q':
-                        f'repo:{repo} is:pr is:merged author:{login} merged:{start.isoformat()}..{now.isoformat()}',
+                        f'repo:{repo} is:pr is:merged author:{login} merged:{start.isoformat()}..{query_end.isoformat()}',
                         'per_page': 100, 'page': page})
                     data = r.json()
                     partial |= data.get('incomplete_results', False)
@@ -179,7 +198,7 @@ async def github_shipped(since: str = 'today', now: datetime | None = None) -> d
                 partial |= more
                 for page in range(1, 11):
                     r = await request('GET', f'/repos/{repo}/commits', params={
-                        'author': login, 'since': start.isoformat(), 'until': now.isoformat(), 'per_page': 100, 'page': page})
+                        'author': login, 'since': start.isoformat(), 'until': query_end.isoformat(), 'per_page': 100, 'page': page})
                     commits.extend({'repo': repo, 'sha': c['sha'], 'title': c['commit']['message'].split('\n')[0],
                                     'url': c['html_url'], 'date': (c['commit'].get('committer') or
                                                                             c['commit'].get('author') or {}).get('date')}
@@ -187,14 +206,19 @@ async def github_shipped(since: str = 'today', now: datetime | None = None) -> d
                     more = 'next' in r.links
                     if not more:
                         break
+                # Defensive boundary filtering and identity deduplication; never count a page twice.
+                prs = list({p['number']: p for p in prs if _in_window(p['merged_at'], start, end)}.values())
+                commits = list({c['sha']: c for c in commits if _in_window(c['date'], start, end)}.values())
                 return prs, commits, partial or more
         results = await asyncio.gather(*(read(repo) for repo in repos))
-        return {'since': start.isoformat(), 'until': now.isoformat(), 'timezone': settings.timezone,
+        return {'since': start.isoformat(), 'until': end.isoformat(), 'end_exclusive': True, 'timezone': settings.timezone,
                 'prs': [p for ps, _, _ in results for p in ps], 'commits': [c for _, cs, _ in results for c in cs],
                 'partial': any(p for _, _, p in results), 'repositories': repos,
                 'scope': 'Author-matched merged PRs and default-branch commits; these can overlap. Search indexing can lag.'}
     except (ValueError, TypeError) as exc:
-        return _error('bad_args', str(exc), 'Use today, this week, an ISO date or an offset timestamp.')
+        return _error('bad_args', str(exc), 'Use today, yesterday, this week, an ISO date or an offset timestamp; until is exclusive.')
+    except (KeyError, AttributeError):
+        return _error('github_response', 'GitHub returned incomplete history evidence.', 'No complete total was calculated.')
     except GitHubError as exc:
         return _error('github_error', str(exc), 'Check token and repository access; no complete history was returned.')
 
