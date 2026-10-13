@@ -8,6 +8,7 @@ import respx
 from koe import agent, google_auth, store
 from koe.config import settings
 from koe.tools import sheets
+from test_approvals import fake_store
 
 
 @pytest.fixture(autouse=True)
@@ -78,3 +79,29 @@ def test_duplicate_headers_rejected_by_discovery():
     respx.get(url__regex=r'https://sheets.googleapis.com/.*/values/.*').respond(200,
         json={'values': [sheets.HEADERS + ['Project', 'project']]})
     assert 'error' in asyncio.run(sheets.sheets_schema())
+
+
+def test_extreme_integer_is_a_validation_error():
+    with pytest.raises(ValueError): sheets.prepare_hours('2026-10-14', 'Client', 1, fields={'Amount': 10 ** 400})
+
+
+@respx.mock
+def test_optional_columns_execute_once_only_after_explicit_approval(fake_store):
+    respx.get(url__regex=r'https://sheets.googleapis.com/.*/values/.*').respond(200,
+        json={'values': [sheets.HEADERS + ['Project']]})
+    append = respx.post(url__regex=r'https://sheets.googleapis.com/.*/values/.*:append').respond(200,
+        json={'updates': {'updatedRange': 'Hours!A3:F3'}})
+    async def scenario():
+        ctx = agent.Conversation('cli')
+        proposal = await agent.run_tool('sheets_log_hours', {'date': '2026-10-14', 'client': 'Client',
+            'hours': 1, 'fields': {'Project': 'Koe'}}, context=ctx)
+        assert 'pending_action' in proposal and append.call_count == 0
+        assert 'error' in await agent.confirm(ctx, True)
+        # The frozen contract also survives the JSON storage boundary.
+        action = fake_store[0][proposal['pending_action']['id']]
+        action['args_json'] = json.loads(json.dumps(action['args_json']))
+        ctx.approval_ready = True
+        assert (await agent.confirm(ctx, True))['status'] == 'executed'
+        assert 'error' in await agent.confirm(ctx, True)
+    asyncio.run(scenario())
+    assert append.call_count == 1 and json.loads(append.calls[0].request.content)['values'][0][-1] == 'Koe'

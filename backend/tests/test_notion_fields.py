@@ -6,6 +6,7 @@ import respx
 
 from koe import agent, identity, notion_service as service, store
 from koe.config import settings
+from test_approvals import fake_store
 
 SOURCE = '11111111-1111-1111-1111-111111111111'
 PAGE = '22222222-2222-2222-2222-222222222222'
@@ -109,3 +110,28 @@ def test_friend_cannot_read_owner_notion_schema(monkeypatch):
         assert 'error' in asyncio.run(notion.notion_schema())
     finally:
         identity.OWNER.reset(token)
+
+
+def test_extreme_integer_is_a_validation_error():
+    with pytest.raises(ValueError): service.prepare_save('Review', '2026-10-14', fields={'Estimate': 10 ** 400})
+
+
+@respx.mock
+def test_optional_properties_execute_once_only_after_explicit_approval(fake_store):
+    mock_source()
+    respx.post(f'{ROOT}/data_sources/{SOURCE}/query').respond(200, json={'results': [], 'has_more': False})
+    create = respx.post(f'{ROOT}/pages').respond(200, json={'id': PAGE, 'properties': {}, 'url': ''})
+    async def scenario():
+        ctx = agent.Conversation('cli')
+        proposal = await agent.run_tool('notion_save', {'title': 'Review', 'date': '2026-10-14',
+            'fields': {'Priority': 'High'}}, context=ctx)
+        assert 'pending_action' in proposal and create.call_count == 0
+        assert 'error' in await agent.confirm(ctx, True)
+        action = fake_store[0][proposal['pending_action']['id']]
+        action['args_json'] = json.loads(json.dumps(action['args_json']))
+        ctx.approval_ready = True
+        assert (await agent.confirm(ctx, True))['status'] == 'executed'
+        assert 'error' in await agent.confirm(ctx, True)
+    asyncio.run(scenario())
+    assert create.call_count == 1
+    assert json.loads(create.calls[0].request.content)['properties']['priority'] == {'select': {'id': 'high'}}

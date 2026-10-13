@@ -1,5 +1,7 @@
 # Plan and timeline: Koe (声)
 
+Backend integration expansion (requested 2026-10-13): [DETERMINISTIC_FEATURES.md](DETERMINISTIC_FEATURES.md) tracks the implemented GitHub statistics/date reports, Calendar details/reminders and optional Sheets/Notion fields, their verification, and feasible follow-up slices. UI remains frozen; implementation and approval logic are Python-owned.
+
 **Total:** about 4 weeks at 3–5 h/day (about 80–100 h). Start date: the first build session.
 **Difficulty:** about 7/10. Hardest parts: real-time audio streaming and barge-in, time/timezone correctness, Google OAuth quirks, Meta setup.
 **Rule:** every phase ends with a working, demoable slice, verified, logged in BUILD_LOG.md, and committed.

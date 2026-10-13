@@ -143,7 +143,7 @@ def optional_fields(fields):
             raise ValueError('Use text, numbers, booleans, option-name lists or null for optional properties.')
         if isinstance(value, str) and len(value) > 2000:
             raise ValueError('Optional property text must be at most 2000 characters.')
-        if type(value) in (int, float) and (not math.isfinite(value) or abs(value) > 1e15):
+        if type(value) in (int, float) and (abs(value) > 1e15 or not math.isfinite(value)):
             raise ValueError('Optional property numbers must be finite and at most 1e15 in magnitude.')
         if isinstance(value, list) and (len(value) > 30 or any(not isinstance(v, str) or len(v) > 100 for v in value)):
             raise ValueError('Use at most 30 existing option names.')
@@ -197,7 +197,8 @@ def field_payload(fields, contracts):
         elif kind == 'email' and (value is None or isinstance(value, str) and re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+', value)):
             encoded = value
         elif kind == 'url' and (value is None or isinstance(value, str) and urlparse(value).scheme in ('http', 'https')
-                               and urlparse(value).hostname and not urlparse(value).username):
+                               and urlparse(value).hostname and not urlparse(value).username
+                               and not any(c.isspace() or ord(c) < 32 for c in value)):
             encoded = value
         else:
             raise ValueError(f'Invalid value for Notion property {key}; use its exact type and existing options.')

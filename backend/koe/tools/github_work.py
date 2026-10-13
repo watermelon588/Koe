@@ -17,6 +17,7 @@ from koe.tools.github import _client, _error, GitHubError
 from koe import connections, gemini
 
 SOURCE_LIMIT = 30_000
+HISTORY_SECONDS = 30
 _REPO = re.compile(r'[A-Za-z0-9_-][A-Za-z0-9_.-]*/[A-Za-z0-9_-][A-Za-z0-9_.-]*\Z')
 _LOGIN = re.compile(r'[A-Za-z0-9][A-Za-z0-9-]{0,38}\Z')
 
@@ -36,7 +37,7 @@ def repositories() -> list[str]:
 
 
 async def request(method: str, path: str, **kwargs) -> httpx.Response:
-    token = connections.github_account()['token']
+    token = (await asyncio.to_thread(connections.github_account))['token']
     if not token:
         raise GitHubError('GitHub is not connected: Settings → Connections → GitHub.')
     try:
@@ -171,11 +172,19 @@ def _in_window(value, start, end):
 
 async def github_shipped(since: str = 'today', now: datetime | None = None, until: str = '') -> dict:
     try:
+        return await asyncio.wait_for(_github_shipped(since, now, until), timeout=HISTORY_SECONDS)
+    except TimeoutError:
+        return _error('github_deadline', 'The activity read exceeded its total time budget.',
+                      'Narrow the date range or selected repositories. No complete total was returned.')
+
+
+async def _github_shipped(since, now, until):
+    try:
         now = now or datetime.now(timezone.utc)
         start, end = history_window(since, until, now)
         query_end = end - timedelta(microseconds=1)  # GitHub's range ends are inclusive; ours is exclusive.
-        repos = repositories()
-        login = connections.github_account()['login'] or (await request('GET', '/user')).json()['login']
+        repos = await asyncio.to_thread(repositories)
+        login = (await asyncio.to_thread(connections.github_account))['login'] or (await request('GET', '/user')).json()['login']
         if not _LOGIN.fullmatch(login):
             raise ValueError('Invalid GITHUB_LOGIN.')
         # Fixed endpoint pagination; never follow an absolute Link URL with auth headers.
@@ -209,6 +218,8 @@ async def github_shipped(since: str = 'today', now: datetime | None = None, unti
                 # Defensive boundary filtering and identity deduplication; never count a page twice.
                 prs = list({p['number']: p for p in prs if _in_window(p['merged_at'], start, end)}.values())
                 commits = list({c['sha']: c for c in commits if _in_window(c['date'], start, end)}.values())
+                if any(not isinstance(c['sha'], str) or not re.fullmatch(r'[a-fA-F0-9]{1,64}', c['sha']) for c in commits):
+                    raise ValueError('GitHub returned an invalid commit identifier.')
                 return prs, commits, partial or more
         results = await asyncio.gather(*(read(repo) for repo in repos))
         return {'since': start.isoformat(), 'until': end.isoformat(), 'end_exclusive': True, 'timezone': settings.timezone,

@@ -1,12 +1,14 @@
 # Phase 4: connect when you have time
 
+The implemented integration extensions and remaining work are tracked in [DETERMINISTIC_FEATURES.md](DETERMINISTIC_FEATURES.md). Existing connections suffice; no additional AI key or OAuth scope is required for this batch. Optional Sheets columns and Notion properties must already exist; discover their exact names with `sheets_schema` / `notion_schema` before proposing values. Every changed value appears in the existing approval summary.
+
 The code can be tested without account credentials. Live summaries need GitHub and Gemini; live writes additionally need the services below. Keep secrets in `backend/.env`, never in chat or frontend `VITE_*` variables. No new paid service or dependency is required.
 
 ## GitHub
 
 Set `GITHUB_TOKEN`, `GITHUB_REPOS=your-name/your-repo` and `GITHUB_LOGIN=your-name`. Use a fine-grained token restricted to those repositories: Contents **read** for commits, Pull requests **read** for summaries; enable Pull requests **write** only when you want approved PR comments. The [comment endpoint](https://docs.github.com/en/rest/issues/comments#create-an-issue-comment) accepts Pull requests write (or Issues write). Metadata access is included by GitHub. Do not grant administration access; Koe has no merge tool.
 
-`github_shipped` searches authored merged PRs and authored commits on each repository's default branch, from local midnight (or Monday for this week) until the read begins. These lists overlap; they are not billable-hours evidence. GitHub search indexing may lag. Searches and commit lists stop at 10 pages per repository and report partial results when capped/incomplete. A failure does not become an empty success.
+`github_shipped` searches authored merged PRs and authored commits on each repository's default branch. Today/this week run from local midnight/Monday until the read begins; yesterday stops at today's local midnight. Optional `until` is exclusive. These lists overlap; they are not billable-hours evidence. GitHub search indexing may lag. Searches and commit lists stop at 10 pages per repository and report partial results when capped/incomplete. A 30-second total deadline returns an error rather than a fabricated total. `github_activity` calculates counts and opt-in bounded changed-line totals in Python. `github_contributions` calculates contribution streaks within a stated calendar window, with daily rows opt-in. A failure does not become an empty success.
 
 PR summaries use the existing `GEMINI_API_KEY` and `GEMINI_TEXT_MODEL`. They analyze at most 30,000 UTF-8 bytes of source JSON, report omitted patches/truncation and identify the head SHA. Risk notes are AI inferences; they are not test results or a merge decision.
 

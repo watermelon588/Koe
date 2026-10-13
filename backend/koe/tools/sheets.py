@@ -33,7 +33,7 @@ def optional_fields(fields):
             raise ValueError('Optional fields cannot replace required columns or the Koe action ID.')
         if type(value) not in (str, int, float, bool) or (isinstance(value, str) and len(value) > 1000):
             raise ValueError('Optional column values must be text (up to 1000 characters), numbers or booleans.')
-        if type(value) in (int, float) and (not math.isfinite(value) or abs(value) > 1e15):
+        if type(value) in (int, float) and (abs(value) > 1e15 or not math.isfinite(value)):
             raise ValueError('Optional numbers must be finite and at most 1e15 in magnitude.')
     return dict(fields)
 
@@ -60,6 +60,8 @@ def prepare_hours(date: str, client: str, hours: float, note: str = '', fields: 
 
 
 def validate_headers(data):
+    if not isinstance(data, dict):
+        raise ValueError('Sheets did not return a header object.')
     values = data.get('values')
     if not isinstance(values, list) or len(values) != 1 or not isinstance(values[0], list):
         raise ValueError('Sheets did not return a complete header row.')

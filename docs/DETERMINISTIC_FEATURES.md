@@ -42,7 +42,25 @@ Intentionally excluded: automatic PR merge/code push, guaranteed phone alarms, i
 5. Notion: actual property IDs/types/options, read-only/reserved protection, stale schema/page rejection and untouched unrelated properties.
 6. Exercise the shared agent proposal → explicit approval → execution path with synthetic API responses; verify both Live and text use the same registry. Run the full backend suite before reporting completion.
 
-## Sources
+## Using the implemented batch
+
+- “What did I ship yesterday?” uses the exact previous local day, not yesterday through now.
+- “Show yesterday's commits by repository, including lines added and removed.” uses `github_activity`; line details are opt-in, at most 50 commits with four concurrent reads and a 15-second detail budget. History has a 30-second total budget. Coverage flags accompany partial totals. Changed lines can include generated files and merge diffs; they are not unique source LOC.
+- “What is my contribution streak for the last 30 days?” uses `github_contributions`. It follows GitHub's contribution day labels with UTC request bounds, not a reconstructed IST commit-only streak. Daily records are returned only when `include_calendar=true`. A streak reaching the window boundary is a lower bound; a one-day empty window cannot establish yesterday's streak and returns unknown.
+- “Book a review tomorrow at 7 PM for 30 minutes, at the library, with a popup reminder 15 minutes before.” prepares exact event details/reminders for approval. Omitted fields preserve current/default settings; empty text clears a field and `reminders=[]` disables reminders.
+- “Log one hour for Client tomorrow, Project Koe and Billable true.” reads `sheets_schema` and fills those optional headers if they exist after the five required columns. The configured timesheet stays append-only. Up to 52 headers are inspected and 20 optional fields accepted; values remain RAW literals. Creating columns automatically and editing previous rows are queued separately.
+- “Create a review task tomorrow with Priority High.” reads `notion_schema` and fills that existing property using its verified option ID, then asks for approval. Optional Notion values are limited to 20 supported existing properties. Text/number/date/URL/email/select can be cleared with null; checkboxes use false and multi-select uses []. Computed properties, people/relations and tracking overrides are not writable through this feature.
+
+The existing chat and Live call use the same registry and persisted approval path. Every optional write value appears in the approval summary. UI layout, provider credentials, OAuth scopes and dependencies are unchanged. Optional fields are not added to existing remote schemas by this batch.
+
+## Evidence and remaining work
+
+- Four implementation slices and a boundary-hardening follow-up are saved as separate local commits. Final verification: **334 backend tests passed**, with the existing Starlette/httpx deprecation warning. Synthetic tests exercise complete proposal → storage roundtrip → explicit approval → write, and reject replay for both optional Sheets and Notion values.
+- Read-only acceptance succeeded against the configured GitHub, Sheets and Notion accounts: yesterday activity/count/line read (6.18 s), contribution calendar (4.02 s), Sheets header discovery (4.59 s), Notion property discovery (2.97 s). These are individual observations, not p50/p95 promises. No LLM quota or real writes were used.
+- Queued rows above are feasible follow-up slices with their own acceptance requirements. Meet creation, recurrence/cancellation, schema mutation and existing-row edits are not advertised as implemented.
+- Next write-acceptance step: the owner requests and approves one intended reminder or optional-field entry in the normal app. Synthetic approval tests verify execution and no replay without creating real test clutter.
+
+## References
 
 - [GitHub commits](https://docs.github.com/en/rest/commits/commits), [contribution data](https://docs.github.com/en/graphql/reference/users#contributionscollection).
 - [Calendar event fields](https://developers.google.com/workspace/calendar/api/v3/reference/events/insert), [reminders](https://developers.google.com/workspace/calendar/api/concepts/reminders).

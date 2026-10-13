@@ -5,13 +5,11 @@ https://docs.github.com/en/graphql/reference/users#contributionscollection
 """
 import asyncio
 from datetime import date, datetime, time, timedelta, timezone
-from zoneinfo import ZoneInfo
-
-from koe.config import settings
 from koe.tools import github_work as work
 from koe.tools.github import _error
 
 MAX_LINE_COMMITS = 50
+LINE_BUDGET_SECONDS = 15
 
 
 def nonnegative(value):
@@ -40,7 +38,17 @@ async def github_activity(since='today', until='', include_lines=False):
                 return nonnegative(stats['additions']), nonnegative(stats['deletions'])
             except (work.GitHubError, ValueError, TypeError, KeyError):
                 return None  # An unavailable detail is unknown, never a zero-line change.
-    details = await asyncio.gather(*(detail(c) for c in history['commits'][:MAX_LINE_COMMITS]))
+    tasks = [asyncio.create_task(detail(c)) for c in history['commits'][:MAX_LINE_COMMITS]]
+    if tasks:
+        try:
+            done, _ = await asyncio.wait(tasks, timeout=LINE_BUDGET_SECONDS)
+            details = [task.result() for task in done]
+        finally:
+            for task in tasks:
+                if not task.done(): task.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
+    else:
+        details = []
     known = [d for d in details if d is not None]
     complete = not history['partial'] and len(known) == len(history['commits'])
     additions = sum(d[0] for d in known) if known or not history['commits'] else None
@@ -52,13 +60,15 @@ async def github_activity(since='today', until='', include_lines=False):
     return result
 
 
-async def github_contributions(days=365, now=None):
-    if type(days) is not int or not 1 <= days <= 365:
+async def github_contributions(days=365, now=None, include_calendar=False):
+    if type(days) is not int or not 1 <= days <= 365 or type(include_calendar) is not bool:
         return _error('bad_args', 'days must be an integer from 1 to 365.', 'Choose a bounded contribution window.')
     now = now or datetime.now(timezone.utc)
-    today = now.astimezone(ZoneInfo(settings.timezone)).date()
+    # Use the provider's dated calendar, not a reconstruction of local-time commit activity.
+    now = now.astimezone(timezone.utc)
+    today = now.date()
     first = today - timedelta(days=days - 1)
-    start = datetime.combine(first, time.min, ZoneInfo(settings.timezone))
+    start = datetime.combine(first, time.min, timezone.utc)
     query = '''query($from:DateTime!,$to:DateTime!){viewer{contributionsCollection(from:$from,to:$to){
         contributionCalendar{weeks{contributionDays{date contributionCount}}}}}}'''
     try:
@@ -87,11 +97,15 @@ async def github_contributions(days=365, now=None):
         while cursor in values and values[cursor] > 0:
             current += 1
             cursor -= timedelta(days=1)
-        return {'window_start': first.isoformat(), 'window_end': today.isoformat(),
+        if anchor < first:
+            current = None  # yesterday is outside this window; zero would be a fabricated answer
+        return {'window_start': first.isoformat(), 'window_end': today.isoformat(), 'as_of': now.isoformat(),
+            'calendar_day_basis': 'GitHub contribution day labels, with UTC request bounds; not local-time commit days.',
             'total_contributions': sum(values.values()), 'active_days': sum(v > 0 for v in values.values()),
             'current_streak': current, 'streak_ends_on': anchor.isoformat() if current else None,
             'current_streak_may_extend_before_window': bool(current and cursor < first),
-            'longest_streak_in_window': longest, 'days': [{'date': d.isoformat(), 'count': values[d]} for d in expected],
+            'longest_streak_in_window': longest,
+            **({'days': [{'date': d.isoformat(), 'count': values[d]} for d in expected]} if include_calendar else {}),
             'note': 'GitHub contribution calendar dates and visible contributions, not a commit-only streak. Longest streak covers this window only; an unfinished today does not break yesterday’s streak.'}
     except (work.GitHubError, ValueError, TypeError, KeyError, AttributeError):
         return _error('github_contributions', 'GitHub did not return a complete accessible contribution calendar.',

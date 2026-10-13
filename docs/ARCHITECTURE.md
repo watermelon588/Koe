@@ -1,5 +1,13 @@
 # Architecture: Koe (声)
 
+## Deterministic integration expansion — 2026-10-13
+
+The shared tool registry now includes `github_activity`, `github_contributions`, `sheets_schema` and `notion_schema`. GitHub history has explicit exclusive-end boundaries; Python deduplicates and calculates counts/line changes/streaks. History reads have a 30-second total budget; optional commit detail reads have a 50-commit cap, four-way concurrency and a 15-second budget. Streaks use GitHub calendar dates with UTC request bounds; local-day shipped history uses the configured timezone. Contribution-day lists are opt-in to keep the model context compact.
+
+Calendar details/reminders, optional existing Sheets columns and optional existing Notion properties extend the existing approved writers. The LLM never supplies raw API payloads or executes code. Python validates values and destinations, discovers real field definitions, freezes requested schema identity with the proposal and checks it again at execution. Tracking fields and computed Notion results cannot be overridden. Owner-only Notion schema discovery is also available at GET `/api/notion/schema`.
+
+No frontend files, credentials, OAuth scopes or dependencies changed. [DETERMINISTIC_FEATURES.md](DETERMINISTIC_FEATURES.md) lists implemented capabilities, evidence, examples and explicitly queued extensions.
+
 ## Backend reliability update — 2026-10-13
 
 All Gemini text generation, including structured tool-free PR analysis, uses `gemini.generate`: individual SDK attempts have a 15-second timeout and the complete model/key selection has a 30-second budget. Cold credential lookups run in a worker thread. Exhausted transient HTTP and transport failures can reach the existing OpenRouter text fallback only at the start of an agent turn; no tool turn is restarted or replayed. PR analysis retains its structured JSON schema and no-tools policy, using Gemini model/key fallback. Voice-note generation discards partial audio before trying a replacement key.

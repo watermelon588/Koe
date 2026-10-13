@@ -900,3 +900,18 @@ Each had its own fix. No guessing.
 **Try it yourself:** Add a Priority select property with a High option in Notion, then ask “Create a review task for tomorrow with Priority High.” Koe discovers the existing property and previews its exact value for approval.
 
 **Interview line:** "Schema discovery becomes a typed approval contract, so optional fields cannot silently change meaning before execution."
+
+## Step 56: review boundaries and verify the integration batch (2026-10-13)
+**Files:** GitHub history/statistics, Sheets/Notion validators, shared declaration, regression tests and integration docs.
+
+**What it does:** Adds a 30-second total history deadline and a 15-second optional line-detail deadline, preserving completed detail reads with explicit partial coverage. Cold GitHub credential/preferences reads run off the event loop. Contribution requests use UTC bounds and provider calendar labels, return compact summaries by default, and mark a one-day empty window's prior streak unknown. Extreme integer inputs are rejected before float conversion. URLs reject whitespace/control characters. Returned commit IDs are validated before detail endpoints are built.
+
+**Core concept:** Unknown, partial and complete are separate states. Time budgets stop slow reads from consuming an unbounded turn; missing days/details never become plausible numbers. Optional field contracts also survive JSON persistence and execute exactly once through the existing approval path.
+
+**Verification:** The first full run passed 327 tests. Five additional review regressions then reproduced deadline, streak-window and extreme-integer bugs; they passed after fixes. Two further tests cover complete optional Sheets/Notion proposal → JSON roundtrip → approval → real adapter → no replay flows. Final full backend suite: **334 passed**, one existing Starlette/httpx deprecation warning, 105.72 seconds. Read-only real-account probes succeeded: GitHub yesterday activity/count/line read 6.18 s, contributions 4.02 s, Sheets schema 4.59 s, Notion schema 2.97 s. These are individual measurements, not percentile claims. No LLM calls, real writes, credentials/scopes/dependency changes, UI edits, server restarts or deployments were made.
+
+**Startup check:** An isolated TestClient returned health 200 and anonymous Notion schema 401. All 17 shared function declarations validated/serialized through the installed Google SDK. External integrations were disabled for that startup check. Diff review and a scan against local credential values found no frontend edits or exposed secrets.
+
+**Try it yourself:** Follow the examples and feature statuses in DETERMINISTIC_FEATURES.md. New code is saved in local commits; GitHub publication and hosting are separate from this implementation request. The current running processes were left undisturbed.
+
+**Interview line:** "I put evidence coverage and latency budgets into the backend contract, then verified both failure boundaries and complete approved writes without consuming model quota."

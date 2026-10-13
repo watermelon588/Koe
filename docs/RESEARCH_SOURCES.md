@@ -95,6 +95,8 @@ Links behind the claims in these docs, gathered 2026-10-03 to 2026-10-12. Many a
 - OpenRouter [provider logging](https://openrouter.ai/docs/guides/privacy/provider-logging): retention varies by provider; optional fallback processing is disclosed in the public privacy page.
 
 ## Backend reliability and deployment diagnostics (2026-10-13)
+
+Deterministic integration extension references: [GitHub commit detail statistics](https://docs.github.com/en/rest/commits/commits#get-a-commit), [GitHub contribution calendar](https://docs.github.com/en/graphql/reference/users#contributionscollection), [Calendar event reminder fields](https://developers.google.com/workspace/calendar/api/v3/reference/events/insert), [Sheets literal values](https://developers.google.com/workspace/sheets/api/guides/values), [Notion typed page properties](https://developers.notion.com/reference/page-property-values) and [Gemini JSON-schema function declarations](https://ai.google.dev/api/generate-content#FunctionDeclaration). Metrics are calculated by Python; optional field identity is checked against the real schema before approval and execution.
 - Google [rate limits](https://ai.google.dev/gemini-api/docs/rate-limits): quotas apply per project and vary by model, not per API key; do not promise extra quota from a second same-project key.
 - Google [troubleshooting](https://ai.google.dev/gemini-api/docs/troubleshooting): distinguish transient 500/503/504 failures from authentication and request errors.
 - Render [deploys](https://render.com/docs/deploys): build failure retains the previous live build; restart does not deploy the latest commit; CI-gated auto-deploy requires detected checks.

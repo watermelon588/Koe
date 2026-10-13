@@ -98,3 +98,42 @@ def test_incomplete_calendar_never_becomes_a_fabricated_streak(monkeypatch):
     monkeypatch.setattr(github_work, 'request', request)
     result = asyncio.run(github_stats.github_contributions(days=5))
     assert 'error' in result and 'current_streak' not in result
+
+
+def test_slow_line_reads_return_bounded_partial_coverage(monkeypatch):
+    from koe.tools import github_stats
+    async def shipped(**kwargs):
+        return {'commits': [{'repo': 'me/app', 'sha': 'a'}, {'repo': 'me/app', 'sha': 'b'}],
+                'prs': [], 'repositories': ['me/app'], 'partial': False}
+    async def request(method, path, **kwargs):
+        if path.endswith('/b'): await asyncio.Event().wait()
+        return httpx.Response(200, json={'stats': {'additions': 5, 'deletions': 2}})
+    monkeypatch.setattr(github_work, 'github_shipped', shipped)
+    monkeypatch.setattr(github_work, 'request', request)
+    monkeypatch.setattr(github_stats, 'LINE_BUDGET_SECONDS', .01, raising=False)
+    async def scenario():
+        return await asyncio.wait_for(github_stats.github_activity(include_lines=True), timeout=.2)
+    result = asyncio.run(scenario())
+    assert result['lines']['partial'] and result['lines']['commits_analyzed'] == 1
+
+
+@respx.mock
+def test_history_read_has_a_total_deadline(monkeypatch):
+    monkeypatch.setattr(github_work, 'HISTORY_SECONDS', .01, raising=False)
+    async def stalled(*args, **kwargs): await asyncio.Event().wait()
+    monkeypatch.setattr(github_work, 'request', stalled)
+    async def scenario():
+        return await asyncio.wait_for(github_work.github_shipped('today'), timeout=.2)
+    result = asyncio.run(scenario())
+    assert 'error' in result and 'commits' not in result
+
+
+def test_one_day_window_does_not_guess_yesterdays_streak(monkeypatch):
+    from koe.tools import github_stats
+    async def request(*args, **kwargs):
+        return httpx.Response(200, json={'data': {'viewer': {'contributionsCollection': {
+            'contributionCalendar': {'weeks': [{'contributionDays': [{'date': '2026-10-13', 'contributionCount': 0}]}]}}}}})
+    monkeypatch.setattr(github_work, 'request', request)
+    result = asyncio.run(github_stats.github_contributions(days=1, now=datetime(2026, 10, 13, 1, tzinfo=timezone.utc)))
+    assert result['current_streak'] is None
+    assert 'days' not in result  # daily records are opt-in, avoiding a large model context on every streak read
