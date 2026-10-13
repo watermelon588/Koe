@@ -1,9 +1,4 @@
-.call-work { min-width: 0; overflow-y: auto; padding: 8px 22px 24px; overscroll-behavior: contain; }
-.work-heading, .work-heading > div { display: flex; align-items: center; gap: 10px; }
-.work-heading { justify-content: space-between; margin: 0 0 8px; }
-.work-heading h2 { font-size: 19px; font-weight: 500; letter-spacing: -.02em; }
-.work-heading a { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 12px; }
-.work-heading a:hover { background: var(--surface-2); }
+/* Koe's view of Calendar/Sheets work (WorkViews.tsx): the day timeline and the timesheet row. */
 .work-phase { display: flex; align-items: center; gap: 8px; font-size: 12px; margin-bottom: 12px; color: var(--muted); }
 .work-phase > span { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
 .work-phase[data-phase='waiting'], .work-phase[data-phase='saved'] { color: var(--accent); }
@@ -11,12 +6,12 @@
 .work-context { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; font-size: 13px; margin: 12px 0; }
 .work-context strong { font-weight: 500; overflow-wrap: anywhere; }
 .work-context span { color: var(--muted); font-size: 11px; }
-.work-selection { border-left: 2px solid var(--accent); padding: 8px 14px; margin: 14px 0 20px; background: var(--surface-2); overflow-wrap: anywhere; }
+.work-selection { border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent); border-radius: 12px; padding: 10px 14px; margin: 14px 0 20px; background: var(--surface-2); overflow-wrap: anywhere; }
 .work-selection h3 { font-weight: 500; font-size: 16px; margin-bottom: 6px; }
 .work-selection p { font-size: 12px; margin: 4px 0; }
 .work-selection small, .work-help { color: var(--muted); font-size: 12px; line-height: 1.6; }
 .work-help { margin: 14px 0 0; overflow-wrap: anywhere; }
-.work-error { border-left: 2px solid var(--muted); background: var(--surface-2); padding: 12px; margin: 12px 0; font-size: 13px; }
+.work-error { border: 1px solid var(--line); border-radius: 12px; background: var(--surface-2); padding: 12px; margin: 12px 0; font-size: 13px; }
 .work-error p + p { margin-top: 6px; color: var(--muted); }
 .work-legend { display: grid; grid-template-columns: 1fr 1fr; padding-left: 46px; gap: 8px; font-size: 10px; color: var(--muted); margin-top: 20px; }
 .work-timeline { position: relative; margin: 12px 0; min-height: 140px; }
@@ -41,14 +36,12 @@
 .work-sheet th:nth-child(4) { width: 65px; }
 .work-sheet th:last-child { width: 35%; }
 .work-sheet tr[data-phase='waiting'], .work-sheet tr[data-phase='saved'] { background: color-mix(in srgb, var(--accent) 8%, var(--surface)); }
-.work-empty { display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; gap: 14px; }
-.work-empty h2 { font-size: 20px; font-weight: 500; }
-.work-empty p { font-size: 13px; color: var(--muted); max-width: 320px; }
+.work-sheet tr[data-phase='waiting'] { outline: 1px dashed var(--accent); outline-offset: -1px; }
+.work-sheet .work-earlier th, .work-sheet .work-earlier td { color: var(--muted); font-size: 11px; padding-top: 6px; padding-bottom: 6px; }
 .call-tabs .seg { width: 100%; }
 .call-tabs .seg button { flex: 1; gap: 5px; padding-left: 8px; padding-right: 8px; }
 @media (max-width: 899px) {
-  .panel:has(.call-work) { height: 72dvh; }
-  .call-work { padding-left: 16px; padding-right: 16px; }
+  .panel:has(.lw) { height: 72dvh; }
   .call-tabs { padding-left: 16px; padding-right: 16px; }
   .call-tabs .seg button { font-size: 12px; }
   .call-tabs .seg svg { display: none; }

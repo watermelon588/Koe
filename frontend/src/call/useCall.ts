@@ -4,7 +4,7 @@ import { startMic } from './mic'
 import { createPlayer } from './player'
 import type { createMascot, Mood } from '../mascot/mascot'
 import { wsUrl } from '../backend'
-import { emptyWork, reduceWork } from './workState'
+import { emptyWork, reduceWork } from '../workspace/workState'
 
 // One live call over /ws/call: mic up, Koe's voice down, plus the chat transcript, typed messages,
 // mute, and the mascot's moods. Wire format: SPEC §2 "/ws/call wire format".
@@ -23,6 +23,9 @@ const TOOL_LABEL: Record<string, string> = {
   calendar_find_free: 'Looking for a free slot',
   calendar_upsert_event: 'Preparing your Calendar change',
   sheets_log_hours: 'Preparing your Sheets row',
+  notion_save: 'Preparing your Notion record',
+  notion_archive: 'Preparing to move a Notion record to trash',
+  notion_log: 'Writing your Notion daily log',
 }
 export const moodOf = (s: CallState): Mood => (s === 'thinking' ? 'thinking' : s === 'idle' || s === 'connecting' ? 'idle' : 'listening')
 

@@ -93,3 +93,9 @@ Links behind the claims in these docs, gathered 2026-10-03 to 2026-10-12. Many a
 - Notion [update data source](https://developers.notion.com/reference/update-a-data-source), [update page](https://developers.notion.com/reference/patch-page), [retrieve blocks](https://developers.notion.com/reference/get-block-children): additive schema, reversible trash and paginated preview. Existing properties and body blocks are retained.
 - OpenRouter [free router](https://openrouter.ai/docs/guides/routing/routers/free-router) and [tool calling](https://openrouter.ai/docs/guides/features/tool-calling): optional free text inference using the existing tool loop. Free routing still has quotas and is not a voice transport.
 - OpenRouter [provider logging](https://openrouter.ai/docs/guides/privacy/provider-logging): retention varies by provider; optional fallback processing is disclosed in the public privacy page.
+
+## Live workspace (2026-10-13)
+- GSAP [React guide / useGSAP](https://gsap.com/resources/React), [timelines](https://gsap.com/docs/v3/GSAP/Timeline/), [gsap.matchMedia / reduced motion](https://gsap.com/docs/v3/GSAP/gsap.matchMedia/). Versions from `npm view`: gsap 3.15.0 (2026-04-13), @gsap/react 2.1.2.
+- MDN [X-Frame-Options](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/X-Frame-Options) and [CSP frame-ancestors](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Content-Security-Policy/frame-ancestors): what decides whether a page may be shown in an iframe.
+- Google Calendar [embed a calendar on a website](https://support.google.com/calendar/answer/41207) (`/calendar/embed?src=…&ctz=…&mode=…`).
+- Frameability measured with `curl -D -` on 2026-10-13 (headers in DECISIONS.md). `rm=minimal` for Sheets is observed, not documented.
