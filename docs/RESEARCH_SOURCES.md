@@ -1,5 +1,12 @@
 # Research sources: Koe (声)
 
+## Calendar extension sources (checked 2026-10-14)
+
+- [Events insert](https://developers.google.com/workspace/calendar/api/v3/reference/events/insert): exclusive all-day ends, event fields, recurrence and conferenceDataVersion=1; existing calendar.events scope suffices.
+- [Events resource](https://developers.google.com/workspace/calendar/api/v3/reference/events): asynchronous conference pending/success/failure and actual video entry points.
+- [Recurring events](https://developers.google.com/workspace/calendar/api/guides/recurringevents): expanded instances carry recurringEventId/originalStartTime; parent versus instance IDs are distinct targets. Koe supports bounded daily/weekly creation and explicit whole-series/instance cancellation, not unbounded rewriting.
+- [Events delete](https://developers.google.com/workspace/calendar/api/v3/reference/events/delete) and [conditional modifications](https://developers.google.com/workspace/calendar/api/guides/version-resources): DELETE/sendUpdates and If-Match protect exact read versions; insert conflict checks are not atomic reservations.
+
 ## Phase 2 implementation sources (checked 2026-10-12)
 - [Supabase database functions and execution grants](https://supabase.com/docs/guides/database/functions)
 - [Supabase API key types and apikey header](https://supabase.com/docs/guides/getting-started/api-keys)

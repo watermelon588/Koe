@@ -79,7 +79,7 @@ The matching `tool` end adds `ms`, `ok` and the updated `work` when a projection
 
 Do not reuse a reducer that expects call top-level `status` for dashboard nested `result.status`. Filter activity by relevant context/channel. The hub is currently a single-owner/single-process surface; this brief does not authorize advertising general multi-user workspace access.
 
-**Projection coverage at handoff creation:** `call_work.py` projects `calendar_list`, `calendar_find_free`, `calendar_upsert_event`, `sheets_log_hours` only. Existing Calendar events/slots are capped at 100 with `total,truncated`; links are allowlisted HTTPS URLs. New Sheets row/schema and Notion/GitHub tools still emit lifecycle events and global result data, but the active call does not expose their full raw result. Show a truthful activity/approval summary fallback when a `work` projection is absent. Never claim that hidden data was returned. Calendar additions made after this handoff are described in the final appendix below when implemented.
+**Current projection coverage:** `call_work.py` projects `calendar_list`, `calendar_find_free`, `calendar_upsert_event`, `calendar_get_event`, `calendar_cancel_event` and `sheets_log_hours`. Calendar events/slots are capped at 100 with `total,truncated`; links are allowlisted HTTPS URLs. New Sheets row/schema and Notion/GitHub tools still emit lifecycle events and global result data, but the active call does not expose their full raw result. Show a truthful activity/approval summary fallback when a `work` projection is absent. Never claim that hidden data was returned. Final Calendar additions are specified in the appendix below.
 
 ## Shared approval UI and operation state
 
@@ -96,14 +96,14 @@ Decide in the **originating** surface: Call via its socket; app chat via `/api/a
 
 ## Calendar workspace
 
-Implemented tools: `calendar_list({date:"YYYY-MM-DD"})`, `calendar_find_free({date,duration_min,between?})`, and approved `calendar_upsert_event({title,start,end,attendees?,event_id?,description?,location?,reminders?})`.
+Implemented tools: `calendar_list({date:"YYYY-MM-DD"})`, `calendar_find_free({date,duration_min,between?})`, `calendar_get_event({event_id})`, approved `calendar_upsert_event({title,start,end,attendees?,event_id?,description?,location?,reminders?,all_day?,recurrence?,create_meet?,expected_etag?})`, and approved `calendar_cancel_event({event_id,expected_etag,scope})`.
 
 - Timed events use ISO timestamps with offsets. Show the returned timezone, not the browser's timezone by accident. Distinguish all-day records read from Google (`start.date`, exclusive `end.date`) from timed `dateTime` records. Current free-slot checks honor transparent/cancelled/declined events and working hours.
 - Event card/approval: title, start/end, attendee emails, description, location and reminders. Description up to 6000 characters, location up to 500; title 1–200. Attendees at most 50 explicit valid addresses; never guess addresses.
 - Optional reminders are at most five `{method:"popup"|"email",minutes:0..40320}`. Omission preserves defaults/current values, `[]` disables reminders. They are Calendar notifications; do not promise a device alarm.
 - Omitted description/location preserve existing values on move, `""` clears. Omitted attendees preserve existing attendees on move. Booking/moving notifies affected guests (`sendUpdates=all`); disclose this in the confirmation presentation.
 - Render free-slot blocks, actual event blocks and a distinct proposal overlay. On success invalidate old free slots and refresh. Handle overlap/version/permission failures without showing a successful booking.
-- Meet, recurrence, all-day creation and cancellation are the next backend phase; only show working controls after the appendix confirms the final implemented contract. Do not fake a Meet link or recurring series.
+- Meet, bounded recurrence, all-day creation and explicit cancellation are implemented by the subsequent backend phase. Use the appendix for exact controls, projection fields, versions and limitations. Do not fake a Meet link or recurring series.
 
 ## Sheets workspace
 
@@ -159,4 +159,34 @@ Display source-linked evidence and deterministic metrics from connected selected
 
 ## Calendar follow-up appendix
 
-At initial handoff creation, Meet/recurrence/all-day creation/cancellation remain pending backend work. This section will be replaced with the checked-in contracts and evidence when that backend phase is complete. All contracts above already exist; the frontend agent can begin those surfaces immediately.
+Implemented 2026-10-14 after initial publication of this handoff. Contract: `docs/CALENDAR_EXTENSIONS.md`. These are shared Call/Chat tools, **not new REST routes**. All 23 SDK declarations validate. Final verification: **424 backend tests passed**, one existing Starlette/httpx deprecation warning. New write acceptance uses synthetic provider responses, not real invitations.
+
+### Creation and move controls
+
+- `all_day` boolean defaults false. True requires `start:"2026-10-15",end:"2026-10-16"` for one full day; end is exclusive. Display an all-day block; don't convert dates through UTC midnight. Each event spans at most 31 days. Configured Koe timezone should match the connected Calendar's timezone for all-day conflict interpretation.
+- `recurrence` is omitted for one event or `{frequency:"daily"|"weekly",interval?:1..4,count:2..20}` for a **new** series. Interval defaults 1; count is explicit. Every occurrence including its end fits within 90 days of the first start and cannot overlap another occurrence. No monthly/unbounded/raw RRULE/weekday selection. Timed recurring plans crossing an offset transition are refused. Render all returned occurrences with count/timezone.
+- Existing recurring series/instance moves and “this and following” rewrites are unsupported. `event_id` moves an individual regular event; the backend freezes its etag at proposal time. Optional `expected_etag` from a fresh read adds an earlier stale-read check. Retain versions internally. Timed↔all-day moves clear the opposite date representation explicitly.
+- `create_meet:true` requests a unique Meet for a **new** event/series. False/omitted doesn't remove an existing conference. Persisted action ID supplies the provider request ID; frontend/model must not supply it. Existing event Meet replacement is unsupported. Google decides support; no extra scope or paid service is added.
+- Create/move result: `{id,url,title,start,end,all_day,occurrences:[{start,end}],recurrence:string|null,conference:{status,url,note},etag,timezone,verified:true}`. Output recurrence is a canonical RRULE string, unlike the small input object. Verified means Google returned approved fields, not that emails/reminders were delivered. `calendar_unverified` means a mutation may have applied but its result didn't match; inspect before another proposal.
+
+### Meet readiness
+
+`conference.status` is `none|pending|success|failure|unavailable`. Only success **with an actual HTTPS meet.google.com URL** enables Join Meet. Show saved-event and conference states separately. Never recreate an event automatically because its link is pending/failed/unavailable. Manual “check link” uses `calendar_get_event`; the Python read itself uses no model. No automatic polling is implemented.
+
+### Read and cancel
+
+Event read/list records: `{id,etag,title,start:{dateTime?,date?,timeZone?},end:{...},all_day,url,description,location,reminders,attendees:string[],attendees_omitted,recurring_event_id,original_start,recurrence:string[],event_type,conference,timezone}`. At most 50 displayed attendees; omitted/incomplete guests block cancellation. Already-cancelled events return a structured error. A read doesn't grant write permission.
+
+Cancellation input: `{event_id,expected_etag,scope:"single"|"instance"|"series"}` from the exact read. Single targets an individual event; instance targets a concrete occurrence; series requires the **parent** ID from `recurring_event_id`, read again through `calendar_get_event` for its own etag. Never infer or silently substitute scope/ID. Only regular meetings organized by the caller can be cancelled; declining another organizer's invitation is unsupported.
+
+Show the complete server summary with actual title/times/guests/scope. A series confirmation says **ALL occurrences including past ones**, not “this and following”. Individual exceptions aren't enumerated; the version protects the root, not a snapshot of every exception. DELETE uses If-Match and guest notifications (`sendUpdates=all`). Executed result: `{id,title,cancelled:true,scope,start,end,all_day,url,timezone}`. `status:"executed"` with `cancelled:true` means a meeting was cancelled; `status:"rejected"` means only the proposal was rejected. Refresh availability; don't show a cancelled event as a saved booking.
+
+### Added call projection fields
+
+Preserve the `work` envelope and correlation IDs. Calendar `details.start/end` remain strings, flattened from date/dateTime for cancellation previews. New optional details: `all_day,create_meet,scope,description,location,reminders,recurrence:{frequency,interval?,count}`. Projection display text is bounded; the **complete approval summary remains authoritative**.
+
+Create/move result work adds `id,etag,verified,all_day,recurrence` (RRULE string), at most 20 `occurrences`, and `conference:{status,url}`. Read/cancel work adds `event` with provider-style date objects, etag/all-day/recurring identity and `date` for the displayed day; cancellation adds `cancelled,scope`. `work.events[]` also accepts `etag,all_day,recurring_event_id,original_start,recurrence,attendees,attendees_omitted,event_type,conference`. Projection links are empty strings when unavailable; raw conference URLs can be null. Accept absence/empty/null without inventing a link. Never expose stored `expected_calendar`, `expected_timezone`, execution snapshots or credentials in browser requests/state.
+
+Failures include `bad_args,calendar_evidence,calendar_conflict,calendar_changed,calendar_scope,calendar_preview,calendar_destination,calendar_too_large,calendar_timeout,calendar_unverified,calendar_missing,calendar_permission,google_not_connected,google_reauthorize,calendar_unreachable,calendar_duplicate,calendar_unavailable,recurring_event`. Display actual message/hint. Budgets: operation 45 seconds, scan 30 seconds; at most 10 pages/1000 expanded events/4 MB response. Incomplete evidence refuses a write. Google has no atomic insert-if-free lock; another organizer can race the final check.
+
+Frontend acceptance: timed/all-day layouts, exact recurring dates, pending/success/failure Meet, instance-versus-series confirmation, stale move/cancel etag, whole-series warning, guest-only refusal, persistent call, availability invalidation and no automatic retry after a lost response. Use synthetic events/guests in tests; the owner approves intended real mutations separately.

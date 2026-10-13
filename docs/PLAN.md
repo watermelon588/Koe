@@ -1,6 +1,6 @@
 # Plan and timeline: Koe (声)
 
-Next backend phase (2026-10-14): approved Sheets column creation, stable existing-row edits and additive Notion property creation are implemented. Contract and verification: [SCHEMA_ROW_EDIT_PLAN.md](SCHEMA_ROW_EDIT_PLAN.md). The user handles Render rollout; no UI or hosting changes belong to this phase.
+Latest backend phases (2026-10-14): approved Sheets column creation, stable row edits and additive Notion properties are implemented ([SCHEMA_ROW_EDIT_PLAN.md](SCHEMA_ROW_EDIT_PLAN.md)). The next Calendar phase adds unique asynchronous Meet, bounded daily/weekly/all-day creation and explicit versioned cancellation; **424 backend tests pass** ([CALENDAR_EXTENSIONS.md](CALENDAR_EXTENSIONS.md)). Frontend agent brief: [FRONTEND_BACKEND_HANDOFF.md](FRONTEND_BACKEND_HANDOFF.md). Work is pushed to GitHub at the user's request; the user handles Render. Frontend source remains unchanged by this backend work.
 
 Backend integration expansion (requested 2026-10-13): [DETERMINISTIC_FEATURES.md](DETERMINISTIC_FEATURES.md) tracks the implemented GitHub statistics/date reports, Calendar details/reminders and optional Sheets/Notion fields, their verification, and feasible follow-up slices. UI remains frozen; implementation and approval logic are Python-owned.
 

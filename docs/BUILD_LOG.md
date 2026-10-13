@@ -993,3 +993,17 @@ Next phase: approved schema creation and safe Sheets row editing is tracked in [
 **Try it:** Ask Koe to read a meeting, then cancel that one event/occurrence or explicitly the whole series. A series confirmation warns that past occurrences are included. Review the actual event and guest list before confirming.
 
 **Interview line:** “I bind destructive operations to exact event versions and explicit scopes, and make the UI result follow the application's outcome.”
+
+## 2026-10-14 — Calendar result verification, frontend contract and final regression
+
+**Files:** Calendar adapter/result verifier, additive call projection, regression fixtures/tests, frontend handoff and integration documentation.
+
+**What it does:** Checks actual returned title, time representation, recurrence, guests and requested detail/reminder fields before a verified success. PATCH clears opposite timed/all-day fields. Malformed conflict evidence fails closed. Old projection start/end strings remain compatible, while new bounded event/series/conference data lets the frontend agent build real controls. The standalone handoff includes all existing integration contracts, missing HTTP/projection boundaries, auth/tickets, exact approval envelopes/states, typed optional fields and acceptance checks.
+
+**Core concept:** Approved intent is not provider evidence. A mismatch after a mutation is uncertain and must never trigger automatic repetition. Backend contracts also identify where the frontend needs an API addition instead of pretending an internal tool is a REST endpoint.
+
+**Verification:** Five final review regressions first failed; fixes passed the focused suite. Final full suite: **424 passed**, one existing Starlette/httpx deprecation warning, **205.05 seconds**. All 23 SDK declarations validate. Synthetic tests cover actual adapter payloads, persisted JSON/approval roundtrips, stale versions, whole-series/instance safety, malformed/bounded evidence, uncertain writes, display compatibility and no replay. No real bookings, invitations, cancellations, columns, rows or Notion properties were changed during this phase's testing. Frontend files, credentials, dependencies, OAuth scopes and Render configuration are unchanged.
+
+**Try it:** Hand `docs/FRONTEND_BACKEND_HANDOFF.md` to the frontend agent. After the owner loads this backend, ask Koe for a bounded series/all-day meeting or a new Meet, inspect the summary and explicitly approve an intended change. Read the returned conference state; don't recreate a pending event. Cancellation needs a fresh read and explicit scope.
+
+**Interview line:** “I verify provider outcomes against approved fields and hand frontend developers a tested contract with honest capability boundaries.”

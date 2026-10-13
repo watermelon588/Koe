@@ -21,7 +21,9 @@ def api(monkeypatch):
             return {"id": "moving", "etag": '"v1"', "summary": "Old", "recurrence": [],
                     "start": {"dateTime": "2026-10-12T15:00:00+05:30"},
                     "end": {"dateTime": "2026-10-12T16:00:00+05:30"}}
-        return {"id": "new", "htmlLink": "https://calendar.google.com/event"}
+        body = kwargs['json']
+        return {**body, 'id': 'moving' if method == 'PATCH' else body.get('id', 'new'),
+                'htmlLink': 'https://calendar.google.com/event'}
 
     monkeypatch.setattr(calendar, "request", request)
     return calls, events

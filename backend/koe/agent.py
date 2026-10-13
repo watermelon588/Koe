@@ -133,6 +133,7 @@ TOOLS.update({
         'reminders': {'type': 'array', 'maxItems': 5, 'description': 'Override event notifications; [] disables reminders. Omit to preserve defaults/existing settings. Not a phone alarm.',
             'items': {'type': 'object', 'properties': {'method': {'type': 'string', 'enum': ['popup', 'email']},
                 'minutes': {'type': 'integer', 'minimum': 0, 'maximum': 40320}}, 'required': ['method', 'minutes'], 'additionalProperties': False}},
+        'expected_etag': {'type': 'string', 'description': 'Optional exact etag from calendar_get_event when moving an individual event. Backend also freezes its proposal-time read.'},
         "event_id": {"type": "string", "description": "ID from calendar_list when moving an event."}},
         "required": ["title", "start", "end"]}, needs_approval=True),
 })

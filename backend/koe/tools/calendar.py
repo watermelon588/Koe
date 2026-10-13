@@ -107,7 +107,7 @@ def prepare_event(title: str, start: str, end: str, attendees: list[str] | None 
     if end_dt <= start_dt:
         raise ValueError("The end must be after the start.")
     if attendees is not None and (not isinstance(attendees, list) or len(attendees) > 50 or any(
-        not isinstance(email, str) or not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", email) for email in attendees)):
+        not isinstance(email, str) or len(email) > 254 or not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", email) for email in attendees)):
         raise ValueError("Attendees must be explicit email addresses; don't guess an address from a name.")
     if event_id is not None and (not isinstance(event_id, str) or not re.fullmatch(r"[a-zA-Z0-9_-]{1,1024}", event_id)):
         raise ValueError("Invalid event_id.")
@@ -193,14 +193,18 @@ async def _scan_events(start, end):
 def _interval(event: dict) -> tuple[datetime, datetime] | None:
     if event.get("status") == "cancelled" or event.get("transparency") == "transparent":
         return None
-    if any(a.get("self") and a.get("responseStatus") == "declined" for a in event.get("attendees", [])):
-        return None
-    tz = ZoneInfo(settings.timezone)
-    def when(part):
-        if "dateTime" in part:
-            return _iso(part["dateTime"])
-        return datetime.combine(Date.fromisoformat(part["date"]), time.min, tz)
-    return when(event["start"]), when(event["end"])
+    try:
+        if any(a.get("self") and a.get("responseStatus") == "declined" for a in event.get("attendees", [])):
+            return None
+        def when(part):
+            if 'dateTime' in part and not part.get('date'): return _iso(part['dateTime'])
+            if 'date' in part and not part.get('dateTime'): return _day(part['date'])[0]
+            raise ValueError()
+        a, b = when(event['start']), when(event['end'])
+        if b <= a: raise ValueError()
+        return a, b
+    except (ValueError, TypeError, KeyError, AttributeError):
+        raise CalendarError('calendar_evidence', 'Conflict evidence is incomplete or malformed. Nothing was booked.') from None
 
 
 def _day(value: str):
@@ -211,9 +215,15 @@ def _day(value: str):
 
 def conference(event, requested=False):
     data = event.get('conferenceData') or {}
-    status = data.get('createRequest', {}).get('status', {}).get('statusCode')
+    if not isinstance(data, dict): data = {'unavailable': True}
+    creation = data.get('createRequest') or {}
+    creation = creation if isinstance(creation, dict) else {}
+    state = creation.get('status') or {}
+    status = state.get('statusCode') if isinstance(state, dict) else None
     url = None
-    for entry in data.get('entryPoints', []):
+    points = data.get('entryPoints', [])
+    for entry in points if isinstance(points, list) else []:
+        if not isinstance(entry, dict): continue
         if entry.get('entryPointType') != 'video': continue
         value = entry.get('uri', '')
         try:
@@ -344,12 +354,49 @@ def check_destination(expected_calendar, expected_timezone):
         raise CalendarError('calendar_destination', 'The Calendar destination or timezone changed. Propose again.')
 
 
+def verify_saved(result, args, plan, desired_id=None):
+    """Check actual mutation evidence; do not turn approved intent into a claimed provider fact."""
+    try:
+        identifier = _valid_id(result['id'])
+        if desired_id and identifier != desired_id: raise ValueError()
+        if result.get('summary') != args['title'] or result.get('status') == 'cancelled': raise ValueError()
+        for key in ('start', 'end'):
+            part = result[key]
+            if args['all_day']:
+                if part.get('date') != args[key] or part.get('dateTime'): raise ValueError()
+            elif _iso(part['dateTime']) != _iso(args[key]) or part.get('date'):
+                raise ValueError()
+        if plan['rrule']:
+            returned = result.get('recurrence')
+            if not isinstance(returned, list) or len(returned) != 1: raise ValueError()
+            def rule(value):
+                if not value.startswith('RRULE:'): raise ValueError()
+                pairs = [p.split('=') for p in value[6:].split(';')]
+                parsed = dict(pairs)
+                if len(parsed) != len(pairs): raise ValueError()
+                parsed.setdefault('INTERVAL', '1')
+                return parsed
+            if rule(returned[0]) != rule(plan['rrule']): raise ValueError()
+        elif result.get('recurrence') or result.get('recurringEventId'):
+            raise ValueError()
+        for key in ('description', 'location'):
+            if args[key] is not None and result.get(key, '') != args[key]: raise ValueError()
+        if args['reminders'] is not None:
+            reminders = result.get('reminders', {})
+            if reminders.get('useDefault') is not False or reminders.get('overrides', []) != args['reminders']: raise ValueError()
+        if args['attendees'] is not None:
+            if result.get('attendeesOmitted') or sorted(a['email'].casefold() for a in result.get('attendees', [])) != sorted(a.casefold() for a in args['attendees']): raise ValueError()
+    except (KeyError, ValueError, TypeError, AttributeError):
+        raise CalendarError('calendar_unverified', 'Calendar accepted the mutation but did not return matching approved fields. Inspect the event before another proposal; no write was retried.') from None
+
+
 @bounded
 async def calendar_cancel_event(event_id, expected_etag, scope, *, expected_calendar, expected_timezone,
                                 approved_event, request_id):
     args = prepare_cancel(event_id, expected_etag, scope)
     check_destination(expected_calendar, expected_timezone)
     async with _write_lock:
+        check_destination(expected_calendar, expected_timezone)
         event = await checked_existing(args['event_id'], args['expected_etag'])
         preview, _ = cancellation_preview(event, args['scope'])
         if preview != approved_event:
@@ -426,6 +473,7 @@ async def calendar_upsert_event(title: str, start: str, end: str, attendees: lis
         intervals = [(_day(p['start'])[0], _day(p['end'])[0]) if all_day else (_iso(p['start']), _iso(p['end']))
                      for p in plan['occurrences']]
         async with _write_lock:
+            check_destination(expected_calendar, expected_timezone)
             old = await checked_existing(event_id, expected_etag) if event_id else None
             if old and (old.get("recurrence") or old.get("recurringEventId")):
                 return error("recurring_event", "Moving recurring events isn't supported in v1.")
@@ -440,6 +488,10 @@ async def calendar_upsert_event(title: str, start: str, end: str, attendees: lis
                     "end": {"dateTime": args["end"], "timeZone": settings.timezone}}
             if all_day:
                 body.update(start={'date': args['start']}, end={'date': args['end']})
+            if old:
+                # PATCH merges nested fields: explicitly clear the opposite date representation.
+                for part in ('start', 'end'):
+                    body[part].update({'dateTime': None, 'timeZone': None} if all_day else {'date': None})
             if plan['rrule']:
                 body['recurrence'] = [plan['rrule']]
             if attendees is not None:
@@ -462,10 +514,12 @@ async def calendar_upsert_event(title: str, start: str, end: str, attendees: lis
                 if request_id:
                     body["id"] = "koe" + request_id.replace("-", "")
                 result = await request("POST", _path(), json=body, params=params)
+            verify_saved(result, args, plan, event_id or body.get('id'))
             return {"id": result["id"], "url": result.get("htmlLink"), "title": args["title"],
                     "start": args["start"], "end": args["end"], 'all_day': all_day,
                     'occurrences': plan['occurrences'], 'recurrence': plan['rrule'],
-                    'conference': conference(result, requested=create_meet)}
+                    'conference': conference(result, requested=create_meet), 'etag': result.get('etag'),
+                    'timezone': settings.timezone, 'verified': True}
     except CalendarError as exc:
         return exc.result
     except (ValueError, TypeError) as exc:

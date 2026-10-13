@@ -22,8 +22,8 @@ Every Calendar, Sheets and Notion record/property change uses the existing persi
 | S2 | Fill optional existing columns | Named scalar fields, RAW input, leave unspecified cells blank in new rows; no arbitrary destination or formula execution | Implemented; synthetic tests pass |
 | N1 | Discover editable Notion properties/options | Configured owner data source only; type and option validation; no arbitrary workspace traversal | Implemented; synthetic tests pass |
 | N2 | Fill optional existing Notion properties | Text, finite number, checkbox, date, URL, email, select/multi-select/status; reserved workflow fields and computed results protected | Implemented; synthetic tests pass |
-| C3 | Google Meet link creation | Doable; requires supported conference type, asynchronous result handling and exact proposal semantics | Queued |
-| C4 | Recurring events / all-day creation / cancellation | Doable; separate series/instance approval, recurrence conflict checks and cancellation previews required | Queued |
+| C3 | Google Meet link creation | Unique new-event request; pending/success/failure separate from event save, actual links only | Implemented; see CALENDAR_EXTENSIONS.md |
+| C4 | Recurring events / all-day creation / cancellation | Bounded daily/weekly creation, exclusive all-day dates, explicit versioned single/instance/whole-series cancellation | Implemented within documented bounds; series moves/monthly/unbounded rules excluded |
 | S3 | Add optional columns / edit existing rows | Separate approvals; typed versions, stable row metadata, bounded scans and sparse literal edits | Implemented; see SCHEMA_ROW_EDIT_PLAN.md |
 | N3 | Add new Notion properties | Additive schema approval; eight explicit types, existing schema/source checked and preserved | Implemented; see SCHEMA_ROW_EDIT_PLAN.md |
 | N4 | Assign people / relations / advanced property schemas | Doable; verified user/page IDs and separate schema/type-specific contracts required | Queued |
@@ -56,11 +56,11 @@ The existing chat and Live call use the same registry and persisted approval pat
 
 ## Evidence and remaining work
 
-Latest phase, 2026-10-14: approved Sheets column creation, stable existing-row edits and additive Notion property creation pass **377 backend tests** plus real read-only schema/row probes. Complete contract, examples and concurrency limits: [SCHEMA_ROW_EDIT_PLAN.md](SCHEMA_ROW_EDIT_PLAN.md). New code is saved locally; Render rollout is handled by the user.
+Latest phases, 2026-10-14: approved Sheets column creation, stable existing-row edits and additive Notion property creation passed **377 backend tests** plus real read-only schema/row probes ([SCHEMA_ROW_EDIT_PLAN.md](SCHEMA_ROW_EDIT_PLAN.md)). Subsequent Calendar extensions pass **424 backend tests**; contracts and evidence: [CALENDAR_EXTENSIONS.md](CALENDAR_EXTENSIONS.md). Standalone frontend assignment: [FRONTEND_BACKEND_HANDOFF.md](FRONTEND_BACKEND_HANDOFF.md). Work is published to GitHub at the user's request; Render rollout is handled by the user.
 
 - Four implementation slices and a boundary-hardening follow-up are saved as separate local commits. Final verification: **334 backend tests passed**, with the existing Starlette/httpx deprecation warning. Synthetic tests exercise complete proposal → storage roundtrip → explicit approval → write, and reject replay for both optional Sheets and Notion values.
 - Read-only acceptance succeeded against the configured GitHub, Sheets and Notion accounts: yesterday activity/count/line read (6.18 s), contribution calendar (4.02 s), Sheets header discovery (4.59 s), Notion property discovery (2.97 s). These are individual observations, not p50/p95 promises. No LLM quota or real writes were used.
-- Queued rows above are feasible follow-up slices with their own acceptance requirements. Meet creation, recurrence/cancellation and people/relations/advanced property schemas remain queued. Approved additive schema changes and stable Sheets row edits are implemented by the subsequent phase.
+- Remaining queued rows are Notion people/relations/advanced schema contracts and additional GitHub branch/LOC/statistic definitions. Meet creation and bounded recurrence/all-day/cancellation are implemented by the subsequent Calendar phase. Series moves, monthly/unbounded recurrence and “this and following” rewriting are explicitly excluded from its contract.
 - Next write-acceptance step: the owner requests and approves one intended reminder or optional-field entry in the normal app. Synthetic approval tests verify execution and no replay without creating real test clutter.
 
 ## References

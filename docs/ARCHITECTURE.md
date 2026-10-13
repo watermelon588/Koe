@@ -1,5 +1,11 @@
 # Architecture: Koe (声)
 
+## Versioned Calendar plans and conference readiness — 2026-10-14
+
+`calendar.py` expands a small daily/weekly recurrence object into at most 20 exact occurrences and a canonical RRULE; all-day events use exclusive date ends. Every occurrence is checked against complete bounded event evidence. Shared proposals freeze configured Calendar/timezone and individual move/cancellation versions. Cancellation scope is explicit single/instance/whole series, validated against real IDs and organizer identity; DELETE uses If-Match and guest notifications. Recurring series/instance moves remain unsupported. Mutation responses are checked against approved event fields before a verified result.
+
+Meet creation uses the persisted approval ID and `conferenceDataVersion=1`. Provider pending/failure is separate from event save; only actual allowlisted HTTPS Meet URLs are exposed. `calendar_get_event` rereads versions/recurring identity/conference status. Operation/scan deadlines, page/event/response bounds and off-loop TLS/credential work protect the call. No mutation retries. Bounded `call_work` projections extend Calendar data without exposing frozen execution arguments; cancellations invalidate availability and deterministic text explains outcomes. No frontend source changes. Contracts: [CALENDAR_EXTENSIONS.md](CALENDAR_EXTENSIONS.md), [FRONTEND_BACKEND_HANDOFF.md](FRONTEND_BACKEND_HANDOFF.md).
+
 ## Schema creation and stable Sheets edits — 2026-10-14
 
 `sheet_workspace.py` owns bounded typed Sheets reads, column insertion and row updates. `sheets_find_rows` returns actual IDs and row/header versions; `sheets_update_row` stores an exact old/new preview and freezes the destination/tab/schema. At approval it rescans identity, rejects stale data and formula targets, then creates/reuses Google developer metadata and verifies that the anchor resolves to the same row/version. RAW values with null skips update only requested cells. Post-write reads verify the result. Metadata-based addressing follows structural row moves; it does not provide an external-editor transaction lock.

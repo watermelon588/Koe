@@ -60,7 +60,10 @@ def project(name, args, result=None, action_id=None):
         details['attendees'] = [v[:254] for v in source['attendees'][:50] if isinstance(v, str)]
     if service == 'calendar':
         for when in ('start', 'end'):
-            if isinstance(source.get(when), dict): details[when] = fields(source[when], ('date', 'dateTime', 'timeZone'))
+            if isinstance(source.get(when), dict):
+                part = source[when]
+                value = part.get('dateTime') or part.get('date')
+                if isinstance(value, str): details[when] = value[:100]
         if isinstance(args.get('recurrence'), dict): details['recurrence'] = fields(args['recurrence'], ('frequency', 'interval', 'count'))
         if isinstance(args.get('reminders'), list): details['reminders'] = [fields(r, ('method', 'minutes')) for r in args['reminders'][:5] if isinstance(r, dict)]
     data = {'service': service, 'operation': name, 'details': details, 'timezone': settings.timezone}
@@ -75,12 +78,16 @@ def project(name, args, result=None, action_id=None):
         data['url'] = f'https://docs.google.com/spreadsheets/d/{sheet}/edit' if isinstance(sheet, str) and re.fullmatch(r'[A-Za-z0-9_-]+', sheet) else ''
     else:
         data['url'] = link(result.get('url'), service)
-        data.update(fields(result, ('cancelled', 'scope', 'all_day', 'id', 'etag', 'recurrence')))
+        data.update(fields(result, ('cancelled', 'scope', 'all_day', 'id', 'etag', 'recurrence', 'verified')))
         if (meeting := conference(result.get('conference'))) is not None: data['conference'] = meeting
         if isinstance(result.get('occurrences'), list):
             data['occurrences'] = [fields(p, ('start', 'end')) for p in result['occurrences'][:20] if isinstance(p, dict)]
         if name in ('calendar_get_event', 'calendar_cancel_event') and result.get('id'):
             data['event'] = calendar_row(result)
+            part = result.get('start')
+            if isinstance(part, dict):
+                value = part.get('dateTime') or part.get('date')
+                if isinstance(value, str): data['date'] = value[:10]
         for key in ('events', 'slots'):
             if not isinstance(result.get(key), list):
                 continue

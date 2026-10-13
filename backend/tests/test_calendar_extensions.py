@@ -75,7 +75,7 @@ def test_meet_requests_unique_conference_and_returns_provider_state(monkeypatch,
     async def request(method, path, **kwargs):
         calls.append((method, path, kwargs))
         if method == 'GET': return {'items': []}
-        return {'id': 'new', 'conferenceData': {'createRequest': {'status': {'statusCode': status}},
+        return {**kwargs['json'], 'id': kwargs['json']['id'], 'conferenceData': {'createRequest': {'status': {'statusCode': status}},
             'entryPoints': [{'entryPointType': 'video', 'uri': 'https://meet.google.com/abc-defg-hij'}] if status == 'success' else []}}
     monkeypatch.setattr(calendar, 'request', request)
     result = asyncio.run(calendar.calendar_upsert_event(**ARGS, create_meet=True, request_id='a1b2-c3d4'))
@@ -222,3 +222,137 @@ def test_text_confirmation_does_not_claim_pending_meet_ready_or_cancelled_event_
     assert 'pending' in text.lower() and 'saved' in text.lower()
     text = approval_text({'status': 'executed', 'title': 'Review', 'scope': 'series', 'cancelled': True})
     assert 'series' in text and 'cancel' in text.lower() and 'saved' not in text.lower()
+
+
+def test_provider_dropping_recurrence_cannot_be_reported_as_verified(monkeypatch):
+    calls = []
+    async def request(method, path, **kwargs):
+        calls.append(method)
+        if method == 'GET': return {'items': []}
+        return {'id': 'new', **{k: v for k, v in kwargs['json'].items() if k != 'recurrence'}}
+    monkeypatch.setattr(calendar, 'request', request)
+    result = asyncio.run(calendar.calendar_upsert_event(**ARGS, recurrence={'frequency': 'daily', 'count': 3}))
+    assert result['error']['code'] == 'calendar_unverified' and calls.count('POST') == 1
+
+
+def test_move_to_all_day_clears_old_timed_fields(api):
+    result = asyncio.run(calendar.calendar_upsert_event('Review', '2026-10-15', '2026-10-16', all_day=True, event_id='moving'))
+    assert 'error' not in result
+    for key in ('start', 'end'):
+        assert api[0][-1][2]['json'][key]['dateTime'] is None
+
+
+@pytest.mark.parametrize('event', [{'start': {}, 'end': {}}, {'attendees': None},
+    {'start': {'dateTime': ARGS['end']}, 'end': {'dateTime': ARGS['start']}}])
+def test_malformed_conflict_evidence_fails_closed(monkeypatch, event):
+    calls = []
+    async def request(method, *args, **kwargs):
+        calls.append(method)
+        return {'items': [event]}
+    monkeypatch.setattr(calendar, 'request', request)
+    result = asyncio.run(calendar.calendar_upsert_event(**ARGS))
+    assert result['error']['code'] == 'calendar_evidence' and calls == ['GET']
+
+
+def test_timeout_after_insert_is_uncertain_and_never_replayed(fake_store, monkeypatch):
+    from koe import agent
+    writes = []
+    async def request(method, *args, **kwargs):
+        if method == 'GET': return {'items': []}
+        writes.append(kwargs['json'])
+        await asyncio.sleep(1)
+    monkeypatch.setattr(calendar, 'request', request)
+    monkeypatch.setattr(calendar, 'OPERATION_SECONDS', .02)
+    monkeypatch.setitem(agent.TOOLS, 'calendar_upsert_event', agent.TOOLS['calendar_upsert_event']._replace(fn=calendar.calendar_upsert_event))
+    async def scenario():
+        ctx = agent.Conversation('app')
+        await agent.run_tool('calendar_upsert_event', ARGS, context=ctx)
+        ctx.approval_ready = True
+        result = await agent.confirm(ctx, True)
+        assert result['status'] == 'failed' and result['error']['code'] == 'calendar_timeout'
+        assert 'error' in await agent.confirm(ctx, True)
+        assert len(writes) == 1
+    asyncio.run(scenario())
+
+
+def test_oversized_scan_and_stream_never_allow_booking(monkeypatch):
+    import httpx
+    import respx
+    from types import SimpleNamespace
+    real_request = calendar.request
+    async def request(*args, **kwargs): return {'items': [{}] * 1001}
+    monkeypatch.setattr(calendar, 'request', request)
+    assert asyncio.run(calendar.calendar_upsert_event(**ARGS))['error']['code'] == 'calendar_too_large'
+    monkeypatch.setattr(calendar.google_auth, 'credentials', lambda: SimpleNamespace(token='fake'))
+    monkeypatch.setattr(calendar, 'MAX_RESPONSE_BYTES', 100)
+    with respx.mock as router:
+        router.get(calendar.API + '/events').mock(return_value=httpx.Response(200, text='x' * 101))
+        with pytest.raises(calendar.CalendarError) as exc:
+            asyncio.run(real_request('GET', '/events'))
+        assert exc.value.result['error']['code'] == 'calendar_too_large'
+
+
+def test_series_scope_is_never_inferred_from_an_instance(fake_store, cancel_api):
+    from koe import agent
+    event, calls = cancel_api
+    event['recurringEventId'] = 'parent'
+    result = asyncio.run(agent.run_tool('calendar_cancel_event', {'event_id': 'event', 'expected_etag': '"v1"', 'scope': 'series'}, context=agent.Conversation('app')))
+    assert result['error']['code'] == 'calendar_scope'
+    assert len(calls) == 1 and calls[0][1].endswith('/event')
+
+
+def test_individual_move_freezes_proposal_time_etag(fake_store, cancel_api, monkeypatch):
+    from koe import agent
+    event, calls = cancel_api
+    monkeypatch.setitem(agent.TOOLS, 'calendar_upsert_event', agent.TOOLS['calendar_upsert_event']._replace(fn=calendar.calendar_upsert_event))
+    async def scenario():
+        ctx = agent.Conversation('app')
+        proposal = await agent.run_tool('calendar_upsert_event', {**ARGS, 'event_id': 'event'}, context=ctx)
+        assert 'Exact review' in proposal['pending_action']['summary']
+        event['etag'] = '"v2"'
+        ctx.approval_ready = True
+        result = await agent.confirm(ctx, True)
+        assert result['error']['code'] == 'calendar_changed'
+        assert not any(c[0] in ('POST', 'PATCH') for c in calls)
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize('code', ['calendar_unreachable', 'calendar_changed'])
+def test_cancellation_uncertain_or_precondition_failure_never_replays(fake_store, cancel_api, monkeypatch, code):
+    from koe import agent
+    original = calendar.request
+    deletes = []
+    async def request(method, *args, **kwargs):
+        if method == 'DELETE':
+            deletes.append(True)
+            raise calendar.CalendarError(code, 'Inspect Calendar before retrying.')
+        return await original(method, *args, **kwargs)
+    monkeypatch.setattr(calendar, 'request', request)
+    async def scenario():
+        ctx = agent.Conversation('app')
+        await agent.run_tool('calendar_cancel_event', {'event_id': 'event', 'expected_etag': '"v1"', 'scope': 'single'}, context=ctx)
+        ctx.approval_ready = True
+        result = await agent.confirm(ctx, True)
+        assert result['status'] == 'failed' and result['error']['code'] == code
+        assert 'error' in await agent.confirm(ctx, True)
+        assert len(deletes) == 1
+    asyncio.run(scenario())
+
+
+def test_calendar_projection_is_compatible_with_old_start_strings_and_excludes_internal_data():
+    from koe import call_work
+    work = call_work.project('calendar_cancel_event', {'event_id': 'event', 'scope': 'single',
+        'expected_calendar': 'private', 'approved_event': {'title': 'Review', 'start': {'date': '2026-10-15'},
+        'end': {'date': '2026-10-16'}, 'all_day': True, 'token': 'private'}},
+        {'id': 'event', 'cancelled': True, 'start': {'date': '2026-10-15'}, 'end': {'date': '2026-10-16'}, 'all_day': True})
+    assert work['details']['start'] == '2026-10-15' and work['date'] == '2026-10-15'
+    assert work['event']['start'] == {'date': '2026-10-15'}
+    assert 'private' not in str(work)
+
+
+def test_sdk_accepts_all_calendar_tool_contracts():
+    from google.genai import types
+    from koe import agent
+    declarations = [types.FunctionDeclaration.model_validate(d) for d in agent.declarations()]
+    assert len(declarations) == 23
+    assert all(d.model_dump_json() for d in declarations)
