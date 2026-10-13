@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { emptyWork, reduceWork, googleLink, calendarLayout } from '../src/call/workState.ts'
+import { emptyWork, reduceWork, serviceLink, calendarLayout, liveUrl, announce } from '../src/workspace/workState.ts'
 
 const booking = { service: 'calendar', operation: 'calendar_upsert_event', action_id: 'a', timezone: 'Asia/Kolkata',
   details: { title: 'Review', start: '2026-10-13T19:00:00+05:30', end: '2026-10-13T19:30:00+05:30' } }
@@ -43,9 +43,9 @@ test('a confirmed move clears stale free windows and removes the old event occur
   assert.deepEqual(s.calendar.work.events,[])
 })
 test('Google links reject executable, credential and lookalike URLs', () => {
-  assert.equal(googleLink('https://docs.google.com/spreadsheets/d/a/edit','sheets'),'https://docs.google.com/spreadsheets/d/a/edit')
+  assert.equal(serviceLink('https://docs.google.com/spreadsheets/d/a/edit','sheets'),'https://docs.google.com/spreadsheets/d/a/edit')
   for (const link of ['javascript:alert(1)','https://docs.google.com.evil.test/a','https://secret@docs.google.com/a','http://calendar.google.com/'])
-    assert.equal(googleLink(link,'sheets'),'')
+    assert.equal(serviceLink(link,'sheets'),'')
 })
 test('timeline respects provider timezone, all-day events and overnight bounds', () => {
   const layout = calendarLayout({phase:'ready',work:{service:'calendar',operation:'calendar_list',date:'2026-10-13',timezone:'Asia/Kolkata',details:{},events:[
@@ -54,4 +54,35 @@ test('timeline respects provider timezone, all-day events and overnight bounds',
   assert.equal(layout.allDay.length,1)
   assert.equal(layout.items[0].start,23*60+30)
   assert.equal(layout.items[0].end,1440)
+})
+test('Notion: a proposal waits, only an executed result is saved, the own daily log saves without approval', () => {
+  const record = {service:'notion',operation:'notion_save',action_id:'n1',details:{title:'Plan Q4',kind:'Task',date:'2026-10-13'}}
+  let s = reduceWork(emptyWork, {type:'approval_pending',work:record})
+  assert.equal(s.active,'notion'); assert.equal(s.notion.phase,'waiting')
+  assert.equal(reduceWork(s,{type:'approval_result',status:'rejected',work:record}).notion.phase,'cancelled')
+  s = reduceWork(s,{type:'approval_result',status:'executed',work:{...record,url:'https://app.notion.com/p/x',page_id:'p'}})
+  assert.equal(s.notion.phase,'saved')
+  assert.equal(announce('notion', s.notion), 'Saved in Notion: Plan Q4.')
+  const log = {service:'notion',operation:'notion_log',details:{date:'2026-10-13',entries:['Shipped #4']},added:1}
+  s = reduceWork(s,{type:'tool',phase:'start',operation_id:'o',work:log})
+  assert.equal(reduceWork(s,{type:'tool',phase:'end',operation_id:'o',work:log}).notion.phase,'saved')
+  assert.equal(reduceWork(s,{type:'tool',phase:'end',operation_id:'o',work:{...log,error:{message:'Notion is not connected'}}}).notion.phase,'error')
+})
+test('live view frames only verified Google URL forms and never Notion', () => {
+  const sheet = {service:'sheets',operation:'sheets_log_hours',details:{},url:'https://docs.google.com/spreadsheets/d/abc_1-2/edit'}
+  assert.equal(liveUrl('sheets',sheet,{timesheet:'',google:''}),'https://docs.google.com/spreadsheets/d/abc_1-2/edit?rm=minimal')
+  assert.equal(liveUrl('sheets',undefined,{timesheet:'https://docs.google.com/spreadsheets/d/T/edit',google:''}),'https://docs.google.com/spreadsheets/d/T/edit?rm=minimal')
+  assert.equal(liveUrl('sheets',{...sheet,url:'https://evil.test/spreadsheets/d/x/edit'},{timesheet:'',google:''}),'')
+  assert.equal(liveUrl('calendar',undefined,{timesheet:'',google:'me@example.com'}),
+    'https://calendar.google.com/calendar/embed?src=me%40example.com&ctz=Asia%2FKolkata&mode=WEEK')
+  assert.ok(liveUrl('calendar',undefined,{timesheet:'',google:'me@x.com&src=other'}).includes('src=me%40x.com%26src%3Dother&'))
+  assert.equal(liveUrl('calendar',undefined,{timesheet:'',google:'not an address'}),'')
+  assert.equal(liveUrl('notion',{service:'notion',operation:'notion_save',details:{},url:'https://app.notion.com/p/x'},{timesheet:'',google:'me@x.com'}),'')
+})
+test('screen readers hear pending, saved (with the row) and failures', () => {
+  const row = {service:'sheets',operation:'sheets_log_hours',action_id:'r',details:{client:'A',hours:2,date:'2026-10-13'}}
+  assert.match(announce('sheets',{phase:'waiting',work:row}),/^Proposed in Google Sheets: 2 hours for A on 2026-10-13\. Not saved yet/)
+  assert.equal(announce('sheets',{phase:'saved',work:{...row,row:8}}),'Saved in Google Sheets: 2 hours for A on 2026-10-13, row 8.')
+  assert.equal(announce('sheets',{phase:'error',work:{...row,error:{message:'Sheets did not confirm the entry.'}}}),
+    'Google Sheets needs attention: Sheets did not confirm the entry.')
 })

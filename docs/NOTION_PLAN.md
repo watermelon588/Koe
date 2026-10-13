@@ -56,3 +56,7 @@ OpenRouter free text fallback is implemented and covered by mocked tests, but in
 Live Gemini tool-selection verification (`scripts.verify_notion_agent`, synthetic responses only) returned 503 UNAVAILABLE. Conversational selection remains unverified with a live provider; registry, validation and approval execution are covered by tests. Rerun that read-only check when Gemini recovers. Private Notion contents were not transmitted by this check.
 
 The daily-log coexistence filter uses at most two compound nesting levels, per [Notion filter limits](https://developers.notion.com/reference/filter-data-source-entries). The optional fallback follows [free routing](https://openrouter.ai/docs/guides/routing/routers/free-router) and [tool calling](https://openrouter.ai/docs/guides/features/tool-calling).
+
+
+## Live workspace (2026-10-13)
+Notion work now also appears in the app chat's and the call's live workspace (SPEC §2 "Live workspace"): a `notion_save`/`notion_archive` proposal as a pending record, the saved record re-read from `GET /api/notion/records/{id}`, and own daily-log appends with the exact entries and how many were new. Notion pages can't be framed (`X-Frame-Options: SAMEORIGIN`, measured), so there is no live view for Notion, only Koe's rendering plus **Open in Notion**.

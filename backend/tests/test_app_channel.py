@@ -28,7 +28,7 @@ def client(monkeypatch):
 
 def fake_agent(monkeypatch, result):
     asked = []
-    async def chat(text, history, context, client=None):
+    async def chat(text, history, context, client=None, seen=None):
         asked.append(text)
         return result
     monkeypatch.setattr(app_channel.text_agent, "chat", chat)
@@ -187,7 +187,7 @@ def test_each_owner_sees_only_their_own_chat_voice_notes_and_devices(client, mon
     note = asyncio.run(app_channel.save_voice(wav_bytes()))
 
     monkeypatch.setattr(settings, "koe_owner_id", "friend")
-    assert client.get("/api/app/messages", headers=AUTH).json() == {"messages": []}
+    assert client.get("/api/app/messages", headers=AUTH).json() == {"messages": [], "workspace": []}
     assert client.get(f"/api/app/voice/{note}", headers=AUTH).status_code == 404
     assert asyncio.run(app_channel.sql("select endpoint from koe_app_push where owner_id = %s", "friend")) == []
     assert client.get("/api/app/messages", headers=AUTH).json()["messages"] == []
@@ -195,3 +195,75 @@ def test_each_owner_sees_only_their_own_chat_voice_notes_and_devices(client, mon
     monkeypatch.setattr(settings, "koe_owner_id", me)
     assert [m["text"] for m in client.get("/api/app/messages", headers=AUTH).json()["messages"]] == ["my secret plan"]
     assert "owner_id" not in client.get("/api/app/messages", headers=AUTH).json()["messages"][0]
+
+
+# ── Live workspace (SPEC §2 "Live workspace"): the chat API says what Koe read, proposed or wrote ─────────────
+
+ROW = {"date": "2026-10-13", "client": "Client A", "hours": 2.5, "note": "Pairing", "spreadsheet_id": "sheet-1",
+       "sheet_name": "Hours", "token": "private-token"}
+
+
+def proposing_agent(monkeypatch):
+    """A turn that reads the calendar, then proposes one Sheets row (stored like store.propose would)."""
+    async def chat(text, history, context, client=None, seen=None):
+        seen.append(("calendar_list", {"date": "2026-10-13"}, {"date": "2026-10-13", "timezone": "Asia/Kolkata", "events": []}))
+        seen.append(("github_my_prs", {}, {"prs": []}))  # not a workspace tool: never shown
+        seen.append(("sheets_log_hours", ROW, {"pending_action": {"id": "act-9"}}))
+        context.pending = {"id": "act-9", "tool": "sheets_log_hours", "args_json": ROW, "summary": "Log 2.5 hours"}
+        return {"text": "Log 2.5 hours for Client A?", "pending_action": context.pending}
+    monkeypatch.setattr(app_channel.text_agent, "chat", chat)
+
+
+def test_a_turn_returns_workspace_events_with_the_exact_pending_row_and_no_secrets(client, monkeypatch):
+    proposing_agent(monkeypatch)
+    body = client.post("/api/app/messages", json={"text": "log 2.5h for Client A"}, headers=AUTH).json()
+    work = body["workspace"]
+    assert [(e["type"], e.get("phase"), e["work"]["service"]) for e in work] == [
+        ("tool", "start", "calendar"), ("tool", "end", "calendar"),
+        ("tool", "start", "sheets"), ("tool", "end", "sheets"), ("approval_pending", None, "sheets")]
+    assert work[0]["operation_id"] == work[1]["operation_id"] != work[2]["operation_id"]
+    pending = work[-1]["work"]
+    assert pending["action_id"] == "act-9" == body["messages"][1]["action_id"]
+    assert pending["details"] == {"date": "2026-10-13", "client": "Client A", "hours": 2.5, "note": "Pairing", "sheet_name": "Hours"}
+    assert pending["url"] == "https://docs.google.com/spreadsheets/d/sheet-1/edit"
+    assert "private-token" not in str(body)
+    # Reopening the app shows the open proposal again; a follow-up poll does not re-open the panel.
+    assert client.get("/api/app/messages", headers=AUTH).json()["workspace"][0]["type"] == "approval_pending"
+    assert client.get("/api/app/messages?after=1", headers=AUTH).json()["workspace"] == []
+
+
+def test_confirming_returns_the_authoritative_row_and_a_failure_is_never_shown_saved(client, monkeypatch):
+    proposing_agent(monkeypatch)
+    client.post("/api/app/messages", json={"text": "log it"}, headers=AUTH)
+    async def confirm(context, approve, action_id=None):
+        context.pending = None
+        return {"status": "executed", "row": 8, "range": "Hours!A8:E8", "title": "2.5 hours for Client A",
+                "url": "https://docs.google.com/spreadsheets/d/sheet-1/edit"}
+    monkeypatch.setattr(app_channel.agent, "confirm", confirm)
+    r = client.post("/api/app/approvals/act-9", json={"approve": True}, headers=AUTH).json()
+    [event] = r["workspace"]
+    assert event["type"] == "approval_result" and event["status"] == "executed"
+    assert (event["work"]["row"], event["work"]["range"], event["work"]["details"]["client"]) == (8, "Hours!A8:E8", "Client A")
+
+    proposing_agent(monkeypatch)
+    client.post("/api/app/messages", json={"text": "log it again"}, headers=AUTH)
+    async def failed(context, approve, action_id=None):
+        context.pending = None
+        return {"error": {"code": "sheets_unreachable", "message": "Sheets did not confirm the entry.", "hint": "Check the sheet."}}
+    monkeypatch.setattr(app_channel.agent, "confirm", failed)
+    [event] = client.post("/api/app/approvals/act-9", json={"approve": True}, headers=AUTH).json()["workspace"]
+    assert event["status"] == "unavailable" and event["work"]["error"]["message"] == "Sheets did not confirm the entry."
+    assert "row" not in event["work"]
+
+
+def test_a_typed_yes_returns_the_result_and_marks_the_proposal_bubble(client, monkeypatch):
+    proposing_agent(monkeypatch)
+    koe = client.post("/api/app/messages", json={"text": "log it"}, headers=AUTH).json()["messages"][1]
+    async def chat(text, history, context, client=None, seen=None):
+        context.pending = None
+        return {"text": "Saved", "approval_result": {"status": "executed", "row": 9, "range": "Hours!A9:E9"}}
+    monkeypatch.setattr(app_channel.text_agent, "chat", chat)
+    [event] = client.post("/api/app/messages", json={"text": "yes"}, headers=AUTH).json()["workspace"]
+    assert (event["type"], event["status"], event["work"]["row"], event["work"]["action_id"]) == ("approval_result", "executed", 9, "act-9")
+    stored = {m["id"]: m for m in client.get("/api/app/messages", headers=AUTH).json()["messages"]}
+    assert stored[koe["id"]]["action_status"] == "executed"

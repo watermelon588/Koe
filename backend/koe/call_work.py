@@ -1,4 +1,5 @@
-"""Bounded display projections for the authenticated call; never send raw tool args."""
+"""Bounded display projections of Calendar/Sheets/Notion work for the call and the app chat's live workspace
+(SPEC §2 "Live workspace"). Never send raw tool args, tokens or credentials: only these whitelisted fields."""
 import re
 from urllib.parse import urlparse
 
@@ -6,7 +7,10 @@ from koe.config import settings
 
 TOOLS = {'calendar_list': 'calendar', 'calendar_find_free': 'calendar',
          'calendar_upsert_event': 'calendar', 'calendar_get_event': 'calendar',
-         'calendar_cancel_event': 'calendar', 'sheets_log_hours': 'sheets'}
+         'calendar_cancel_event': 'calendar', 'sheets_log_hours': 'sheets',
+         'notion_save': 'notion', 'notion_archive': 'notion', 'notion_log': 'notion'}
+HOSTS = {'calendar': {'calendar.google.com', 'www.google.com'}, 'sheets': {'docs.google.com'},
+         'notion': {'notion.so', 'www.notion.so', 'app.notion.com'}, 'meet': {'meet.google.com'}}
 
 
 def fields(data, names):
@@ -17,8 +21,7 @@ def fields(data, names):
 def link(value, service):
     try:
         url = urlparse(value)
-        allowed = {'meet.google.com'} if service == 'meet' else {'calendar.google.com', 'www.google.com'} if service == 'calendar' else {'docs.google.com'}
-        if url.scheme == 'https' and url.hostname in allowed and not url.username and not url.password:
+        if url.scheme == 'https' and url.hostname in HOSTS[service] and not url.username and not url.password:
             return value
     except (TypeError, ValueError):
         pass
@@ -54,8 +57,10 @@ def project(name, args, result=None, action_id=None):
         return None
     args, result = args or {}, result or {}
     source = {**args, **args.get('approved_event', {})} if name == 'calendar_cancel_event' and isinstance(args.get('approved_event'), dict) else args
-    details = fields(source, ('date', 'title', 'start', 'end', 'event_id', 'duration_min', 'between', 'scope', 'all_day', 'create_meet', 'description', 'location') if service == 'calendar'
-                     else ('date', 'client', 'hours', 'note', 'sheet_name'))
+    details = fields(source, {'calendar': ('date', 'title', 'start', 'end', 'event_id', 'duration_min', 'between', 'scope', 'all_day',
+                                           'create_meet', 'description', 'location'),
+                              'sheets': ('date', 'client', 'hours', 'note', 'sheet_name'),
+                              'notion': ('date', 'title', 'kind', 'status', 'end', 'body', 'page_id')}[service])
     if isinstance(source.get('attendees'), list):
         details['attendees'] = [v[:254] for v in source['attendees'][:50] if isinstance(v, str)]
     if service == 'calendar':
@@ -72,7 +77,16 @@ def project(name, args, result=None, action_id=None):
     if isinstance(result.get('error'), dict):
         data['error'] = fields(result['error'], ('code', 'message', 'hint'))
     data.update(fields(result, ('date', 'timezone', 'duration_min', 'title', 'start', 'end', 'row', 'range', 'status')))
-    if service == 'sheets':
+    if service == 'notion':
+        if isinstance(args.get('entries'), list):  # notion_log: the exact bullets appended to the daily page
+            details['entries'] = [v[:2000] for v in args['entries'][:50] if isinstance(v, str)]
+        data.update(fields(result, ('kind', 'record_status', 'added', 'message')))
+        if isinstance(result.get('id') or result.get('page_id'), str):
+            data['page_id'] = result.get('id') or result.get('page_id')
+        if isinstance(result.get('date'), dict):  # a saved record's Date property {start, end}
+            data['date'] = fields(result['date'], ('start', 'end')).get('start', '')
+        data['url'] = link(result.get('url'), service)
+    elif service == 'sheets':
         sheet = args.get('spreadsheet_id', settings.google_sheets_id)
         details.setdefault('sheet_name', settings.google_sheets_tab)
         data['url'] = f'https://docs.google.com/spreadsheets/d/{sheet}/edit' if isinstance(sheet, str) and re.fullmatch(r'[A-Za-z0-9_-]+', sheet) else ''

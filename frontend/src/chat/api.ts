@@ -1,5 +1,6 @@
 // The Koe app API (backend /api/app, SPEC §14). Every call carries the access token remembered on this device.
 import { httpUrl } from '../backend'
+import type { WorkEvent } from '../workspace/workState'
 
 export type Message = {
   id: number
@@ -11,6 +12,9 @@ export type Message = {
   action_status: string | null
   sending?: boolean // local only: on its way, not yet saved
 }
+
+// Koe's reply plus what it read, proposed or wrote in Calendar/Sheets/Notion (the live workspace, SPEC §2).
+export type Reply = { messages: Message[]; workspace?: WorkEvent[] }
 
 const KEY = 'koe-token'
 export function savedToken(): string {
@@ -45,11 +49,11 @@ const post = (body: unknown): RequestInit => ({ method: 'POST', headers: { 'Cont
 
 const voices = new Map<string, string>() // voice note name → object URL, fetched once
 export const api = {
-  messages: async (after = 0): Promise<Message[]> => (await (await request(`/messages?after=${after}`)).json()).messages,
-  send: async (text: string): Promise<Message[]> => (await (await request('/messages', post({ text }))).json()).messages,
-  sendVoice: async (wav: Blob): Promise<Message[]> =>
-    (await (await request('/voice', { method: 'POST', headers: { 'Content-Type': 'audio/wav' }, body: wav })).json()).messages,
-  decide: async (id: string, approve: boolean): Promise<{ messages: Message[]; action: { id: string; status: string } }> =>
+  messages: async (after = 0): Promise<Reply> => (await request(`/messages?after=${after}`)).json(),
+  send: async (text: string): Promise<Reply> => (await request('/messages', post({ text }))).json(),
+  sendVoice: async (wav: Blob): Promise<Reply> =>
+    (await request('/voice', { method: 'POST', headers: { 'Content-Type': 'audio/wav' }, body: wav })).json(),
+  decide: async (id: string, approve: boolean): Promise<Reply & { action: { id: string; status: string } }> =>
     (await request(`/approvals/${encodeURIComponent(id)}`, post({ approve }))).json(),
   voice: async (name: string): Promise<string> => {
     if (!voices.has(name)) voices.set(name, URL.createObjectURL(await (await request(`/voice/${name}`)).blob()))

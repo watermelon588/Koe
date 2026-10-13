@@ -110,3 +110,8 @@ Deterministic integration extension references: [GitHub commit detail statistics
 - Google [troubleshooting](https://ai.google.dev/gemini-api/docs/troubleshooting): distinguish transient 500/503/504 failures from authentication and request errors.
 - Render [deploys](https://render.com/docs/deploys): build failure retains the previous live build; restart does not deploy the latest commit; CI-gated auto-deploy requires detected checks.
 - Render [default environment variables](https://render.com/docs/environment-variables): `RENDER_GIT_COMMIT` identifies a deployment. Public health exposes only a validated SHA; configuration-presence diagnostics require owner authentication.
+## Live workspace (2026-10-13)
+- GSAP [React guide / useGSAP](https://gsap.com/resources/React), [timelines](https://gsap.com/docs/v3/GSAP/Timeline/), [gsap.matchMedia / reduced motion](https://gsap.com/docs/v3/GSAP/gsap.matchMedia/). Versions from `npm view`: gsap 3.15.0 (2026-04-13), @gsap/react 2.1.2.
+- MDN [X-Frame-Options](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/X-Frame-Options) and [CSP frame-ancestors](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Content-Security-Policy/frame-ancestors): what decides whether a page may be shown in an iframe.
+- Google Calendar [embed a calendar on a website](https://support.google.com/calendar/answer/41207) (`/calendar/embed?src=…&ctz=…&mode=…`).
+- Frameability measured with `curl -D -` on 2026-10-13 (headers in DECISIONS.md). `rm=minimal` for Sheets is observed, not documented.

@@ -1,0 +1,76 @@
+/* The live workspace (LiveWorkspace.tsx). Same world as index.css: flat surfaces, light type, one accent, Phosphor
+   light icons, elevation from a 1px line (no shadow). GSAP moves it; CSS only places it. */
+.lw { --lw-w: min(460px, 42vw); display: flex; flex-direction: column; min-height: 0; color: var(--text); }
+.lw:not([data-inline]) { position: fixed; z-index: 4; top: 82px; right: 16px; bottom: 16px; width: var(--lw-w); background: var(--surface);
+  border: 1px solid var(--line); border-radius: 16px; overflow: hidden; visibility: hidden; } /* GSAP owns its transform */
+.lw[data-inline] { height: 100%; }
+
+.lw-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 18px 10px; }
+.lw-head h2 { display: flex; align-items: center; gap: 10px; font-size: 17px; font-weight: 400; letter-spacing: -0.01em; min-width: 0; }
+.lw-head h2:focus { outline: none; }
+.lw-head h2:focus-visible { outline: 1.5px solid var(--accent); }
+.lw-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+.lw-open { height: 34px; padding: 0 14px; font-size: 13px; gap: 6px; color: var(--text); text-decoration: none; }
+.lw-bar { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; padding: 0 18px; }
+.lw-bar .seg button { height: 28px; }
+.lw-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--muted); margin-left: 2px; }
+.lw-dot:is([data-phase='waiting'], [data-phase='saved']) { background: var(--accent); }
+.lw-phase { margin: 12px 18px 0; }
+.lw-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+.lw-body { position: relative; flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 4px 18px 20px;
+  scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+.lw-body ::selection { background: color-mix(in srgb, var(--accent) 35%, transparent); }
+.lw-flash { position: absolute; left: 0; top: 0; z-index: 1; border-radius: 8px; background: var(--accent); pointer-events: none; visibility: hidden; opacity: 0; }
+.lw-empty { display: grid; justify-items: center; gap: 14px; text-align: center; padding: 48px 12px; color: var(--muted); font-size: 13px; }
+.lw-empty p { max-width: 34ch; line-height: 1.6; }
+.lw-empty .soft { text-decoration: none; height: 34px; font-size: 13px; color: var(--text); }
+.lw-muted { display: block; color: var(--muted); font-size: 12px; line-height: 1.6; margin-top: 10px; }
+.lw-muted a, .lw-receipt a { color: var(--text); text-underline-offset: 3px; text-decoration-color: var(--line); }
+
+/* What was written: the exact identifiers, once Google/Notion confirmed them. */
+/* Sticky, so the receipt stays in view while the saved slot/row is scrolled into the middle of the panel. */
+.lw-receipt { position: sticky; top: 0; z-index: 2; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; align-items: start; margin: 8px 0 14px; padding: 14px 16px;
+  border-radius: 12px; background: color-mix(in srgb, var(--accent) 10%, var(--surface)); }
+.lw-check { color: var(--accent); }
+.lw-receipt h3 { font-size: 15px; font-weight: 400; margin-bottom: 6px; }
+.lw-receipt dl, .lw-record dl { display: grid; gap: 3px; margin: 0 0 8px; }
+.lw-receipt dl div, .lw-record dl div { display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 8px; font-size: 13px; }
+.lw-receipt dt, .lw-record dt { color: var(--muted); font-size: 12px; }
+.lw-receipt dd, .lw-record dd { margin: 0; overflow-wrap: anywhere; }
+.lw-receipt a { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; }
+.lw-receipt small { color: var(--muted); font-size: 12px; }
+
+/* Koe's view of a Notion record. Dashed accent = proposed, solid = Notion confirmed it. */
+.lw-record { margin-top: 4px; padding: 16px; border-radius: 12px; background: var(--surface-2); border: 1px dashed var(--line); overflow-wrap: anywhere; }
+.lw-record[data-phase='waiting'] { border-color: var(--accent); }
+.lw-record[data-phase='saved'] { border-style: solid; border-color: color-mix(in srgb, var(--accent) 50%, transparent); }
+.lw-record[data-phase='cancelled'] { opacity: 0.6; }
+.lw-record h3 { font-size: 16px; font-weight: 400; letter-spacing: -0.01em; margin-bottom: 10px; }
+.lw-entries { display: grid; gap: 6px; font-size: 13px; margin-top: 4px; }
+.lw-entries li { padding-left: 14px; position: relative; }
+.lw-entries li::before { content: ''; position: absolute; left: 2px; top: 0.7em; width: 4px; height: 4px; border-radius: 50%; background: var(--muted); }
+.lw-blocks { display: grid; gap: 6px; font-size: 13px; color: var(--text); border-top: 1px solid var(--line); padding-top: 10px; margin-top: 4px; white-space: pre-wrap; }
+.lw-blocks small { color: var(--muted); font-size: 12px; }
+
+.lw-live { display: grid; gap: 4px; padding-top: 8px; }
+.lw-live iframe { width: 100%; height: min(64dvh, 600px); border: 1px solid var(--line); border-radius: 12px; background: var(--surface-2); }
+
+.lw-decide { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 14px; padding: 12px 18px 16px; border-top: 1px solid var(--line); }
+.lw-decide p { flex: 1 1 200px; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.lw-decide .pair button { height: 38px; padding: 0 18px; font-size: 14px; }
+
+/* The chat makes room for the panel on wide screens; on phones the panel is a bottom sheet over it. */
+@media (min-width: 900px) {
+  .chat-page[data-workspace='open'] { margin-left: max(16px, calc((100vw - 760px - min(460px, 42vw) - 32px) / 2)); margin-right: calc(min(460px, 42vw) + 32px); }
+}
+@media (max-width: 899px) {
+  .lw:not([data-inline]) { top: auto; left: 0; right: 0; bottom: 0; width: auto; height: min(78dvh, 640px); border-radius: 18px 18px 0 0;
+    border-bottom: 0; padding-bottom: env(safe-area-inset-bottom); }
+  .lw[data-inline] .lw-head, .lw[data-inline] .lw-bar, .lw[data-inline] .lw-body, .lw[data-inline] .lw-decide { padding-left: 16px; padding-right: 16px; }
+  .lw[data-inline] .lw-phase { margin-left: 16px; }
+}
+@media (max-width: 600px) {
+  .lw-wide-only { display: none; }
+  .lw-bar .seg button { padding: 0 9px; }
+}

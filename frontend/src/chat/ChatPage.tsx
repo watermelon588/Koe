@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
-import { BellRinging, GearSix, Microphone, PaperPlaneRight, Pause, Phone, Play, Trash } from '@phosphor-icons/react'
+import { BellRinging, GearSix, Microphone, PaperPlaneRight, Pause, Phone, Play, SidebarSimple, Trash } from '@phosphor-icons/react'
 import { mascotProfile, type MascotId } from '../mascot/catalog'
-import { api, AuthError, saveToken, type Message } from './api'
+import { api, AuthError, saveToken, type Message, type Reply } from './api'
 import { record } from './recorder'
 import { resendPush } from '../pwa'
+import { LiveWorkspace } from '../workspace/LiveWorkspace'
+import { emptyWork, reduceWork, SERVICES, type WorkEvent } from '../workspace/workState'
 import './chat.css'
 
 // The Koe app's home on the phone (SPEC §14): a WhatsApp-style chat with Koe. Text or voice notes; Koe answers a
@@ -28,6 +30,26 @@ export function ChatPage({ model }: { model: MascotId }) {
     return () => { mounted.current = false; activeRecording.current?.cancel() }
   }, [])
   const lastId = messages.filter((m) => !m.sending).at(-1)?.id ?? 0
+  // The live workspace: what Koe read, proposed or wrote in Calendar/Sheets/Notion, beside the chat.
+  const [work, setWork] = useState(emptyWork)
+  const [panelOpen, setPanelOpen] = useState(false)
+  const [deciding, setDeciding] = useState<string | null>(null)
+  const toggle = useRef<HTMLButtonElement>(null)
+  const panelHeading = useRef<HTMLHeadingElement>(null)
+  const absorb = useCallback((events: WorkEvent[] = [], reveal = true) => {
+    if (!events.length) return
+    setWork((w) => events.reduce(reduceWork, w))
+    const results = events.filter((e) => e.type === 'approval_result' && e.work?.action_id)
+    if (results.length) setMessages((ms) => ms.map((m) => {
+      const r = results.find((e) => e.work!.action_id === m.action_id)
+      return r && !m.action_status ? { ...m, action_status: r.status ?? 'failed' } : m
+    }))
+    if (reveal) setPanelOpen(true) // opens without taking focus: you keep typing
+  }, [])
+  function openPanel(open: boolean) {
+    setPanelOpen(open)
+    requestAnimationFrame(() => (open ? panelHeading.current : toggle.current)?.focus())
+  }
 
   const fail = useCallback((e: unknown) => {
     if (e instanceof AuthError) setNeedToken(true)
@@ -36,13 +58,14 @@ export function ChatPage({ model }: { model: MascotId }) {
 
   const load = useCallback(async (after: number) => {
     try {
-      const fresh = await api.messages(after)
+      const { messages: fresh, workspace } = await api.messages(after)
       if (fresh.length) setMessages((ms) => [...ms.filter((m) => !fresh.some((f) => f.id === m.id)), ...fresh])
+      absorb(workspace, false) // an open proposal after a reload: ready behind the panel button
       setNeedToken(false)
     } catch (e) {
       fail(e)
     }
-  }, [fail])
+  }, [fail, absorb])
 
   useEffect(() => { void load(0); resendPush().catch(() => {}) }, [load])
   // New messages while the app is open: the service worker pings us on push; also re-check on return to the app.
@@ -70,13 +93,14 @@ export function ChatPage({ model }: { model: MascotId }) {
   }, [recording])
   const seconds = recording ? Math.floor((now - recording.started) / 1000) : 0
 
-  async function deliver(local: Message, send: () => Promise<Message[]>) {
+  async function deliver(local: Message, send: () => Promise<Reply>) {
     setError('')
     setMessages((ms) => [...ms, local])
     setBusy(true)
     try {
-      const saved = await send()
+      const { messages: saved, workspace } = await send()
       setMessages((ms) => [...ms.filter((m) => m.id !== local.id), ...saved.filter((s) => !ms.some((m) => m.id === s.id))])
+      absorb(workspace)
     } catch (e) {
       setMessages((ms) => ms.filter((m) => m.id !== local.id))
       fail(e)
@@ -116,23 +140,37 @@ export function ChatPage({ model }: { model: MascotId }) {
   }, [recording]) // eslint-disable-line react-hooks/exhaustive-deps -- deliver is stable enough per render
   useEffect(() => { sendLatest.current = sendRecording }, [sendRecording])
 
-  async function decide(m: Message, approve: boolean) {
+  // One decision path for the bubble's and the panel's Confirm/Cancel: POST /api/app/approvals/{id} (SPEC §5).
+  async function decide(actionId: string, approve: boolean) {
+    if (deciding) return
+    const card = SERVICES.map((s) => work[s]).find((c) => c?.work.action_id === actionId && c.phase === 'waiting')
+    setDeciding(actionId)
+    if (card && approve) setWork((w) => reduceWork(w, { type: 'approval_progress', work: card.work }))
     try {
-      const r = await api.decide(m.action_id!, approve)
+      const r = await api.decide(actionId, approve)
       setMessages((ms) => [...ms.map((x) => (x.action_id === r.action.id ? { ...x, action_status: r.action.status } : x)), ...r.messages])
+      absorb(r.workspace)
     } catch (e) {
+      if (card) setWork((w) => reduceWork(w, { type: 'approval_pending', work: card.work })) // still undecided
       fail(e)
+    } finally {
+      setDeciding(null)
     }
   }
+  const undecided = (actionId: string) => messages.some((m) => m.action_id === actionId && !m.action_status)
+  const hasWork = SERVICES.some((s) => work[s])
 
   return (
-    <main className="chat-page" id="main-content" tabIndex={-1} data-mascot={model}>
+    <>
+    <main className="chat-page" id="main-content" tabIndex={-1} data-mascot={model} data-workspace={panelOpen ? 'open' : undefined}>
       <header className="chat-head">
         <img className="avatar" src={profile.portrait} alt="" width="40" height="40" />
         <div className="chat-who">
           <span>{profile.name}</span>
           <small aria-live="polite">{recording ? 'listening…' : busy ? 'typing…' : 'Koe, your assistant'}</small>
         </div>
+        <button ref={toggle} className="icon-btn lw-toggle" aria-label={panelOpen ? 'Hide live workspace' : 'Show live workspace'} title="Live workspace"
+          aria-expanded={panelOpen} aria-controls="live-workspace" data-has-work={hasWork || undefined} onClick={() => openPanel(!panelOpen)}><SidebarSimple /></button>
         <a className="icon-btn" href="#home" aria-label="Call Koe" title="Call"><Phone /></a>
         <a className="icon-btn" href="#settings" aria-label="Settings" title="Settings"><GearSix /></a>
       </header>
@@ -146,7 +184,7 @@ export function ChatPage({ model }: { model: MascotId }) {
             <small>Type, or tap the mic to send a voice note.</small>
           </li>
         )}
-        {messages.map((m) => <Bubble key={m.id} m={m} onDecide={(approve) => decide(m, approve)} />)}
+        {messages.map((m) => <Bubble key={m.id} m={m} busy={deciding === m.action_id} onDecide={(approve) => decide(m.action_id!, approve)} />)}
         {busy && <li className="msg koe typing" aria-label="Koe is typing"><i /><i /><i /></li>}
       </ol>
 
@@ -164,10 +202,13 @@ export function ChatPage({ model }: { model: MascotId }) {
         </>}
       </form>
     </main>
+    <LiveWorkspace work={work} open={panelOpen} onClose={() => openPanel(false)} headingRef={panelHeading}
+      decision={(id) => (undecided(id) ? { deciding: deciding === id, decide: (approve) => void decide(id, approve) } : null)} />
+    </>
   )
 }
 
-function Bubble({ m, onDecide }: { m: Message; onDecide: (approve: boolean) => void }) {
+function Bubble({ m, busy, onDecide }: { m: Message; busy: boolean; onDecide: (approve: boolean) => void }) {
   const time = new Date(m.ts).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
   if (m.role === 'alert') {
     return <li className="msg alert"><BellRinging /><p>{m.text}</p><time>{time}</time></li>
@@ -180,8 +221,8 @@ function Bubble({ m, onDecide }: { m: Message; onDecide: (approve: boolean) => v
       {m.action_id && (m.action_status
         ? <p className="decided">{decided}</p>
         : <div className="pair">
-            <button className="ghost" onClick={() => onDecide(false)}>Cancel</button>
-            <button className="soft" onClick={() => onDecide(true)}>Confirm</button>
+            <button className="ghost" disabled={busy} onClick={() => onDecide(false)}>Cancel</button>
+            <button className="soft" disabled={busy} onClick={() => onDecide(true)}>{busy ? 'Checking…' : 'Confirm'}</button>
           </div>)}
       <time>{m.sending ? 'sending…' : time}</time>
     </li>

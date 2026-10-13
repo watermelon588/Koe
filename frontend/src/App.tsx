@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from 'react'
 import { CalendarBlank, ChatCircle, ChatCircleDots, GearSix, HandWaving, House, Key, Microphone, MicrophoneSlash, Moon, PaperPlaneRight,
-  Phone, PhoneDisconnect, Sun, IconContext, Notebook, Table, SquaresFour, Question } from '@phosphor-icons/react'
-import { WorkPanel } from './call/WorkPanel'
+  Phone, PhoneDisconnect, Sun, IconContext, Notebook, SquaresFour, Question, SidebarSimple } from '@phosphor-icons/react'
+import { LiveWorkspace } from './workspace/LiveWorkspace'
 import { moodOf, useCall, type Line } from './call/useCall'
 import { MascotView, type MascotController } from './mascot/MascotView'
 import { mascotProfile, savedMascot, saveMascot } from './mascot/catalog'
@@ -201,9 +201,10 @@ export default function App() {
 }
 
 export function CallPanel({ open, call, dashboard }: { open: boolean; call: ReturnType<typeof useCall>; dashboard: ReturnType<typeof useDashboard> }) {
-  type View = 'chat' | 'day' | 'calendar' | 'sheets'
+  type View = 'chat' | 'day' | 'work'
   const [chosen, setChosen] = useState<{ view: View; revision: number }>({ view: 'chat', revision: -1 })
-  const tab = chosen.revision === call.workspace.revision ? chosen.view : call.workspace.active || 'chat'
+  // Koe touching Calendar/Sheets/Notion opens the live workspace tab; picking a tab wins until the next change.
+  const tab = chosen.revision === call.workspace.revision ? chosen.view : call.workspace.active ? 'work' : 'chat'
   const setTab = (view: View) => setChosen({ view, revision: call.workspace.revision })
   const [clock, setClock] = useState(Date.now)
   useEffect(() => { if (!open) return; const timer = setInterval(() => setClock(Date.now()), 1000); return () => clearInterval(timer) }, [open])
@@ -234,11 +235,11 @@ export function CallPanel({ open, call, dashboard }: { open: boolean; call: Retu
         <div className="seg" role="group" aria-label="Call view">
           <button aria-pressed={tab === 'chat'} onClick={() => setTab('chat')}><ChatCircle size={15} />Chat</button>
           <button aria-pressed={tab === 'day'} onClick={() => setTab('day')}><CalendarBlank size={15} />Day</button>
-          <button aria-pressed={tab === 'calendar'} onClick={() => setTab('calendar')}><CalendarBlank size={15} />Calendar</button>
-          <button aria-pressed={tab === 'sheets'} onClick={() => setTab('sheets')}><Table size={15} />Sheets</button>
+          <button aria-pressed={tab === 'work'} onClick={() => setTab('work')}><SidebarSimple size={15} />Workspace</button>
         </div>
       </div>
-      {tab === 'calendar' || tab === 'sheets' ? <WorkPanel service={tab} card={call.workspace[tab]} /> : tab === 'day' ? <div className="panel-day"><Dashboard data={dashboard.data} connected={dashboard.connected}
+      {tab === 'work' ? <LiveWorkspace inline work={call.workspace}
+        decision={(id) => (call.approval?.id === id ? { deciding: call.deciding, decide: call.decide } : null)} /> : tab === 'day' ? <div className="panel-day"><Dashboard data={dashboard.data} connected={dashboard.connected}
         currentApproval={call.approval} decide={call.decide} refresh={dashboard.refresh} /></div> : <ol className="transcript" ref={list} aria-live="polite">
         {call.lines.length === 0 && <li className="empty">Say hi, or type below.</li>}
         {call.lines.map((l: Line) => (
