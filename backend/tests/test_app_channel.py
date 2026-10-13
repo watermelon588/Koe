@@ -144,7 +144,7 @@ def test_notify_pushes_to_each_device_and_forgets_gone_ones(monkeypatch):
         if subscription["endpoint"].endswith("gone"):
             raise app_channel.WebPushException("gone", response=SimpleNamespace(status=410))
     monkeypatch.setattr(app_channel, "webpush_async", webpush_async)
-    asyncio.run(app_channel.notify("hello"))
+    assert asyncio.run(app_channel.notify("hello")) == 1  # the gone device doesn't count
     assert {e for e, _, _ in sent} == {"https://push.example/gone", "https://push.example/live"}
     assert '"body": "hello"' in sent[0][1] and sent[0][2] == {"sub": settings.koe_push_contact}
     with app_channel.db() as con:
@@ -171,3 +171,11 @@ def test_the_push_key_can_come_from_the_environment(monkeypatch):
     monkeypatch.setattr(app_channel.settings, "vapid_private_key", raw)
     assert app_channel.vapid().private_key.private_numbers() == key.private_key.private_numbers()
     assert not (app_channel.DATA / "vapid.pem").exists()
+
+
+def test_the_install_page_can_send_a_test_notification(client, monkeypatch):
+    async def notify(body, title="Koe", tag="koe"):
+        return 2
+    monkeypatch.setattr(app_channel, "notify", notify)
+    assert client.post("/api/app/push/test").status_code == 401
+    assert client.post("/api/app/push/test", headers=AUTH).json() == {"sent": 2}

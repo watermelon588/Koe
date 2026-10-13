@@ -115,8 +115,9 @@ function DeviceSection() {
       <div className="device-row">
         <span><span><DeviceMobile size={16} /> Koe app</span>
           <small>{install.installed ? 'Installed on this device.' : install.canPrompt ? 'Add Koe to your home screen, like an app.'
-            : install.ios ? 'On iPhone: Share, then Add to Home Screen.' : 'Open this page in Chrome on your phone to install.'}</small></span>
+            : install.ios ? 'On iPhone: Share, then Add to Home Screen.' : 'Scan a QR code to set Koe up on your phone.'}</small></span>
         {!install.installed && install.canPrompt && <button className="soft" onClick={() => void install.install()}>Install app</button>}
+        {!install.installed && !install.canPrompt && <a className="ghost" href="#install">Phone setup</a>}
       </div>
       <div className="device-row">
         <span><span><BellSimple size={16} /> Notifications</span>

@@ -482,3 +482,25 @@ Replies within 24 h of your own message are a different category. A correct app 
 - Koe's side works end to end: `model_done` 8098 ms and `reply_sent` 8927 ms after the webhook.
 - Meta then rejected delivery: `131031 Business Account locked`. Koe can't fix that; only Meta can unlock the account.
 **Interview line:** "I traced a 'no reply' bug across four silent hops: webhook verification, the account-to-app subscription, the signing secret's name, and asynchronous delivery receipts. Then I made the last hop log Meta's own error code."
+
+## Step 37: scan a QR code, get Koe on your phone  (Phase 5b · 2026-10-13)
+**Files:** frontend/src/install/{InstallPage.tsx,install.css} (new) · frontend/public/install-qr.svg (new) · frontend/src/{App.tsx,chat/api.ts,settings/SettingsPage.tsx} · backend/koe/app_channel.py (`POST /api/app/push/test`, `notify` returns a count) · backend/tests/test_app_channel.py
+**What it does:** `koe-pi.vercel.app/#install` is a setup portal. On the laptop it shows a QR code; scan it with the phone camera. On the phone the same page has four steps, each turning into a ✓ only after a real check:
+1. install the app;
+2. connect: the token is tried against the Render backend;
+3. notifications: turn them on, then **Send a test**, a real push from the backend;
+4. open the chat and send a voice note.
+**Core concept:** *A setup flow that verifies itself.* Each ✓ comes from the real system rather than from a button press:
+- `api.messages(0)` proves the token and that the backend is reachable;
+- `/push/test` proves the whole push path: backend → Google's push service → the service worker → a notification on screen.
+
+A QR code is just a URL drawn as squares. Since the URL is fixed, the image is generated once and served as a static file, so no library is needed.
+**How it connects:** QR → `#install` → `useInstall()` (beforeinstallprompt) → `saveToken` + `GET /api/app/messages` → `enablePush()` → `POST /api/app/push/subscribe` → `POST /api/app/push/test` → `notify()` → `sw.js` shows it → `#chat`.
+**Try it yourself:** Open `https://koe-pi.vercel.app/#install` on the laptop and scan the QR with the phone. Then on the phone: Install → paste the token → Connect → Turn on → Send a test → Open chat.
+**Gotchas:**
+- Render's free plan sleeps, so the first Connect can take up to a minute.
+- If the site's domain changes, the QR must be regenerated; the command is in the comment at the top of `InstallPage.tsx`.
+- On iPhone, notifications only work after Add to Home Screen.
+- The built-in browser pane blocks notifications, so step 3 says "Blocked" there.
+**Measured:** 156 backend tests and 10 frontend tests pass; types check. The laptop layout at 1280 px puts the QR on the left (280 px) and the steps on the right, with no horizontal overflow. The phone layout at 600 px is a single column with the QR hidden.
+**Interview line:** "I made phone onboarding self-verifying: each step is checked against the real backend and push service, so a green tick means the whole path works, not just that a button was pressed."

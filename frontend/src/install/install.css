@@ -1,0 +1,34 @@
+/* The phone setup portal (#install): one narrow column of steps; the QR shows only where there's room (a laptop). */
+.install-page { max-width: 560px; margin: 0 auto; padding: 48px 20px 64px; display: grid; gap: 32px; }
+.install-head { display: grid; justify-items: center; gap: 8px; text-align: center; }
+.install-head img { width: 72px; height: 72px; border-radius: 50%; object-fit: cover; object-position: 50% 15%; box-shadow: 0 0 0 3px var(--bg), 0 0 0 4.5px var(--accent); margin-bottom: 8px; }
+.install-head h1 { font-size: 26px; font-weight: 300; letter-spacing: -0.01em; }
+.install-head p { color: var(--muted); max-width: 40ch; }
+
+/* The QR keeps a white quiet zone in both themes: phone cameras need the contrast. */
+.install-qr { margin: 0; display: grid; justify-items: center; gap: 12px; text-align: center; }
+.install-qr img { width: 184px; height: 184px; padding: 10px; border-radius: 16px; background: #fff; }
+.install-qr figcaption { color: var(--muted); font-size: 13px; }
+@media (max-width: 720px), (pointer: coarse) { .install-qr { display: none; } } /* on the phone itself, skip it */
+
+.steps { display: grid; gap: 4px; counter-reset: step; }
+.step { display: grid; grid-template-columns: 36px 1fr; gap: 14px; padding: 18px 16px; border-radius: 18px; background: var(--surface); }
+.step-mark { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; background: var(--surface-2); color: var(--muted); font-size: 18px; }
+.step[data-done] .step-mark { background: none; color: var(--accent); font-size: 28px; }
+.step-body { display: grid; gap: 10px; min-width: 0; align-content: start; }
+.step-body h2 { font-size: 16px; font-weight: 400; line-height: 36px; }
+.step-body p { color: var(--muted); font-size: 13px; }
+.step-body b { font-weight: 500; color: var(--text); }
+.step-body > :is(.primary, .soft) { justify-self: start; text-decoration: none; }
+.step-body .pair { align-items: center; gap: 12px; flex-wrap: wrap; }
+.step-body a[aria-disabled] { opacity: 0.4; pointer-events: none; }
+
+.visually-hidden { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.app[data-page='install'] .bar { display: none; } /* a focused setup page, like the chat */
+
+/* Laptop: the QR on the left (what you need there), the steps beside it as a preview of what the phone will do. */
+@media (min-width: 900px) and (pointer: fine) {
+  .install-page { max-width: 920px; grid-template-columns: 280px 1fr; column-gap: 48px; align-items: start; padding-top: 72px; }
+  .install-head { grid-column: 1 / -1; }
+  .install-qr { position: sticky; top: 32px; }
+}

@@ -6,6 +6,7 @@ import { MascotView, type MascotController } from './mascot/MascotView'
 import { mascotProfile, savedMascot, saveMascot } from './mascot/catalog'
 import { SettingsPage } from './settings/SettingsPage'
 import { ChatPage } from './chat/ChatPage'
+import { InstallPage } from './install/InstallPage'
 import { savedToken } from './chat/api'
 import { Dashboard } from './dashboard/Dashboard'
 import { useDashboard } from './dashboard/useDashboard'
@@ -27,8 +28,9 @@ function savedTheme(): Theme {
     return 'dark' // storage can be blocked (private mode); dark is the default anyway
   }
 }
-type Page = 'home' | 'chat' | 'settings'
-const pageOf = (hash: string): Page => (hash === '#settings' ? 'settings' : hash === '#chat' ? 'chat' : 'home')
+type Page = 'home' | 'chat' | 'settings' | 'install'
+const pageOf = (hash: string): Page =>
+  hash === '#settings' ? 'settings' : hash === '#chat' ? 'chat' : hash === '#install' ? 'install' : 'home'
 
 function greeting() {
   const h = new Date().getHours()
@@ -135,7 +137,7 @@ export default function App() {
       {page === 'settings' ? <SettingsPage selected={model} onSelect={(id) => {
         setModel(id)
         return saveMascot(id)
-      }} /> : page === 'chat' ? <ChatPage model={model} /> : <>
+      }} /> : page === 'chat' ? <ChatPage model={model} /> : page === 'install' ? <InstallPage model={model} /> : <>
       <main className="home" id="main-content" tabIndex={-1} inert={inCall}>
         <section className="hello">
           <p className="date">{new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })}</p>

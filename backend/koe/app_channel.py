@@ -8,6 +8,7 @@
   POST /api/app/approvals/{id}      {"approve": bool} → resolve a proposal
   GET  /api/app/push/key            VAPID public key for the browser's PushManager.subscribe
   POST /api/app/push/subscribe      the browser's PushSubscription JSON
+  POST /api/app/push/test           a test notification to every device → {"sent": n}
 
 Every endpoint needs `Authorization: Bearer <KOE_ACCESS_TOKEN>`: the phone reaches this through a public tunnel.
 Web Push: https://developer.mozilla.org/en-US/docs/Web/API/Push_API · pywebpush: https://github.com/web-push-libs/pywebpush
@@ -233,17 +234,26 @@ def push_subscribe(subscription: dict):
     return {"ok": True}
 
 
-async def notify(body: str, title: str = "Koe", tag: str = "koe") -> None:
-    """Push to every subscribed device. Gone subscriptions (404/410) are removed; other failures are logged."""
+@router.post("/push/test")
+async def push_test():
+    """The install page's end-to-end check: did a real notification reach this phone?"""
+    return {"sent": await notify("Notifications work. Koe's replies and GitHub alerts will arrive like this.", tag="koe-test")}
+
+
+async def notify(body: str, title: str = "Koe", tag: str = "koe") -> int:
+    """Push to every subscribed device; returns how many accepted it.
+    Gone subscriptions (404/410) are removed; other failures are logged."""
     with closing(db()) as con:
         subs = [(r["endpoint"], json.loads(r["subscription"])) for r in con.execute("select * from push")]
     if not subs:
-        return
+        return 0
+    sent = 0
     payload = json.dumps({"title": title, "body": body[:300], "tag": tag, "url": "/#chat"})
     key = vapid()
     for endpoint, sub in subs:
         try:
             await webpush_async(sub, payload, vapid_private_key=key, vapid_claims={"sub": settings.koe_push_contact}, ttl=3600)
+            sent += 1
         except WebPushException as exc:
             status = getattr(exc.response, "status", None) or getattr(exc.response, "status_code", None)
             if status in {404, 410}:
@@ -253,6 +263,7 @@ async def notify(body: str, title: str = "Koe", tag: str = "koe") -> None:
                 log.warning("push failed (%s)", status)
         except Exception:
             log.warning("push failed", exc_info=True)
+    return sent
 
 
 async def alert(text: str) -> None:

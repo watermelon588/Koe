@@ -53,4 +53,5 @@ export const api = {
   },
   pushKey: async (): Promise<string> => (await (await request('/push/key')).json()).key,
   subscribe: async (subscription: PushSubscriptionJSON): Promise<void> => void (await request('/push/subscribe', post(subscription))),
+  pushTest: async (): Promise<number> => (await (await request('/push/test', { method: 'POST' })).json()).sent,
 }

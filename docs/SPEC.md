@@ -174,6 +174,11 @@ The dedicated `#settings` page owns mascot selection: Kami, Miku, Aoi and Kobash
 
 ## 14. Koe app (mobile channel, replaces WhatsApp while Meta needs business verification)
 - **What it is:** the same web app, installable from an **Install app** button (Chrome's install prompt; on iPhone, Share → Add to Home Screen). No app store. Opens on **Chat**: a WhatsApp-style conversation with Koe, the mascot as the avatar.
+- **Phone setup page (`#install`):** on a laptop it shows a QR code for `https://koe-pi.vercel.app/#install`. On the phone the same page walks through four steps, each marked ✓ when verified:
+  1. **Install** (Chrome's prompt, or the iPhone instructions).
+  2. **Connect**: saves the token, then checks it against the backend.
+  3. **Notifications**: turns them on and sends a real test push (`POST /api/app/push/test`).
+  4. **Open chat.**
 - **Messages:** text, or a **voice note** recorded in the app (16 kHz mono WAV). Voice notes are transcribed by Gemini and answered **with a voice note** in Koe's call voice (Gemini Live), plus the text. History persists in `backend/data/app.db` (SQLite, git-ignored); audio in `backend/data/voice/`.
 - **Approvals:** a proposed write arrives as a message with **Confirm / Cancel**, resolved through the same gate as voice and CLI (§5).
 - **Notifications:** every Koe reply and GitHub alert is pushed (Web Push, VAPID keys generated once into `backend/data/vapid.pem`). The service worker skips the notification when the chat is already open on screen.
