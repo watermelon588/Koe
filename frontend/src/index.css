@@ -77,6 +77,12 @@ button:disabled { opacity: 0.4; cursor: default; }
 .brand { font-size: 16px; font-weight: 300; letter-spacing: 0.02em; }
 .brand .jp { color: var(--muted); margin-left: 2px; }
 .controls { display: flex; gap: 4px; align-items: center; padding: 4px; border-radius: 999px; background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); }
+.nav-link { display: inline-flex; align-items: center; gap: 7px; padding: 8px 12px; border-radius: 999px; font-size: 13px; color: var(--muted); text-decoration: none; }
+.nav-link[aria-current='page'] { color: var(--text); background: var(--surface-2); }
+.workspace-call { position: fixed; z-index: 5; bottom: 18px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 10px; width: max-content; max-width: calc(100% - 24px); padding: 12px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); box-shadow: 0 8px 32px rgb(0 0 0 / .2); font-size: 13px; }
+.workspace-call a { text-decoration: none; }
+.app:not([data-page='home']) .panel { visibility: hidden; pointer-events: none; }
+@media (max-width: 600px) { .nav-link { padding: 9px; } .nav-link span { display: none; } .workspace-call { flex-wrap: wrap; justify-content: center; } .workspace-call > span:not(.dot) { flex-basis: calc(100% - 40px); } }
 .bar-divider { width: 1px; height: 18px; background: var(--line); margin: 0 4px; }
 
 /* Home: greeting, call, and your day in one card, on the right of her. */
@@ -168,7 +174,8 @@ button:disabled { opacity: 0.4; cursor: default; }
 .composer input { flex: 1; min-width: 0; height: 40px; padding: 0 16px; border-radius: 999px; border: 1px solid var(--line); background: var(--bg); }
 .composer input::placeholder { color: var(--muted); }
 .icon-btn.send { width: 40px; height: 40px; background: var(--accent); color: var(--on-accent); }
-.approval-card { flex-basis: 100%; min-width: 0; max-height: min(20dvh, 180px); overflow-y: auto; padding: 12px 14px; border: 1px solid var(--accent); border-radius: 14px; overflow-wrap: anywhere; }
+.approval-card { flex-basis: 100%; min-width: 0; padding: 10px 14px; border: 1px solid var(--accent); border-radius: 14px; overflow-wrap: anywhere; }
+.approval-copy { max-height: min(12dvh, 100px); overflow-y: auto; font-size: 12px; }
 .approval-card p { margin: 0 0 8px; white-space: pre-wrap; }
 .approval-card small { display: block; color: var(--muted); }
 .approval-card .pair { margin-top: 10px; }

@@ -194,6 +194,7 @@ def test_voice_only_final_complete_yes_executes_not_partial_yes(fake_store):
         state.user_text = "Yes."
         await voice_call._finish_user_turn(browser, session, state)
         assert len(fake_store[1]) == 1
+        assert (await browser.hears())["type"] == "approval_progress"
         assert (await browser.hears())["status"] == "executed"
         assert "Application approval result" in sent[0]["text"]
     asyncio.run(scenario())

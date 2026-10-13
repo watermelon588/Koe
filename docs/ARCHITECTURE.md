@@ -54,6 +54,8 @@ The **agent core** (system prompt, tool registry, approval gate, memory) is writ
 | Events | `backend/koe/events.py` | In-process pub/sub (`asyncio.Queue` per dashboard client) → `/ws/events` |
 | Evals | `backend/evals/` | Scripted requests → agent (text mode) → score tool choice, args, end state, latency |
 | Frontend | `frontend/src/` | Call panel (mic capture via AudioWorklet, playback queue), mascot, dashboard panels |
+| Notion workspace | `notion_api.py`, `notion_service.py`, `frontend/src/notion/` | Authenticated source-scoped reads, additive schema setup, approved create/update/trash and persisted activity. UI proposals reuse the agent gate in a stable owner-scoped conversation, independently of chat/calls. |
+| Optional text fallback | `text_fallback.py` | Existing httpx calls OpenRouter free models only after an initial Gemini 429/503, before tools execute. Same registry/gate; no replay or voice fallback. |
 
 ## 3. Flow A: live web call (the latency-critical path)
 ```
@@ -127,6 +129,20 @@ Koe (声)/
     └── src/  App.tsx  call/ (audio worklet, ws client)  mascot/  panels/
 ```
 Keep it flat. Split a file only when it passes about 400 lines, and log the split.
+
+## Notion workspace flow
+
+Home/Chat/Notion/Settings navigation persists. The root owns the call hook and keeps the CallPanel mounted while changing pages; a compact strip exposes mute/end/return off Home. Notion lists and previews call `/api/notion/*` directly and remain usable without an LLM. Service tokens remain backend-only; the browser supplies its existing Koe access token.
+
+New/edit/trash → `agent.prepare_write` normalizes all values and fixes the destination → Neon durable proposal → full browser/model preview → explicit decision → atomic claim → scoped Notion operation → persisted outcome. The browser receives display fields, never stored execution args. Page parent and revision are rechecked before edits/trash. Creates carry the approval UUID in `Koe action ID`; uncertain writes never auto-retry. Notes are appended, not replaced. Daily logs retain their existing own-log exception and dedupe within daily-log records, independently of tasks/meetings. Calendar booking remains a separate approved tool.
+
+Notion preview is bounded to 500 top-level blocks. Cross-client revision checks and separate metadata/block requests cannot provide a transactional Notion edit; partial or uncertain results require inspection. One backend worker remains required. Scope and acceptance: [NOTION_PLAN.md](NOTION_PLAN.md).
+
+## Calendar and Sheets call work windows
+
+`voice_call.py` sends Google tool start/end display data through `call_work.project`, which whitelists bounded inputs/results and excludes raw execution args and credentials. The exact stored proposal supplies pending/progress/result details. `useCall` feeds these frames to `call/workState.ts`; the existing CallPanel automatically selects Calendar or Sheets on each relevant event. It retains separate service views for this call and resets them for a new call. Manual tabs can return to transcript or Day without affecting audio.
+
+`WorkPanel.tsx` renders a timezone-aware day timeline (events/free windows/proposed or confirmed slot) and a Sheets hours-row preview with the confirmed row/range. Confirmed Calendar writes invalidate the earlier free windows; moves remove the old occurrence from the displayed snapshot. No iframe, additional Google request, new tool or dependency is needed. Normalized data goes through the existing approval gate; the UI shows saving while the application checks a decision and saved only after an executed outcome. Partial/uncertain failures retain an inspect-before-retry message. The projection caps Calendar rows at 100 and explicitly marks truncation. This is a view of the latest tool result, not a continuously synchronized Google client.
 
 ## 8. Deployment
 | Stage | Backend | Frontend | Public URL for webhooks |

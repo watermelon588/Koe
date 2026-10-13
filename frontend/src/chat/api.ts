@@ -23,6 +23,7 @@ export function savedToken(): string {
 export function saveToken(token: string): boolean {
   try {
     localStorage.setItem(KEY, token.trim())
+    dispatchEvent(new Event('koe-auth-change'))
     return true
   } catch {
     return false

@@ -20,6 +20,13 @@ export function ChatPage({ model }: { model: MascotId }) {
   const [recording, setRecording] = useState<{ finish: () => Blob; cancel: () => void; started: number } | null>(null)
   const [now, setNow] = useState(Date.now)
   const thread = useRef<HTMLOListElement>(null)
+  const mounted = useRef(true)
+  const activeRecording = useRef(recording)
+  useEffect(() => { activeRecording.current = recording }, [recording])
+  useEffect(() => {
+    mounted.current = true
+    return () => { mounted.current = false; activeRecording.current?.cancel() }
+  }, [])
   const lastId = messages.filter((m) => !m.sending).at(-1)?.id ?? 0
 
   const fail = useCallback((e: unknown) => {
@@ -91,7 +98,11 @@ export function ChatPage({ model }: { model: MascotId }) {
   async function startRecording() {
     setError('')
     try {
-      setRecording({ ...(await record()), started: Date.now() })
+      const session = await record()
+      if (!mounted.current) { session.cancel(); return }
+      const active = { ...session, started: Date.now() }
+      activeRecording.current = active
+      setRecording(active)
       setNow(Date.now())
     } catch (e) {
       setError(`Microphone: ${e instanceof Error ? e.message : e}`)

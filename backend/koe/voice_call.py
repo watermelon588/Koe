@@ -26,7 +26,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from google import genai
 from google.genai import errors, types
 
-from koe import agent, auth, events, identity, store, usage
+from koe import agent, auth, events, identity, store, usage, call_work
 
 router = APIRouter()
 log = logging.getLogger("uvicorn.error")
@@ -101,9 +101,17 @@ async def _save_activity(state: CallState):
 
 
 async def _approval_result(ws: WebSocket, state: CallState, approve: bool, action_id: str | None = None) -> dict:
+    pending = state.context.pending
+    work = (call_work.project(pending['tool'], pending['args_json'], action_id=pending['id'])
+            if pending and (action_id is None or action_id == pending['id']) else None)
+    if work and approve and state.context.approval_ready and not state.context.resolving:
+        await ws.send_json({'type': 'approval_progress', 'work': work, 'action_id': pending['id']})
     result = await agent.confirm(state.context, approve, action_id)
     remaining = state.context.pending
+    if work:
+        work = call_work.project(pending['tool'], pending['args_json'], result, pending['id'])
     await ws.send_json({"type": "approval_result", **result,
+                       **({'work': work} if work else {}),
                        "pending_action": {k: remaining[k] for k in ("id", "summary", "expires_ts")} if remaining else None})
     return result
 
@@ -235,14 +243,20 @@ async def _run_tools(ws: WebSocket, session, calls, state: CallState):
     ponytail: runs them one after another; gather() them if Gemini starts asking for several at once."""
     responses = []
     for fc in calls:
-        await ws.send_json({"type": "tool", "name": fc.name, "phase": "start"})
+        work = call_work.project(fc.name, fc.args)
+        extra = {'work': work, 'operation_id': fc.id} if work else {}
+        await ws.send_json({"type": "tool", "name": fc.name, "phase": "start", **extra})
         t = time.perf_counter()
         result = await agent.run_tool(fc.name, fc.args, context=state.context)
         ms, ok = round((time.perf_counter() - t) * 1000), "error" not in result
         log.info("tool %s(%s) %d ms ok=%s", fc.name, fc.args or "", ms, ok)
-        await ws.send_json({"type": "tool", "name": fc.name, "phase": "end", "ms": ms, "ok": ok})
+        if work:
+            extra['work'] = call_work.project(fc.name, fc.args, result)
+        await ws.send_json({"type": "tool", "name": fc.name, "phase": "end", "ms": ms, "ok": ok, **extra})
         if "pending_action" in result:
-            await ws.send_json({"type": "approval_pending", **result["pending_action"]})
+            pending = state.context.pending
+            preview = call_work.project(pending['tool'], pending['args_json'], action_id=pending['id']) if pending else None
+            await ws.send_json({"type": "approval_pending", **result["pending_action"], **({'work': preview} if preview else {})})
         responses.append(types.FunctionResponse(id=fc.id, name=fc.name, response=result))
     await session.send_tool_response(function_responses=responses)
 

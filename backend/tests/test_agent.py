@@ -50,6 +50,6 @@ def test_no_merge_tool_exists():
 
 
 def test_phase4_tool_count_and_write_policy():
-    assert len(agent.TOOLS) == 10
+    assert len(agent.TOOLS) == 13
     assert {name for name, t in agent.TOOLS.items() if t.needs_approval} == {
-        'calendar_upsert_event', 'github_comment', 'sheets_log_hours'}
+        'calendar_upsert_event', 'github_comment', 'sheets_log_hours', 'notion_save', 'notion_archive'}

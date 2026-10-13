@@ -128,7 +128,7 @@ def test_settings_representation_omits_backend_credentials():
 
     values = {name: f"private-{name}" for name in (
         "gemini_api_key", "github_token", "github_webhook_secret", "notion_token",
-        "whatsapp_token", "whatsapp_app_secret", "whatsapp_verify_token", "database_url", "koe_access_token",
+        "whatsapp_token", "whatsapp_app_secret", "whatsapp_verify_token", "database_url", "koe_access_token", "openrouter_api_key",
     )}
     representation = repr(Settings(_env_file=None, **values))
     assert all(secret not in representation for secret in values.values())

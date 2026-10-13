@@ -1,14 +1,16 @@
 import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from 'react'
 import { CalendarBlank, ChatCircle, ChatCircleDots, GearSix, HandWaving, House, Key, Microphone, MicrophoneSlash, Moon, PaperPlaneRight,
-  Phone, PhoneDisconnect, Sun, IconContext } from '@phosphor-icons/react'
+  Phone, PhoneDisconnect, Sun, IconContext, Notebook, Table } from '@phosphor-icons/react'
+import { WorkPanel } from './call/WorkPanel'
 import { moodOf, useCall, type Line } from './call/useCall'
 import { MascotView, type MascotController } from './mascot/MascotView'
 import { mascotProfile, savedMascot, saveMascot } from './mascot/catalog'
 import { SettingsPage } from './settings/SettingsPage'
 import { ChatPage } from './chat/ChatPage'
 import { InstallPage } from './install/InstallPage'
-import { savedToken } from './chat/api'
+import { savedToken, saveToken } from './chat/api'
 import { SESSION } from './session'
+import { NotionPage } from './notion/NotionPage'
 import { Dashboard } from './dashboard/Dashboard'
 import { useDashboard } from './dashboard/useDashboard'
 
@@ -29,9 +31,9 @@ function savedTheme(): Theme {
     return 'dark' // storage can be blocked (private mode); dark is the default anyway
   }
 }
-type Page = 'home' | 'chat' | 'settings' | 'install'
+type Page = 'home' | 'chat' | 'settings' | 'install' | 'notion'
 const pageOf = (hash: string): Page =>
-  hash === '#settings' ? 'settings' : hash === '#chat' ? 'chat' : hash === '#install' ? 'install' : 'home'
+  hash === '#settings' ? 'settings' : hash === '#chat' ? 'chat' : hash === '#install' ? 'install' : hash === '#notion' ? 'notion' : 'home'
 
 function greeting() {
   const h = new Date().getHours()
@@ -51,16 +53,18 @@ export default function App() {
   const x = wide ? PLACE[inCall ? 'call' : 'home'] : 0.5
   useEffect(() => {
     function navigate() {
-      if (inCall) {
-        history.replaceState(null, '', `${location.pathname}${location.search}#home`)
-        return
-      }
       setPage(pageOf(location.hash))
       scrollTo({ top: 0 })
     }
     addEventListener('hashchange', navigate)
     return () => removeEventListener('hashchange', navigate)
   }, [inCall])
+
+  useEffect(() => {
+    const sync = () => setAccessToken(savedToken())
+    addEventListener('koe-auth-change', sync)
+    return () => removeEventListener('koe-auth-change', sync)
+  }, [])
 
   useEffect(() => { document.getElementById('main-content')?.focus({ preventScroll: true }) }, [page])
   // Signed in with Google: the day loads by itself, no token to type.
@@ -119,15 +123,17 @@ export default function App() {
           koe <span className="jp">声</span>
         </span>
         <nav className="controls" aria-label="Main navigation">
-          <a className="icon-btn" href="#home" aria-label="Home" title="Home" aria-current={page === 'home' ? 'page' : undefined}>
-            <House weight={page === 'home' ? 'fill' : 'light'} />
+          <a className="nav-link" href="#home" aria-label="Home" title="Home" aria-current={page === 'home' ? 'page' : undefined}>
+            <House weight={page === 'home' ? 'fill' : 'light'} /><span>Home</span>
           </a>
-          <a className="icon-btn" href="#chat" aria-label="Chat" title="Chat" aria-current={page === 'chat' ? 'page' : undefined}>
-            <ChatCircleDots weight={page === 'chat' ? 'fill' : 'light'} />
+          <a className="nav-link" href="#chat" aria-label="Chat" title="Chat" aria-current={page === 'chat' ? 'page' : undefined}>
+            <ChatCircleDots weight={page === 'chat' ? 'fill' : 'light'} /><span>Chat</span>
           </a>
-          <a className="icon-btn" href="#settings" aria-label="Settings" aria-current={page === 'settings' ? 'page' : undefined} aria-disabled={inCall}
-            title={inCall ? 'End your call to open Settings' : 'Settings'} onClick={(e) => { if (inCall) e.preventDefault() }}>
-            <GearSix weight={page === 'settings' ? 'fill' : 'light'} />
+          <a className="nav-link" href="#notion" aria-label="Notion" title="Notion" aria-current={page === 'notion' ? 'page' : undefined}>
+            <Notebook weight={page === 'notion' ? 'fill' : 'light'} /><span>Notion</span>
+          </a>
+          <a className="nav-link" href="#settings" aria-label="Settings" aria-current={page === 'settings' ? 'page' : undefined} title="Settings">
+            <GearSix weight={page === 'settings' ? 'fill' : 'light'} /><span>Settings</span>
           </a>
           <span className="bar-divider" aria-hidden="true" />
           <button className="icon-btn" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
@@ -140,7 +146,9 @@ export default function App() {
       {page === 'settings' ? <SettingsPage selected={model} onSelect={(id) => {
         setModel(id)
         return saveMascot(id)
-      }} /> : page === 'chat' ? <ChatPage model={model} /> : page === 'install' ? <InstallPage model={model} /> : <>
+      }} /> : page === 'chat' ? <ChatPage model={model} /> : page === 'notion' ? <NotionPage token={accessToken} onToken={value => {
+        setAccessToken(value); saveToken(value)
+      }} /> : page === 'install' ? <InstallPage model={model} /> : <>
       <main className="home" id="main-content" tabIndex={-1} inert={inCall}>
         <section className="hello">
           <p className="date">{new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })}</p>
@@ -155,7 +163,7 @@ export default function App() {
         </section>
 
         {/* One quiet row until the dashboard is live; it disappears once connected. */}
-        {!dashboard.connected && accessToken !== SESSION && <form className="connect" onSubmit={(e) => { e.preventDefault(); dashboard.connect(accessToken) }}>
+        {!dashboard.connected && accessToken !== SESSION && <form className="connect" onSubmit={(e) => { e.preventDefault(); saveToken(accessToken); dashboard.connect(accessToken) }}>
           <label className="connect-field">
             <Key aria-hidden="true" />
             <input type="password" value={accessToken} onChange={(e) => setAccessToken(e.target.value)}
@@ -168,15 +176,24 @@ export default function App() {
         <Dashboard data={dashboard.data} connected={dashboard.connected} refresh={dashboard.refresh} />
       </main>
 
-      <CallPanel open={inCall} call={call} dashboard={dashboard} />
       </>}
+      <CallPanel open={inCall && page === 'home'} call={call} dashboard={dashboard} />
+      {inCall && page !== 'home' && <aside className="workspace-call" aria-label="Active Koe call">
+        <span className="dot" aria-hidden="true" /><span>{call.approval ? 'Your call has a pending approval' : `Koe · ${STATUS[call.state]}`}</span>
+        <a className="soft" href="#home">Return to call</a>
+        <button className="ghost" aria-pressed={call.muted} onClick={call.toggleMute}>{call.muted ? 'Unmute' : 'Mute'}</button>
+        <button className="end" onClick={call.stop}>End call</button>
+      </aside>}
     </div>
     </IconContext.Provider>
   )
 }
 
-function CallPanel({ open, call, dashboard }: { open: boolean; call: ReturnType<typeof useCall>; dashboard: ReturnType<typeof useDashboard> }) {
-  const [tab, setTab] = useState<'chat' | 'day'>('chat')
+export function CallPanel({ open, call, dashboard }: { open: boolean; call: ReturnType<typeof useCall>; dashboard: ReturnType<typeof useDashboard> }) {
+  type View = 'chat' | 'day' | 'calendar' | 'sheets'
+  const [chosen, setChosen] = useState<{ view: View; revision: number }>({ view: 'chat', revision: -1 })
+  const tab = chosen.revision === call.workspace.revision ? chosen.view : call.workspace.active || 'chat'
+  const setTab = (view: View) => setChosen({ view, revision: call.workspace.revision })
   const [clock, setClock] = useState(Date.now)
   useEffect(() => { if (!open) return; const timer = setInterval(() => setClock(Date.now()), 1000); return () => clearInterval(timer) }, [open])
   const expired = !!call.approval && new Date(call.approval.expires_ts).getTime() <= clock
@@ -206,9 +223,11 @@ function CallPanel({ open, call, dashboard }: { open: boolean; call: ReturnType<
         <div className="seg" role="group" aria-label="Call view">
           <button aria-pressed={tab === 'chat'} onClick={() => setTab('chat')}><ChatCircle size={15} />Chat</button>
           <button aria-pressed={tab === 'day'} onClick={() => setTab('day')}><CalendarBlank size={15} />Day</button>
+          <button aria-pressed={tab === 'calendar'} onClick={() => setTab('calendar')}><CalendarBlank size={15} />Calendar</button>
+          <button aria-pressed={tab === 'sheets'} onClick={() => setTab('sheets')}><Table size={15} />Sheets</button>
         </div>
       </div>
-      {tab === 'day' ? <div className="panel-day"><Dashboard data={dashboard.data} connected={dashboard.connected}
+      {tab === 'calendar' || tab === 'sheets' ? <WorkPanel service={tab} card={call.workspace[tab]} /> : tab === 'day' ? <div className="panel-day"><Dashboard data={dashboard.data} connected={dashboard.connected}
         currentApproval={call.approval} decide={call.decide} refresh={dashboard.refresh} /></div> : <ol className="transcript" ref={list} aria-live="polite">
         {call.lines.length === 0 && <li className="empty">Say hi, or type below.</li>}
         {call.lines.map((l: Line) => (
@@ -222,11 +241,13 @@ function CallPanel({ open, call, dashboard }: { open: boolean; call: ReturnType<
       <form className="composer" onSubmit={submit}>
         {call.approval && (
           <div className="approval-card" role="status">
+            <div className="approval-copy">
             <p>{call.approval.summary}</p>
             <small>{expired ? 'Expired. Ask Koe to propose it again.' : `Expires ${new Date(call.approval.expires_ts).toLocaleTimeString()}. Say yes/no or choose below.`}</small>
+            </div>
             <div className="pair">
-              <button className="ghost" type="button" disabled={expired} onClick={() => call.decide(false)}>Cancel</button>
-              <button className="soft" type="button" disabled={expired} onClick={() => call.decide(true)}>Confirm</button>
+              <button className="ghost" type="button" disabled={expired || call.deciding} onClick={() => call.decide(false)}>Cancel</button>
+              <button className="soft" type="button" disabled={expired || call.deciding} onClick={() => call.decide(true)}>{call.deciding ? 'Checking…' : 'Confirm'}</button>
             </div>
           </div>
         )}

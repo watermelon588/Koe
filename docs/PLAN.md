@@ -12,7 +12,7 @@
 
 > **Phase 5 conversation built (2026-10-13).** WhatsApp text and voice notes run through the shared text agent and get replies; proposals carry Confirm/Cancel buttons; latency stages are logged. Verified with a faked Meta API plus real Gemini (transcription and replies). Real sending still waits on Meta business verification.
 
-> **Phase 4 implementation built (2026-10-13).** PR summaries, shipped history, Notion daily log, approved PR comments and approved Sheets entries are implemented and tested with fake APIs. Live acceptance remains pending; credentials can be added later using [PHASE4_SETUP.md](PHASE4_SETUP.md).
+> **Phase 4 implementation built (2026-10-13).** PR summaries, shipped history, Notion daily log, approved PR comments and approved Sheets entries are implemented and tested with fake APIs. The expanded Notion workspace now also supports tasks, notes and meeting records, with real Notion/Neon acceptance passed using temporary records. Live Gemini selection returned 503; other account acceptance remains separate. Coverage: [NOTION_PLAN.md](NOTION_PLAN.md). Setup: [PHASE4_SETUP.md](PHASE4_SETUP.md).
 
 ## Overview
 | Phase | Week | Goal | Demo when done |

@@ -35,6 +35,8 @@ class Settings(BaseSettings):
     working_hours_start: str = "09:00"
     working_hours_end: str = "21:00"
     gemini_text_model: str = "gemini-3.8-flash"
+    openrouter_api_key: str = Field(default="", repr=False)
+    openrouter_model: str = 'openrouter/free'  # free-only optional text fallback; voice still Gemini
     # Web Push asks every sender for a contact (mailto: or https:), shown only to push services.
     koe_push_contact: str = "mailto:koe@example.com"
     # The push identity (base64url private key, from scripts.vapid_key). Set it on hosts whose disk is wiped

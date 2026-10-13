@@ -87,3 +87,9 @@ Links behind the claims in these docs, gathered 2026-10-03 to 2026-10-12. Many a
 - [Psycopg concurrency](https://www.psycopg.org/psycopg3/docs/advanced/async.html): async/event-loop considerations; Koe uses worker threads for Windows compatibility.
 - [OWASP session management](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html): HttpOnly, Secure, SameSite and session expiry.
 - [OWASP CSRF prevention](https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html): protect authenticated mutations.
+
+## Notion workspace and optional text fallback (2026-10-13)
+- Notion [filter entries](https://developers.notion.com/reference/filter-data-source-entries): compounds allow at most two nesting levels; distribute Date into type/legacy-title branches to keep daily logs separate from other records.
+- Notion [update data source](https://developers.notion.com/reference/update-a-data-source), [update page](https://developers.notion.com/reference/patch-page), [retrieve blocks](https://developers.notion.com/reference/get-block-children): additive schema, reversible trash and paginated preview. Existing properties and body blocks are retained.
+- OpenRouter [free router](https://openrouter.ai/docs/guides/routing/routers/free-router) and [tool calling](https://openrouter.ai/docs/guides/features/tool-calling): optional free text inference using the existing tool loop. Free routing still has quotas and is not a voice transport.
+- OpenRouter [provider logging](https://openrouter.ai/docs/guides/privacy/provider-logging): retention varies by provider; optional fallback processing is disclosed in the public privacy page.

@@ -60,7 +60,7 @@
 .device .ghost, .device .soft { height: 34px; padding: 0 14px; font-size: 13px; flex-shrink: 0; }
 .device .token-row input { height: 36px; }
 
-.app[data-page='chat'] .bar { display: none; } /* the chat has its own header */
+.app[data-page='chat'] .chat-page { margin-top: 82px; height: calc(100dvh - 82px); }
 @media (prefers-reduced-motion: reduce) {
   .msg, .typing i, .rec-dot { animation: none; }
 }

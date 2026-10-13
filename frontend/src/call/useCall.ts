@@ -4,6 +4,7 @@ import { startMic } from './mic'
 import { createPlayer } from './player'
 import type { createMascot, Mood } from '../mascot/mascot'
 import { wsUrl } from '../backend'
+import { emptyWork, reduceWork } from './workState'
 
 // One live call over /ws/call: mic up, Koe's voice down, plus the chat transcript, typed messages,
 // mute, and the mascot's moods. Wire format: SPEC §2 "/ws/call wire format".
@@ -20,6 +21,8 @@ const TOOL_LABEL: Record<string, string> = {
   github_shipped: 'Looking at what you shipped',
   calendar_list: 'Checking your calendar',
   calendar_find_free: 'Looking for a free slot',
+  calendar_upsert_event: 'Preparing your Calendar change',
+  sheets_log_hours: 'Preparing your Sheets row',
 }
 export const moodOf = (s: CallState): Mood => (s === 'thinking' ? 'thinking' : s === 'idle' || s === 'connecting' ? 'idle' : 'listening')
 
@@ -38,6 +41,8 @@ export function useCall(mascot: { current: Mascot | null }) {
   const [latency, setLatency] = useState<number | null>(null)
   const [muted, setMuted] = useState(false)
   const [approval, setApproval] = useState<Approval | null>(null)
+  const [workspace, setWorkspace] = useState(emptyWork)
+  const [deciding, setDeciding] = useState(false)
   const stateRef = useRef<CallState>('idle')
   const mutedRef = useRef(false)
   const analyser = useRef<AnalyserNode | null>(null) // Koe's voice, for the mascot's mouth
@@ -55,6 +60,8 @@ export function useCall(mascot: { current: Mascot | null }) {
     setLines([])
     setLatency(null)
     setApproval(null)
+    setDeciding(false)
+    setWorkspace(old => ({ ...emptyWork, revision: old.revision + 1 }))
     const player = createPlayer() // created on the click: browsers only allow audio after a user gesture
     analyser.current = player.analyser
     mascot.current?.listen(player.analyser)
@@ -64,6 +71,7 @@ export function useCall(mascot: { current: Mascot | null }) {
     let stopMic = () => {}
     let failed = ''
     let tools = 0 // tools running right now
+    let decisionRunning = false
     let loudAt = 0
     const buf = new Float32Array(2048)
     // Speaking = Koe's audio is loud right now (held 0.4 s so pauses between words don't flicker).
@@ -73,7 +81,7 @@ export function useCall(mascot: { current: Mascot | null }) {
       let sum = 0
       for (const s of buf) sum += s * s
       if (Math.sqrt(sum / buf.length) > 0.01) loudAt = performance.now()
-      const next = performance.now() - loudAt < 400 ? 'speaking' : tools > 0 ? 'thinking' : 'listening'
+      const next = performance.now() - loudAt < 400 ? 'speaking' : tools > 0 || decisionRunning ? 'thinking' : 'listening'
       if (next !== stateRef.current) setState(next)
     }, 100)
     const stop = () => {
@@ -88,6 +96,7 @@ export function useCall(mascot: { current: Mascot | null }) {
       setLines(closeAll)
       setState('idle')
       setApproval(null)
+      setDeciding(false)
     }
     live.current = { ws, stop }
 
@@ -95,6 +104,7 @@ export function useCall(mascot: { current: Mascot | null }) {
     ws.onmessage = (e) => {
       if (typeof e.data !== 'string') return player.play(e.data)
       const msg = JSON.parse(e.data)
+      setWorkspace(old => reduceWork(old, msg))
       if (msg.type === 'interrupted') {
         player.flush()
         setLines(closeAll)
@@ -104,12 +114,15 @@ export function useCall(mascot: { current: Mascot | null }) {
       if (msg.type === 'turn_complete') setLines(closeAll)
       if (msg.type === 'approval_pending') setApproval({ id: msg.id, summary: msg.summary, expires_ts: msg.expires_ts })
       if (msg.type === 'approval_result') {
+        decisionRunning = false
+        setDeciding(false)
         setApproval(msg.pending_action ?? null)
         const text = msg.error ? `${msg.error.message} ${msg.error.hint ?? ''}`
           : msg.status === 'executed' ? `Saved: ${msg.title ?? 'Approved action'}` : 'Cancelled. Nothing was changed.'
         setLines((ls) => add(ls, 'tool', text, false))
         mascot.current?.react(msg.status === 'executed' ? 'happy' : msg.error ? 'sad' : 'happy')
       }
+      if (msg.type === 'approval_progress') { decisionRunning = true; setDeciding(true) }
       if (msg.type === 'tool' && msg.phase === 'start') {
         tools++
         setLines((ls) => add(ls, 'tool', TOOL_LABEL[msg.name] ?? `Using ${msg.name}`, false))
@@ -158,11 +171,12 @@ export function useCall(mascot: { current: Mascot | null }) {
 
   function decide(approve: boolean) {
     const ws = live.current?.ws
-    if (!approval || !ws || ws.readyState !== WebSocket.OPEN) return
+    if (!approval || deciding || !ws || ws.readyState !== WebSocket.OPEN) return
+    setDeciding(true)
     ws.send(JSON.stringify({ type: 'approval', action_id: approval.id, approve }))
   }
 
   useEffect(() => () => live.current?.stop(), []) // leaving the page ends the call
 
-  return { state, lines, error, latency, muted, approval, analyser, start, stop: () => live.current?.stop(), send, toggleMute, decide }
+  return { state, lines, error, latency, muted, approval, deciding, workspace, analyser, start, stop: () => live.current?.stop(), send, toggleMute, decide }
 }

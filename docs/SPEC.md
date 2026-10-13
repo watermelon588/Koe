@@ -42,6 +42,13 @@ A single-user, voice-first agent for a developer founder. It works across GitHub
 - **Close codes:** normal hang-up = 1000. `1011` with a `reason` such as `"Gemini error: …"` = the call failed; show the reason.
 - Unknown event types must be ignored (more come in Phase 3: dashboard events on `/ws/events`).
 
+### Calendar and Sheets work during calls (2026-10-13)
+- The mascot's existing call panel automatically opens Calendar or Sheets when that call actually invokes its tool. Chat/Day remain accessible, with Calendar/Sheets tabs retaining each service's latest work for this call. No keyword guessing or simulated task progress.
+- Calendar shows returned events/free windows on a day timeline, the proposed booking as pending, and the confirmed booking only after an executed approval result. Show date/timezone, attendees and authoritative errors/conflicts. Sheets shows the exact proposed hours row and destination, then the confirmed row number/range and provider link. Existing tools and approval rules remain unchanged.
+- Google tool events carry `operation_id` and a bounded `work` display projection. Approval pending/progress/result carry the original stored proposal's display projection and action ID. No OAuth tokens, credentials or arbitrary execution payloads are sent. Google links are HTTPS and host-validated.
+- Confirm/Cancel still use the call action-ID control or explicit spoken yes/no. Pending slots/rows never appear saved. Saving means a decision is being checked. Errors explain uncertain outcomes. Panels clear on a new call and never trigger additional Google operations themselves.
+- Desktop keeps the mascot alongside the work window; mobile uses the call sheet. Respect reduced motion and retain transcript, composer, mute/end and approval controls. Verify synthetic WebSocket sequences and browser layout; do not book real meetings or append real rows for UI testing.
+
 **Allowed WhatsApp senders:** only numbers in `ALLOWED_WHATSAPP_NUMBERS` (env). Everything else is ignored and logged.
 
 ### `/ws/events` dashboard protocol (Phase 3)
@@ -52,7 +59,7 @@ A single-user, voice-first agent for a developer founder. It works across GitHub
 - Dashboard approvals are informational outside their original conversation. Approve/Reject in the live call's dashboard view sends the existing `/ws/call` action-ID control; the events socket cannot authorize writes or approve another conversation's proposal. Expired cards are disabled locally and remain subject to the database expiry check.
 - During calls a Day/Chat switch keeps the dashboard accessible alongside the current call controls. The existing audio-driven mascot states remain on `/ws/call`; dashboard alerts can trigger a brief reaction only when idle.
 
-## 3. Tools (the agent's whole surface: 10 tools)
+## 3. Tools (the agent's whole surface: 13 tools)
 All tools live in one registry and are shared by both channels. Each tool returns JSON. On failure it returns `{"error": {"code", "message", "hint"}}` instead of raising, so the model can recover.
 
 | # | Tool | Args | Returns | Write? |
@@ -66,8 +73,12 @@ All tools live in one registry and are shared by both channels. Each tool return
 | 7 | `calendar_upsert_event` | `title, start, end, attendees?, event_id?` (create or move) | Event link | **write: approval** |
 | 8 | `notion_log` | `date, entries[]` | Notion page URL (daily dev log) | write (low-risk: own log, no approval) |
 | 9 | `sheets_log_hours` | `date, client, hours, note` | Row number | **write: approval** |
+| 10 | `calendar_list` | `date` | Events for the date | read |
+| 11 | `notion_read` | `query?, kind?, cursor?, page_id?` | Scoped records or bounded page preview | read |
+| 12 | `notion_save` | `title, date, kind?, status?, body?, end?, page_id?, expected_edited?` | Task/note/meeting record | **write: approval** |
+| 13 | `notion_archive` | `page_id, expected_edited, title` | Reversible Notion trash | **write: approval** |
 
-Also in scope: `calendar_list(date)`, a read tool. **Count: 10 tools max.** Adding one needs the user's approval.
+Also in scope: `calendar_list(date)`, a read tool. The user authorized the Notion workspace expansion on 2026-10-13: `notion_read`, `notion_save` and `notion_archive` extend the registry to 13 tools. See NOTION_PLAN.md. Notion saves tasks/notes/meeting records; Calendar remains the booking authority. Save/archive mutations require explicit approval; the existing own-daily-log exception remains append-only.
 
 Rules baked into the tools (not left to the model):
 - **Timezone:** every time is resolved in `Asia/Kolkata` unless the user says otherwise. Tools take and return ISO-8601 with offset.
@@ -132,7 +143,7 @@ Every turn records timestamps, stored in `activity` and shown on the dashboard:
 
 ## 10. Acceptance criteria (v1 done)
 - [ ] Web call: natural conversation with the mascot. Barge-in works. p50 speech-end → first audio measured and shown.
-- [ ] All 10 tools work by voice on the web and by WhatsApp voice note or text.
+- [ ] All 13 tools work by voice on the web and by supported text/voice-note channels; live provider/channel acceptance remains required.
 - [ ] Approval gate: 0 write actions without approval, proven by tests.
 - [ ] The 4 GitHub alert types arrive on WhatsApp.
 - [ ] Shared memory: the web call can answer "what did I do on WhatsApp today?".

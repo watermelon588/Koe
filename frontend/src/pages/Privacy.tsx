@@ -9,6 +9,7 @@ export function Privacy() {
         <ul>
           <li>Koe uses your data only to answer you and to do what you approve. No ads, no selling data, no analytics or tracking cookies.</li>
           <li>Your conversations are processed by Google’s Gemini AI. On Gemini’s free tier, <b>Google may use that content to improve its products</b>, so don’t say passwords or secrets to Koe.</li>
+          <li>If the owner enables the optional OpenRouter free text fallback, conversation history and tool results may also be processed by OpenRouter and its selected model provider. Their retention policies vary; the fallback is currently optional and requires a server key.</li>
           <li>Koe reads your connected services only when you ask, and changes them only after you confirm (except adding lines to your own Notion daily log).</li>
           <li>You can disconnect a service at any time and ask for your data to be deleted.</li>
         </ul>
@@ -23,7 +24,7 @@ export function Privacy() {
           <dt>Activity log</dt>
           <dd>A record of what you asked, which tools Koe used, what it proposed, what you approved or rejected, and how long each step took. It powers the dashboard and keeps an audit trail of every change.</dd>
           <dt>Connected services</dt>
-          <dd>Only after you connect them: calendar events and free/busy times (Google Calendar); timesheet rows (Google Sheets); pull requests, reviews, CI status and commits in the repositories you choose (GitHub); your daily log pages (Notion). Koe stores the access tokens for these, encrypted, so it can act for you.</dd>
+          <dd>Only after you connect them: calendar events and free/busy times (Google Calendar); timesheet rows (Google Sheets); pull requests, reviews, CI status and commits in the repositories you choose (GitHub); daily logs, tasks, notes and meeting records in your configured Notion database. Service credentials currently live in server configuration or local OAuth files; encrypted per-user connection storage is planned with accounts.</dd>
           <dt>Notifications</dt>
           <dd>If you turn them on, a push address for your device from your browser’s push service (Google or Apple). Koe uses it only to notify you.</dd>
           <dt>On your device</dt>
@@ -39,8 +40,9 @@ export function Privacy() {
       <Section id="processors" title="Who processes your data">
         <ul>
           <li><b>Google (Gemini API):</b> understands and answers your messages, voice notes and calls. Free-tier content may be used by Google to improve its products.</li>
-          <li><b>Render</b> (United States): runs Koe’s server. Voice notes and chat history are stored there.</li>
-          <li><b>Neon</b> (Singapore): Koe’s database, holding the activity log, pending approvals, daily notes, and (with accounts) users, sessions and encrypted connection tokens.</li>
+          <li><b>OpenRouter and its selected provider (optional):</b> process text history and tool results when the owner enables a free backup model and the initial Gemini request is rate limited or unavailable. Review <a href="https://openrouter.ai/docs/guides/privacy/provider-logging" rel="noopener">provider retention policies</a>. This does not replace live voice calls.</li>
+          <li><b>Render</b> (United States): runs Koe’s hosted server.</li>
+          <li><b>Neon</b> (Singapore): Koe’s database, holding chat history, voice notes, push subscriptions, activity, pending approvals and daily notes. Account/session and encrypted per-user connection storage is planned. Local development without Neon uses local storage on the server.</li>
           <li><b>Vercel:</b> serves the website and app.</li>
           <li><b>Google, GitHub, Notion:</b> the services you connect, under their own privacy policies.</li>
           <li><b>Google / Apple push services:</b> deliver notifications.</li>
@@ -48,12 +50,12 @@ export function Privacy() {
       </Section>
 
       <Section id="retention" title="How long it’s kept, and deleting it">
-        <p>Chat history and voice notes are kept until you ask for them to be deleted. Today they are also cleared whenever the server restarts. The activity log is kept so you can see what Koe did. Disconnecting a service deletes Koe’s token for it straight away. You can also revoke access from the service’s own settings: <a href="https://myaccount.google.com/permissions" rel="noopener">Google</a>, <a href="https://github.com/settings/applications" rel="noopener">GitHub</a>, or Notion’s connections settings.</p>
+        <p>Chat history and voice notes are kept until you ask for them to be deleted and survive server restarts when Neon is configured. The activity log is kept so you can see what Koe did. Today, ask the owner to remove a server connection credential. You can also revoke access from the service’s own settings: <a href="https://myaccount.google.com/permissions" rel="noopener">Google</a>, <a href="https://github.com/settings/applications" rel="noopener">GitHub</a>, or Notion’s connections settings.</p>
         <p>To see, export or delete everything Koe holds about you, <a href={CONTACT_URL} rel="noopener">contact the owner</a> or the person who invited you. It will be done within 30 days.</p>
       </Section>
 
       <Section id="security" title="Security">
-        <p>Everything travels over HTTPS. Service tokens stay on the server, encrypted, and never reach your browser. Every request needs your sign-in. Koe is a small personal project, not a company, so please don’t use it for sensitive work data.</p>
+        <p>Hosted traffic travels over HTTPS. Service tokens stay on the server and never reach your browser. Private API requests require the device access token today; Google sign-in is planned. Koe is a small personal project, not a company, so please don’t use it for sensitive work data.</p>
       </Section>
 
       <Section id="children" title="Children">

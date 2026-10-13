@@ -10,6 +10,7 @@ from uuid import UUID
 import httpx
 
 from koe.config import settings
+from koe import notion_service
 from koe.tools.github import _error
 
 # One backend worker; serialize query/create/append to avoid concurrent duplicate daily pages.
@@ -59,8 +60,16 @@ async def notion_log(date: str, entries: list[str]) -> dict:
             titles = [name for name, prop in properties.items() if prop.get('type') == 'title']
             if len(titles) != 1 or properties.get('Date', {}).get('type') != 'date':
                 raise ValueError('Notion data source needs one title property and a Date property of type date.')
+            daily_title = {'property': titles[0], 'title': {'equals': f'Koe — {date}'}}
+            day_filter = {'property': 'Date', 'date': {'equals': date}}
+            # Notion permits only two compound-filter levels: distribute the date
+            # into each OR branch, rather than nesting AND -> OR -> AND.
+            daily_filter = ({'or': [
+                {'and': [day_filter, {'property': 'Koe type', 'select': {'equals': 'Daily log'}}]},
+                {'and': [day_filter, {'property': 'Koe type', 'select': {'is_empty': True}}, daily_title]},
+            ]} if properties.get('Koe type', {}).get('type') == 'select' else {'and': [day_filter, daily_title]})
             found = await call('POST', f'/data_sources/{source_id}/query', json={
-                'filter': {'property': 'Date', 'date': {'equals': date}}, 'page_size': 2})
+                'filter': daily_filter, 'page_size': 2})
             pages = found.get('results')
             if (not isinstance(pages, list) or type(found.get('has_more')) is not bool or len(pages) > 1
                     or found['has_more'] or found.get('request_status', {}).get('type', 'complete') != 'complete'):
@@ -68,7 +77,9 @@ async def notion_log(date: str, entries: list[str]) -> dict:
             if not pages:
                 page = await call('POST', '/pages', json={'parent': {'type': 'data_source_id', 'data_source_id': source_id},
                     'properties': {titles[0]: {'title': [{'type': 'text', 'text': {'content': f'Koe — {date}'}}]},
-                                   'Date': {'date': {'start': date}}}, 'children': [bullet(e) for e in entries]})
+                                   'Date': {'date': {'start': date}},
+                                   **({'Koe type': {'select': {'name': 'Daily log'}}} if 'Koe type' in properties else {})},
+                    'children': [bullet(e) for e in entries]})
                 return {'page_id': page['id'], 'url': page['url'], 'added': len(entries), 'date': date}
             page = pages[0]
             page_id = uuid(page['id'])
@@ -99,3 +110,28 @@ async def notion_log(date: str, entries: list[str]) -> dict:
     except (httpx.HTTPError, KeyError):
         return _error('notion_failed', 'Notion did not confirm the daily log operation.',
                       'Check the daily page before retrying; no automatic write retry was made.')
+
+
+async def notion_read(query: str = '', kind: str = '', cursor: str = '', page_id: str = '') -> dict:
+    try:
+        return await notion_service.read(query, kind, cursor, page_id)
+    except notion_service.NotionError as exc:
+        return exc.result()
+
+
+async def notion_save(*, request_id: str, **args) -> dict:
+    try:
+        result = await notion_service.save(**args, request_id=request_id)
+        result['record_status'] = result.pop('status', None)
+        return result
+    except notion_service.NotionError as exc:
+        return exc.result()
+
+
+async def notion_archive(*, request_id: str, **args) -> dict:
+    try:
+        result = await notion_service.archive(**args, request_id=request_id)
+        result['record_status'] = result.pop('status', None)
+        return result
+    except notion_service.NotionError as exc:
+        return exc.result()

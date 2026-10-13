@@ -8,6 +8,7 @@ const CONTENTS = [
   ['sign-in', 'Sign in'],
   ['connect', 'Connect your tools'],
   ['talk', 'Talk to Koe'],
+  ['notion', 'Notion workspace'],
   ['approvals', 'Approvals: nothing changes without you'],
   ['notifications', 'Notifications'],
   ['troubleshooting', 'If something doesn’t work'],
@@ -71,6 +72,12 @@ export function Guide() {
       <Section id="approvals" title="Approvals: nothing changes without you">
         <p>Reading is automatic. Anything that changes something in another service requires your approval: booking or moving an event, commenting on a PR, adding a timesheet row. Koe shows exactly what it will do, with <b>Confirm</b> and <b>Cancel</b> buttons. In a call, saying “yes” or “no” works too. A proposal expires after 10 minutes.</p>
         <p>The one exception is your own Notion daily log: Koe adds lines to it without asking, and never edits or deletes what is already there. Koe never merges pull requests.</p>
+      </Section>
+
+      <Section id="notion" title="Notion workspace">
+        <p>Open <a href="/#notion">Notion</a> from the app navigation to search your connected database, filter daily logs, tasks, meeting records and notes, and preview a record. You can also ask Koe to read or prepare changes from Chat or a call.</p>
+        <p>Choose <b>New record</b>, enter its details, then <b>Preview change</b>. Read the full preview and choose <b>Confirm change</b> or <b>Cancel</b>. Editing appends additional notes and preserves existing content. Moving a record to trash also asks for confirmation; you can restore it in Notion. The workspace works directly even when the AI service is busy.</p>
+        <p>A meeting record stores notes and a date range. To reserve a slot or invite people, ask Koe to book it in <b>Google Calendar</b>. Saving a Notion record does not book time. Nested and non-text blocks are labeled in the preview; use <b>Open in Notion</b> for the full page.</p>
       </Section>
 
       <Section id="notifications" title="Notifications">

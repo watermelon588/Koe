@@ -144,3 +144,49 @@ async def check_connection() -> None:
             raise StoreError("Neon connection/schema check failed; check DATABASE_URL and run the migration.") from None
 
     await asyncio.to_thread(read)
+
+
+async def pending_for_session(session: str) -> dict | None:
+    """Private server-side hydration, including execution args; never return this row to the browser."""
+    if not configured():
+        return None
+    options, owner = connection_options(), identity.owner_id()
+
+    def read():
+        try:
+            with psycopg.connect(**options) as con:
+                con.execute('SET LOCAL statement_timeout = 10000')
+                row = con.execute("""SELECT to_jsonb(p) FROM public.koe_pending_actions p
+                    WHERE owner_id=%s AND session_id=%s AND status='pending'
+                    AND expires_ts > now() ORDER BY created_ts DESC LIMIT 1""", (owner, session)).fetchone()
+                return row[0] if row else None
+        except psycopg.Error:
+            raise StoreError('Pending Notion approval could not be loaded. Check Neon.') from None
+
+    return await asyncio.to_thread(read)
+
+
+async def notion_activity() -> list[dict]:
+    """Display-only Notion audit history; never return stored arguments or result payloads."""
+    if not configured():
+        return []
+    options, owner = connection_options(), identity.owner_id()
+
+    def read():
+        try:
+            with psycopg.connect(**options) as con:
+                con.execute('SET LOCAL statement_timeout = 10000')
+                rows = con.execute("""SELECT to_jsonb(display) FROM (
+                    SELECT a.id,a.ts,a.kind,a.summary,p.tool
+                    FROM public.koe_activity a LEFT JOIN public.koe_pending_actions p
+                      ON p.owner_id=a.owner_id AND p.id::text=a.payload_json->>'action_id'
+                    WHERE a.owner_id=%s AND (
+                      (a.kind='tool' AND a.summary IN ('notion_read','notion_log','notion_save','notion_archive','notion_setup'))
+                      OR p.tool IN ('notion_save','notion_archive'))
+                    ORDER BY a.ts DESC LIMIT 20
+                ) display""", (owner,)).fetchall()
+                return [row[0] for row in rows]
+        except psycopg.Error:
+            raise StoreError('Notion activity is unavailable. Check Neon connectivity.') from None
+
+    return await asyncio.to_thread(read)

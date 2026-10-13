@@ -38,7 +38,8 @@ Notion is called with existing `httpx` against the current data sources, pages a
 | Live web voice | **`gemini-3.8-live`** | Speech-to-speech in one model (no separate STT/TTS), streaming, server-side voice activity detection, barge-in, tool calling. Free tier available |
 | WhatsApp voice notes + text | **`gemini-3.8-flash`** (standard API) with audio input | Understands audio directly (no separate transcription step), tool calling, free tier |
 | PR summaries | `gemini-3.8-flash` | Long context for diffs |
-| **Fallback** if Gemini free-tier limits block us | Groq free tier (Whisper STT + gpt-oss LLM) + browser `speechSynthesis` or Gemini TTS | Keeps the project at ₹0 if one provider says no |
+| Optional implemented text fallback | OpenRouter `openrouter/free` or a `:free` model, through existing httpx | Initial Gemini 429/503 only, before tools execute; same approval gate. Inactive until a key is supplied. Free quotas still apply. |
+| Future voice fallback (not implemented) | Groq STT/LLM + browser `speechSynthesis` | Requires a separate measured voice pipeline; current calls use Gemini Live. |
 
 ### Why speech-to-speech instead of an STT → LLM → TTS chain
 A chain waits at each step: speech-to-text, then the LLM, then text-to-speech. Done naively that's 3–5 s. A speech-to-speech model streams audio in and out continuously and starts speaking about 1 s after you stop. That's the core latency decision of this project.
@@ -64,7 +65,7 @@ A chain waits at each step: speech-to-text, then the LLM, then text-to-speech. D
 | Rejected | Why |
 |---|---|
 | **Node/Express for WebSockets** | FastAPI does WebSockets natively. A second server in a second language means two codebases, shared state across processes, and an extra network hop that *adds* latency |
-| **LangGraph / LangChain** | One agent with ≤10 tools; the tool loop is about 30 lines. LangGraph helps long multi-step workflows with checkpoints, which we don't have. It also fits poorly inside a streaming audio session |
+| **LangGraph / LangChain** | One agent with 13 bounded tools and a small explicit tool loop. Durable approvals already live in Neon; no orchestration framework is needed. |
 | **WebRTC / Pipecat (for now)** | A WebSocket to our backend is simpler and good enough. **Plan B** if measured latency or audio quality is bad: Pipecat with SmallWebRTC |
 | **Twilio / phone numbers** | Costs money; no card |
 | **Render free (prod backend)** | Sleeps, wipes disk, loses webhooks (see SERVICES_AND_COSTS). Used **temporarily** since 2026-10-13 until the Azure VM (DECISIONS) |

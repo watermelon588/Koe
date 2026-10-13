@@ -6,7 +6,7 @@ import logging
 from google import genai
 from google.genai import errors, types
 
-from koe import agent, store
+from koe import agent, store, events, text_fallback
 from koe.config import settings
 
 MAX_TOOL_ROUNDS = 8
@@ -42,12 +42,24 @@ async def chat(text: str, history: list, context: agent.Conversation, client: ge
         history.append(types.Content(role="model", parts=[types.Part.from_text(text=reply)]))
         return {"text": reply, "approval_result": result}
     try:
-        for _ in range(MAX_TOOL_ROUNDS):
-            response = await client.aio.models.generate_content(
-                model=settings.gemini_text_model, contents=history,
-                config={"system_instruction": agent.system_prompt(),
-                        "tools": [{"function_declarations": agent.declarations()}],
-                        "automatic_function_calling": {"disable": True}})
+        provider = 'gemini'
+        for round_index in range(MAX_TOOL_ROUNDS):
+            if provider == 'openrouter':
+                response = await text_fallback.generate(history)
+            else:
+                try:
+                    response = await client.aio.models.generate_content(
+                        model=settings.gemini_text_model, contents=history,
+                        config={"system_instruction": agent.system_prompt(),
+                                "tools": [{"function_declarations": agent.declarations()}],
+                                "automatic_function_calling": {"disable": True}})
+                except errors.APIError as exc:
+                    # Only switch before this turn has executed any tools. Never restart/replay a turn.
+                    if round_index != 0 or exc.code not in {429, 503} or not settings.openrouter_api_key:
+                        raise
+                    response = await text_fallback.generate(history)
+                    provider = 'openrouter'
+                    events.publish('model', provider=provider, message='Using the configured free backup text provider.')
             content = response.candidates[0].content if response.candidates else None
             if not content or not content.parts:
                 return _reply("The model returned no answer. Please try again.", context)
@@ -64,6 +76,8 @@ async def chat(text: str, history: list, context: agent.Conversation, client: ge
                 result = await agent.run_tool(fc.name, fc.args, context=context)
                 parts.append(types.Part(function_response=types.FunctionResponse(name=fc.name, id=fc.id, response=result)))
             history.append(types.Content(role="user", parts=parts))
+    except text_fallback.FallbackError:
+        return _reply('Gemini and the free backup text model are unavailable. You can still manage records from the Notion workspace. No tools were replayed.', context)
     except errors.APIError as exc:
         log.warning("model call failed: %s %s", exc.code, exc.status)
         if exc.code in {429, 503}:  # free-tier rate limit or "high demand": temporary, say so

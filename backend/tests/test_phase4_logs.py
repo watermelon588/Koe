@@ -146,3 +146,17 @@ def test_notion_concurrent_identical_entries_create_only_one_page():
         return await asyncio.gather(*(notion.notion_log('2026-10-13', ['Shipped #42']) for _ in range(2)))
     results = asyncio.run(scenario())
     assert writes.call_count == 1 and sorted(r['added'] for r in results) == [0, 1]
+
+
+@respx.mock
+def test_daily_log_filter_excludes_typed_tasks_even_when_they_use_the_legacy_daily_title():
+    respx.get(f'https://api.notion.com/v1/data_sources/{SOURCE}').respond(200, json={
+        'properties': {'Name': {'type': 'title'}, 'Date': {'type': 'date'}, 'Koe type': {'type': 'select'}}})
+    query = respx.post(f'https://api.notion.com/v1/data_sources/{SOURCE}/query').respond(200, json={'results': [], 'has_more': False})
+    respx.post('https://api.notion.com/v1/pages').respond(200, json={'id': PAGE, 'url': 'https://notion.so/log'})
+    result = asyncio.run(notion.notion_log('2026-10-13', ['Shipped #42']))
+    assert 'error' not in result
+    branches = json.loads(query.calls[0].request.content)['filter']['or']
+    assert {'property': 'Koe type', 'select': {'equals': 'Daily log'}} in branches[0]['and']
+    assert {'property': 'Koe type', 'select': {'is_empty': True}} in branches[1]['and']
+    assert all({'property': 'Date', 'date': {'equals': '2026-10-13'}} in branch['and'] for branch in branches)

@@ -10,14 +10,24 @@ Set `GITHUB_TOKEN`, `GITHUB_REPOS=your-name/your-repo` and `GITHUB_LOGIN=your-na
 
 PR summaries use the existing `GEMINI_API_KEY` and `GEMINI_TEXT_MODEL`. They analyze at most 30,000 UTF-8 bytes of source JSON, report omitted patches/truncation and identify the head SHA. Risk notes are AI inferences; they are not test results or a merge decision.
 
-## Notion daily log
+## Notion workspace and daily log
 
-1. Create a database called **Koe Daily Log** with one title column (any name) and a **Date** column of type Date. Keep it for your own log.
+1. Create or use your own Notion database with one title column (any name) and a **Date** column of type Date. It can hold daily logs, tasks, meeting records and notes together.
 2. Create an internal Notion integration/connection with read, insert and update content capabilities. In the database's Connections menu, connect that integration.
 3. Put its token into `NOTION_TOKEN` and database ID into `NOTION_DATABASE_ID`. The ID is the UUID in the database URL; omit URL query parameters.
 4. If the database has several data sources, set `NOTION_DATA_SOURCE_ID` explicitly from the [retrieve database API](https://developers.notion.com/reference/retrieve-a-database) response. Otherwise Koe resolves its single source automatically. Data sources have their own IDs; they are different from database IDs.
 
-Koe queries Date before creating a daily page and appends plain-text bullets. Exact repeats are skipped. It never replaces existing content. Two pages for the same date cause a setup error. Run **one backend worker** so concurrent log requests serialize. After an uncertain timeout, check Notion before asking to write again; external writes cannot share a transaction with Neon. API version: `2026-03-11` ([versioning](https://developers.notion.com/reference/versioning)).
+5. Restart the backend, open **Notion** in the app navigation, and connect this device with your existing Koe access token if needed. Connection diagnostics show access/schema problems. If prompted, **Add missing properties** adds `Koe type` (select), `Koe status` (select), and `Koe action ID` (rich text), plus Date if missing. Existing fields are retained; incompatible types require fixing the schema yourself. This step has already succeeded for the current configured database.
+
+Search/filter records, select one for its notes preview, or choose **New record** → Note/Task/Meeting → **Preview change** → **Confirm change**. Edits append additional notes and preserve existing blocks. Trash also requires a preview and is reversible in Notion. The Recent activity section shows persisted tool/approval outcomes. Pending workspace approvals survive a backend restart and cannot be confirmed by another chat/call.
+
+Meeting records save a start/end range using your browser's local time. They do **not** reserve availability or invite anyone; ask Koe to book in Google Calendar for that. The preview supports top-level text/checklist blocks and labels nested/non-text content, with an **Open in Notion** link for full editing.
+
+Koe queries Date and daily-log type (or the legacy daily-log title) before creating a daily page and appends plain-text bullets. Exact repeats are skipped. Two matching daily-log pages for the same date cause a setup error; tasks on that date do not. Run **one backend worker** so concurrent writes serialize. After an uncertain timeout, inspect Notion before proposing another write; metadata and notes can partially succeed, and external writes cannot share a transaction with Neon. API version: `2026-03-11` ([versioning](https://developers.notion.com/reference/versioning)).
+
+## Optional free text fallback
+
+Gemini remains the default. Later, save `OPENROUTER_API_KEY` in `backend/.env`, optionally set `OPENROUTER_MODEL=openrouter/free` (or a model ending `:free`), and restart the backend. Never put provider keys in frontend variables. On an initial Gemini 429/503, text chat can use that provider with the same tools and approval gate. It never switches providers after tools have started executing. Voice remains Gemini Live; free providers still have quotas. Without the optional key, the Notion workspace still works directly.
 
 ## Google Sheets hours
 
@@ -48,7 +58,8 @@ Restart the backend after changing `.env`. Apply Phase 2's Neon migration and se
 
 - “Summarize PR 42 in your-name/your-repo.”
 - “What did I ship today?” — reads GitHub, then writes the factual Notion daily log; errors/partial history remain visible.
+- “List my Notion tasks.” / “Create a task to review PRs tomorrow.” — reads immediately; creating/updating/trashing waits for your confirmation.
 - “Comment on PR 42 in your-name/your-repo: please add a regression test.” — inspect the full preview, then approve or cancel.
 - “Log 1.25 hours for Client A on 2026-10-13, note: fixed the login race.” — inspect the destination, hours and note, then approve or cancel.
 
-Use your test repository and test spreadsheet for the first checks. PR comments notify real people; approve only an intended comment. The implementation has been verified against fake APIs; real account acceptance remains pending until you connect them.
+Use your test repository and test spreadsheet for the first checks. PR comments notify real people; approve only an intended comment. Notion acceptance passed against the connected real account using temporary records that were moved to trash afterward; GitHub/Sheets account acceptance remains separate. See [NOTION_PLAN.md](NOTION_PLAN.md) for coverage and limits.
