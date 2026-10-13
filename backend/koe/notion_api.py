@@ -14,7 +14,7 @@ router = APIRouter(prefix='/api/notion', dependencies=[Depends(authorized)])
 
 
 class Proposal(BaseModel):
-    tool: Literal['notion_save', 'notion_archive']
+    tool: Literal['notion_save', 'notion_archive', 'notion_add_properties']
     args: dict = Field(default_factory=dict)
 
 

@@ -903,9 +903,6 @@ Each had its own fix. No guessing.
 
 ## Step 56: review boundaries and verify the integration batch (2026-10-13)
 
-### Follow-up phase, 2026-10-14: schema/row slices
-Sheets column creation passed 43 focused tests after nine new failures established the missing behavior. Stable row discovery/editing then passed 52 focused tests after nine more regressions. New edits use unique action IDs, typed row/header versions and Google developer metadata; sparse RAW updates preserve unrequested cells/formulas and tracking IDs. A synthetic move immediately before the value write still edits the correct row. No real Sheets writes, UI edits or Render changes were made. The schema/row contract and known external-editor race limit are in SCHEMA_ROW_EDIT_PLAN.md.
-
 Next phase: approved schema creation and safe Sheets row editing is tracked in [SCHEMA_ROW_EDIT_PLAN.md](SCHEMA_ROW_EDIT_PLAN.md), requested 2026-10-14. Render deployment is handled by the user.
 **Files:** GitHub history/statistics, Sheets/Notion validators, shared declaration, regression tests and integration docs.
 
@@ -920,3 +917,16 @@ Next phase: approved schema creation and safe Sheets row editing is tracked in [
 **Try it yourself:** Follow the examples and feature statuses in DETERMINISTIC_FEATURES.md. New code is saved in local commits; GitHub publication and hosting are separate from this implementation request. The current running processes were left undisturbed.
 
 **Interview line:** "I put evidence coverage and latency budgets into the backend contract, then verified both failure boundaries and complete approved writes without consuming model quota."
+
+## Step 57: approved columns/properties and stable row edits (2026-10-14)
+**Files:** new tools/sheet_workspace.py, new notion_schema.py; Sheets locking, Notion tool wrapper/API proposal type, agent registry/preparation; new HTTP-boundary tests and SCHEMA_ROW_EDIT_PLAN.md.
+
+**What it does:** Three separate approved writers add optional Sheets columns, edit one identified existing row, and add typed Notion properties. Column insertion and literal header creation form one atomic batch; old cells shift with their columns. Row discovery returns a unique action ID, typed snapshot version and at most 20 matches. Editing rejects stale/duplicate IDs, schema changes, formula targets and tracking overrides. Google row metadata anchors the sparse RAW value update to the row even when it moves. New Notion properties have explicit types/options, preserve all existing definitions and are verified from the returned schema.
+
+**Core concept:** Schema changes and value changes are separate approved intents. The model never chooses raw cell ranges or API objects; Python prepares exact old/new previews, freezes identity and checks again at execution. Sheets append/schema/edit operations share one per-tab lock in this single-process backend. External human edits can still race between the final read and write because these APIs do not provide compare-and-set; optimistic checks are not advertised as a distributed lock.
+
+**Verification:** Column creation: nine new failures, then 43 focused tests passed. Row editing: nine new failures, then 52 focused tests passed, including JSON storage roundtrip, a row move just before writing, formula preservation and no replay. Notion schema: twelve new failures, then 73 focused tests passed. All use synthetic service responses and the actual shared proposal/approval adapters. No real records/schema were mutated, no UI files were changed and no Render action was taken. Full-suite/review results follow in the next entry.
+
+**Try it yourself:** “Add Billable and Project columns to my timesheet”; confirm. “Find my Client entry from October 14”; then “Change its hours to 1.5”; inspect old/new values and confirm. “Add a Priority select property in Notion with High, Medium and Low options”; confirm. Filling new fields is a separate proposal.
+
+**Interview line:** "I use stable record identity and typed previews to turn model intent into bounded, approved mutations that preserve unrelated data."

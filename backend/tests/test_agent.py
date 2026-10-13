@@ -54,4 +54,4 @@ def test_phase4_tool_count_and_write_policy():
     assert not agent.TOOLS['github_activity'].needs_approval
     assert not agent.TOOLS['github_contributions'].needs_approval
     assert {name for name, t in agent.TOOLS.items() if t.needs_approval} == {
-        'calendar_upsert_event', 'github_comment', 'sheets_log_hours', 'notion_save', 'notion_archive', 'sheets_add_columns', 'sheets_update_row'}
+        'calendar_upsert_event', 'github_comment', 'sheets_log_hours', 'notion_save', 'notion_archive', 'sheets_add_columns', 'sheets_update_row', 'notion_add_properties'}

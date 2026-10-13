@@ -14,7 +14,7 @@ from typing import Awaitable, Callable, NamedTuple
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
-from koe import events, identity, store, notion_service
+from koe import events, identity, store, notion_service, notion_schema as schema_ops
 from koe.config import settings
 from koe.tools import calendar, github, github_work, github_stats, notion, sheets, sheet_workspace
 
@@ -50,6 +50,10 @@ SYSTEM_PROMPT = (
     " For optional Sheets columns call sheets_schema first. Use exact existing headers; never invent columns, values or hours."
     " For optional Notion properties call notion_schema first. Match exact property types and existing option names. "
     "Never invent priorities, dates, URLs or people. Omit unknown optional values; never modify tracking or computed fields."
+    " To create optional Sheets columns use sheets_add_columns; to create Notion properties use notion_add_properties. "
+    "Ask for an explicit Notion type/options when missing. Schema creation and filling values need separate approvals; "
+    "reread the schema after creation. To edit an existing timesheet entry first call sheets_find_rows, ask which one "
+    "if ambiguous, then use its exact row_id/version with sheets_update_row. Never guess row numbers, IDs or versions."
 )
 
 
@@ -177,10 +181,19 @@ TOOLS.update({
          'required': ['page_id', 'expected_edited', 'title']}, needs_approval=True),
 })
 
-APPROVED_WRITERS = {'calendar_upsert_event', 'github_comment', 'sheets_log_hours', 'notion_save', 'notion_archive', 'sheets_add_columns', 'sheets_update_row'}
+TOOLS['notion_add_properties'] = Tool(notion.notion_add_properties,
+    'Propose 1–10 new properties in the configured owner Notion source. Explicit supported type and select options required. Additive only; separate approval, no record values filled.',
+    {'type': 'object', 'properties': {'properties': {'type': 'array', 'minItems': 1, 'maxItems': 10, 'items': {
+        'type': 'object', 'properties': {'name': {'type': 'string'}, 'type': {'type': 'string', 'enum': list(schema_ops.TYPES)},
+            'options': {'type': 'array', 'items': {'type': 'string'}, 'maxItems': 30}},
+        'required': ['name', 'type'], 'additionalProperties': False}}}, 'required': ['properties']}, needs_approval=True)
+
+APPROVED_WRITERS = {'calendar_upsert_event', 'github_comment', 'sheets_log_hours', 'notion_save', 'notion_archive', 'sheets_add_columns', 'sheets_update_row', 'notion_add_properties'}
 
 
 def prepare_write(name: str, args: dict) -> tuple[dict, str]:
+    if name == 'notion_add_properties':
+        return schema_ops.prepare_write(**args), ''
     if name in ('sheets_add_columns', 'sheets_update_row'):
         return sheet_workspace.prepare_write(name, **args), ''
     if name == 'notion_save':
@@ -269,6 +282,8 @@ async def _run_tool(name: str, args: dict | None, *, context: Conversation | Non
             normalized, summary = await asyncio.to_thread(prepare_write, name, args or {})
             if name in ('sheets_add_columns', 'sheets_update_row'):
                 normalized, summary = await sheet_workspace.prepare_proposal(name, normalized)
+            if name == 'notion_add_properties':
+                normalized, summary = await schema_ops.prepare_proposal(normalized)
             if name == 'sheets_log_hours' and normalized.get('fields'):
                 normalized = await sheets.freeze_fields(normalized)
             if name == 'notion_save' and normalized.get('fields'):

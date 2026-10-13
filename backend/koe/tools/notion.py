@@ -10,7 +10,7 @@ from uuid import UUID
 import httpx
 
 from koe.config import settings
-from koe import notion_service
+from koe import notion_service, notion_schema as schema_ops
 from koe.tools.github import _error
 
 # One backend worker; serialize query/create/append to avoid concurrent duplicate daily pages.
@@ -140,5 +140,12 @@ async def notion_archive(*, request_id: str, **args) -> dict:
         result = await notion_service.archive(**args, request_id=request_id)
         result['record_status'] = result.pop('status', None)
         return result
+    except notion_service.NotionError as exc:
+        return exc.result()
+
+
+async def notion_add_properties(*, request_id, **args):
+    try:
+        return await schema_ops.add_properties(**args, request_id=request_id)
     except notion_service.NotionError as exc:
         return exc.result()
