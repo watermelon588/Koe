@@ -6,6 +6,7 @@ const CONTENTS = [
   ['what', 'What Koe is'],
   ['install', 'Install the app'],
   ['sign-in', 'Sign in'],
+  ['around', 'Find your way around'],
   ['connect', 'Connect your tools'],
   ['talk', 'Talk to Koe'],
   ['notion', 'Notion workspace'],
@@ -46,8 +47,20 @@ export function Guide() {
       </Section>
 
       <Section id="sign-in" title="Sign in">
-        <p>Open Koe and tap <b>Continue with Google</b>. Only invited Google accounts can sign in; anyone else sees “not invited”. You stay signed in on that device for 30 days, and <b>Settings → Sign out</b> ends it.</p>
+        <p>Open Koe and tap <b>Continue with Google</b>. Only invited Google accounts can sign in; anyone else sees “not invited”. You stay signed in on that device for 30 days, and <b>Settings → Account → Sign out</b> ends it.</p>
         <p className="doc-note">Signing in only tells Koe who you are. It does not give Koe your calendar or anything else: each service is connected separately, with its own consent screen.</p>
+      </Section>
+
+      <Section id="around" title="Find your way around">
+        <p>The bar at the top of the app has five pages, plus the <b>?</b> button for this guide and the sun or moon button for the light and dark theme. On a phone the pages show as icons only.</p>
+        <ul>
+          <li><b>Home:</b> your companion, the <b>Call Koe</b> button and a short <b>Today</b> summary: your next events and anything waiting on you. <b>Open dashboard</b> takes you to the full view.</li>
+          <li><b>Dashboard:</b> your whole day in panels: Today’s calendar, Approvals, pull requests waiting for your review, your own pull requests with their CI, and Activity (what Koe did, and how fast it answered). It updates live.</li>
+          <li><b>Chat:</b> text and voice notes with Koe.</li>
+          <li><b>Notion:</b> your Notion workspace (see below).</li>
+          <li><b>Settings:</b> choose your companion at the top. Below it: <b>Account</b> (sign out), <b>Connections</b> (Google, GitHub, Notion, plus your timesheet and repositories), <b>Your Gemini key</b>, and <b>This device</b> (install the app, notifications).</li>
+        </ul>
+        <p>The footer at the bottom of Home, Dashboard, Notion and Settings links to this guide, the Install page, the privacy policy and the terms.</p>
       </Section>
 
       <Section id="connect" title="Connect your tools">
@@ -57,7 +70,7 @@ export function Guide() {
           <li><b>GitHub:</b> GitHub asks you to authorise Koe, then you choose which repositories Koe should look at.</li>
           <li><b>Notion:</b> Notion lets you pick the pages Koe may use. Koe can create a “Koe Daily Log” database there.</li>
         </ul>
-        <p className="doc-note"><b>How:</b> open <b>Settings → Connections</b> and press <b>Connect</b> next to Google. Google asks for Calendar and Sheets together; leave both ticked. For <b>GitHub</b>, press Connect, approve on GitHub, then <b>Choose</b> which repositories Koe reads. Notion is next. <b>Disconnect</b> deletes Koe’s copy of the access and revokes it at Google.</p>
+        <p className="doc-note"><b>How:</b> open <b>Settings</b> and scroll to <b>Connections</b>. Press <b>Connect</b> next to Google; Google asks for Calendar and Sheets together, so leave both ticked. Once Google is connected, a <b>Timesheet</b> row appears under it: <b>Create my timesheet</b>, or <b>Open</b> it. For <b>GitHub</b>, press Connect, approve on GitHub, then press <b>Choose</b> on the <b>Repositories</b> row under it to pick the repositories Koe reads. Notion is next. <b>Disconnect</b> deletes Koe’s copy of the access and revokes it at Google. Under <b>Your Gemini key</b> you can paste your own free key to remove the shared daily limit.</p>
         <p>Google may show “Google hasn’t verified this app”, because Koe is a small personal project. Choose <b>Advanced</b> → <b>Go to Koe</b> only if you trust the person who invited you.</p>
       </Section>
 
@@ -71,6 +84,7 @@ export function Guide() {
 
       <Section id="approvals" title="Approvals: nothing changes without you">
         <p>Reading is automatic. Anything that changes something in another service requires your approval: booking or moving an event, commenting on a PR, adding a timesheet row. Koe shows exactly what it will do, with <b>Confirm</b> and <b>Cancel</b> buttons. In a call, saying “yes” or “no” works too. A proposal expires after 10 minutes.</p>
+        <p>Proposals waiting on you also appear in the <b>Approvals</b> panel on the Dashboard. During a call you can <b>Approve</b> or <b>Reject</b> the call’s proposal there; a proposal from Chat is confirmed in the chat that asked.</p>
         <p>The one exception is your own Notion daily log: Koe adds lines to it without asking, and never edits or deletes what is already there. Koe never merges pull requests.</p>
       </Section>
 
@@ -83,7 +97,7 @@ export function Guide() {
       <Section id="notifications" title="Notifications">
         <ol>
           <li>Install the app first. On iPhone this is required.</li>
-          <li>On the Install page (step 3) or in Settings, tap <b>Turn on</b> and allow notifications.</li>
+          <li>On the Install page (step 3) or in <b>Settings → This device</b>, tap <b>Turn on</b> and allow notifications.</li>
           <li>Tap <b>Send a test</b>. A notification should arrive within a few seconds.</li>
         </ol>
         <p>Koe notifies you when it replies and when something needs you on GitHub. While the chat is open on screen, it doesn’t notify you; the message just appears.</p>
@@ -96,7 +110,7 @@ export function Guide() {
           <dt>“Gemini is busy right now”</dt>
           <dd>The free AI service is overloaded for a moment. Try again in a minute.</dd>
           <dt>No notification after “Send a test”</dt>
-          <dd>Check that notifications for Koe are allowed in your phone’s settings and that battery saver isn’t blocking Chrome. Then turn notifications off and on in Settings.</dd>
+          <dd>Check that notifications for Koe are allowed in your phone’s settings and that battery saver isn’t blocking Chrome. Then turn notifications off and on in <b>Settings → This device</b>.</dd>
           <dt>The microphone doesn’t work</dt>
           <dd>Allow microphone access for the site, in the address bar or your phone’s settings, then reload.</dd>
           <dt>Still stuck</dt>
@@ -106,8 +120,7 @@ export function Guide() {
 
       <Section id="later" title="Coming later">
         <ul>
-          <li>A Connections screen for Calendar, Sheets, GitHub and Notion, so invited friends can use Koe with their own accounts.</li>
-          <li>Using your own Gemini key, so you have no daily limit.</li>
+          <li>Connecting your own Notion workspace from Settings.</li>
           <li>A weekly check-up: a summary of what you shipped, your meetings and logged hours.</li>
           <li>WhatsApp, once Meta approves the business account.</li>
         </ul>

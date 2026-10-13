@@ -1,19 +1,30 @@
-import { useEffect, useState, type KeyboardEvent, type ReactNode } from 'react'
+import { useState, type KeyboardEvent, type ReactNode } from 'react'
 import { ArrowClockwise, CalendarBlank, GitPullRequest, Pulse, SealCheck, type Icon } from '@phosphor-icons/react'
-import { activityText, latencyStats, type Approval, type DashboardState, type Panel, type PullRequest } from './state'
+import { activityText, clockTime, isBusy, latencyStats, type Approval, type DashboardState, type Panel, type PullRequest } from './state'
+import { usePending } from './useDashboard'
 
-// Your day as one card with four short tabs instead of a long scroll. Used on Home and in the call's Day view.
+// Your day. The pieces below (TodayList, PRList, ApprovalList, ActivityFeed) are shared by two layouts:
+// the compact four-tab card in the call's Day view (Dashboard) and the full Dashboard page (DashboardPage.tsx).
 type Tab = 'today' | 'github' | 'approvals' | 'activity'
 
 function SafeLink({ url, children }: { url?: string; children: ReactNode }) {
   return url?.startsWith('https://') ? <a href={url} target="_blank" rel="noreferrer">{children}</a> : <span>{children}</span>
 }
-const clockTime = (value: string, timezone?: string) =>
-  new Date(value).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', timeZone: timezone })
 function Empty({ panel, label }: { panel?: Panel; label: string }) {
   return <p className="dash-empty">{panel?.result.error?.message ?? (panel ? label : 'Connect to load this.')}</p>
 }
-function PRList({ panel, label }: { panel?: Panel; label: string }) {
+
+export function TodayList({ calendar, limit }: { calendar?: Panel; limit?: number }) {
+  const events = calendar?.result.events ?? []
+  if (!events.length || calendar?.result.error) return <Empty panel={calendar} label="Nothing on your calendar today." />
+  return <ul className="rows">{events.slice(0, limit).map((event) => <li key={event.id}>
+    <time>{event.start.dateTime ? clockTime(event.start.dateTime, calendar!.timezone) : 'All day'}</time>
+    <SafeLink url={event.url}>{event.title}</SafeLink>
+    <small>{event.end.dateTime ? `until ${clockTime(event.end.dateTime, calendar!.timezone)}` : ''}</small>
+  </li>)}</ul>
+}
+
+export function PRList({ panel, label }: { panel?: Panel; label: string }) {
   const prs = panel?.result.prs ?? []
   if (panel?.result.error || !prs.length) return <Empty panel={panel} label={label} />
   return <ul className="rows">{prs.map((pr: PullRequest) => <li key={`${pr.repo}/${pr.number}`}>
@@ -24,18 +35,41 @@ function PRList({ panel, label }: { panel?: Panel; label: string }) {
     </small></li>)}</ul>
 }
 
+export function ApprovalList({ pending, currentApproval, decide }: { pending: Approval[]; currentApproval?: Approval | null; decide?: (approve: boolean) => void }) {
+  if (!pending.length) return <p className="dash-empty">Nothing waiting on you. Koe asks here before it writes anything.</p>
+  return <ul className="asks">{pending.map((action) => <li key={action.id}>
+    <div>
+      <small>{action.channel ?? 'Current call'} · expires {clockTime(action.expires_ts)}</small>
+      <p>{action.summary}</p>
+      {action.id !== currentApproval?.id && <small>Confirm or cancel in the conversation that asked.</small>}
+    </div>
+    {action.id === currentApproval?.id && decide && <div className="pair">
+      <button className="ghost" onClick={() => decide(false)}>Reject</button>
+      <button className="soft" onClick={() => decide(true)}>Approve</button>
+    </div>}
+  </li>)}</ul>
+}
+
+export function ActivityFeed({ data }: { data: DashboardState }) {
+  const stats = latencyStats(data.latencies)
+  return <>
+    {!data.activity.length ? <p className="dash-empty">What Koe does (tool calls, approvals, alerts) shows up here.</p> :
+      <ol className="feed">{data.activity.slice(0, 12).map((item) => <li key={item.id}>
+        <time>{clockTime(item.ts)}</time><p>{activityText(item)}<small>{item.channel ?? 'Koe'}</small></p>
+      </li>)}</ol>}
+    <p className="dash-meta foot">{stats
+      ? <>Response time: p50 <b>{Math.round(stats.p50)} ms</b> · p95 <b>{Math.round(stats.p95)} ms</b> · {stats.count} turns</>
+      : 'Response time appears after Koe answers.'}</p>
+  </>
+}
+
 export function Dashboard({ data, connected, currentApproval, decide, refresh }: {
   data: DashboardState; connected: boolean; currentApproval?: Approval | null; decide?: (approve: boolean) => void; refresh: () => void
 }) {
   const [tab, setTab] = useState<Tab>('today')
-  const [clock, setClock] = useState(Date.now)
-  useEffect(() => { const timer = setInterval(() => setClock(Date.now()), 1000); return () => clearInterval(timer) }, [])
   const { calendar, reviews, prs } = data.panels
-  const pending = data.pending.filter((p) => new Date(p.expires_ts).getTime() > clock)
-  // The current call card can arrive before the separate events socket.
-  if (currentApproval && new Date(currentApproval.expires_ts).getTime() > clock && !pending.some((p) => p.id === currentApproval.id)) pending.push(currentApproval)
-  const stats = latencyStats(data.latencies)
-  const busy = (name: string) => data.activity.find((item) => item.name === name)?.phase === 'start'
+  const pending = usePending(data, currentApproval)
+  const busy = (name: string) => isBusy(data, name)
   const events = calendar?.result.events ?? []
 
   const tabs: { id: Tab; label: string; icon: Icon; count?: number; busy?: boolean }[] = [
@@ -74,12 +108,7 @@ export function Dashboard({ data, connected, currentApproval, decide, refresh }:
     <div className="dash-body" role="tabpanel" id="dash-panel" aria-labelledby={`dash-tab-${tab}`}>
       {tab === 'today' && <>
         {calendar && <p className="dash-meta">Updated {clockTime(calendar.ts)} · {calendar.timezone}</p>}
-        {!events.length || calendar?.result.error ? <Empty panel={calendar} label="Nothing on your calendar today." /> :
-          <ul className="rows">{events.map((event) => <li key={event.id}>
-            <time>{event.start.dateTime ? clockTime(event.start.dateTime, calendar!.timezone) : 'All day'}</time>
-            <SafeLink url={event.url}>{event.title}</SafeLink>
-            <small>{event.end.dateTime ? `until ${clockTime(event.end.dateTime, calendar!.timezone)}` : ''}</small>
-          </li>)}</ul>}
+        <TodayList calendar={calendar} />
       </>}
 
       {tab === 'github' && <>
@@ -89,28 +118,9 @@ export function Dashboard({ data, connected, currentApproval, decide, refresh }:
         <PRList panel={prs} label="No open pull requests." />
       </>}
 
-      {tab === 'approvals' && (!pending.length ? <p className="dash-empty">Nothing waiting on you. Koe asks here before it writes anything.</p> :
-        <ul className="asks">{pending.map((action) => <li key={action.id}>
-          <div>
-            <small>{action.channel ?? 'Current call'} · expires {clockTime(action.expires_ts)}</small>
-            <p>{action.summary}</p>
-            {action.id !== currentApproval?.id && <small>Confirm or cancel in the conversation that asked.</small>}
-          </div>
-          {action.id === currentApproval?.id && decide && <div className="pair">
-            <button className="ghost" onClick={() => decide(false)}>Reject</button>
-            <button className="soft" onClick={() => decide(true)}>Approve</button>
-          </div>}
-        </li>)}</ul>)}
+      {tab === 'approvals' && <ApprovalList pending={pending} currentApproval={currentApproval} decide={decide} />}
 
-      {tab === 'activity' && <>
-        {!data.activity.length ? <p className="dash-empty">What Koe does (tool calls, approvals, alerts) shows up here.</p> :
-          <ol className="feed">{data.activity.slice(0, 12).map((item) => <li key={item.id}>
-            <time>{clockTime(item.ts)}</time><p>{activityText(item)}<small>{item.channel ?? 'Koe'}</small></p>
-          </li>)}</ol>}
-        <p className="dash-meta foot">{stats
-          ? <>Response time: p50 <b>{Math.round(stats.p50)} ms</b> · p95 <b>{Math.round(stats.p95)} ms</b> · {stats.count} turns</>
-          : 'Response time appears after Koe answers.'}</p>
-      </>}
+      {tab === 'activity' && <ActivityFeed data={data} />}
     </div>
   </section>
 }

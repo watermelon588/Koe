@@ -39,3 +39,9 @@ export function activityText(item: Activity): string {
   const name = item.name?.replaceAll('_', ' ') ?? 'Tool'
   return item.phase === 'start' ? `Started ${name}` : `${name}: ${item.ok ? 'completed' : 'failed'} (${item.ms ?? 0} ms)`
 }
+
+export const clockTime = (value: string, timezone?: string) =>
+  new Date(value).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', timeZone: timezone })
+
+// A tool is running right now (its start arrived without an end yet).
+export const isBusy = (data: DashboardState, name: string) => data.activity.find((item) => item.name === name)?.phase === 'start'

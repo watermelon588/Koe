@@ -1,6 +1,6 @@
 import { wsCredential } from '../session'
 import { useEffect, useReducer, useRef, useState } from 'react'
-import { emptyState, reduceEvent } from './state'
+import { emptyState, reduceEvent, type Approval, type DashboardState } from './state'
 import { wsUrl } from '../backend'
 
 export function useDashboard(onAlert: () => void) {
@@ -60,4 +60,13 @@ export function useDashboard(onAlert: () => void) {
   return { data, status, connected,
     connect: (value: string) => { if (value.trim()) { setToken(value.trim()); setAttempt((n) => n + 1) } },
     refresh: () => { if (socket.current?.readyState === WebSocket.OPEN) socket.current.send(JSON.stringify({ type: 'refresh' })) } }
+}
+
+// Proposals that haven't expired, plus the live call's card (it can arrive before the separate events socket).
+export function usePending(data: DashboardState, currentApproval?: Approval | null) {
+  const [clock, setClock] = useState(Date.now)
+  useEffect(() => { const timer = setInterval(() => setClock(Date.now()), 1000); return () => clearInterval(timer) }, [])
+  const pending = data.pending.filter((p) => new Date(p.expires_ts).getTime() > clock)
+  if (currentApproval && new Date(currentApproval.expires_ts).getTime() > clock && !pending.some((p) => p.id === currentApproval.id)) pending.push(currentApproval)
+  return pending
 }

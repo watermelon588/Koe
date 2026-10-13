@@ -807,3 +807,25 @@ Each had its own fix. No guessing.
 - approve → execute: 8.3 s (Calendar), 6.7 s (Sheets), 9.5 s (Notion);
 - 274 backend tests pass.
 **Interview line:** "I tested the agent end to end against real Calendar, Sheets and Notion, verified every write at the source and cleaned up. Then I instrumented each model attempt and removed per-write connection setup to cut the parts of the latency I control."
+
+## Step 50: a calmer Settings, a real Dashboard page, and a footer  (2026-10-13)
+**Files:** frontend/src/dashboard/DashboardPage.tsx (new) · frontend/src/dashboard/dashboard.css (new) · frontend/src/AppFooter.tsx (new) · frontend/src/dashboard/{Dashboard.tsx,state.ts,useDashboard.ts} · frontend/src/App.tsx (nav, routing, Home markup, footer only) · frontend/src/settings/{SettingsPage.tsx,Connections.tsx,settings.css} · frontend/src/chat/chat.css (old `.device*` rules removed) · frontend/src/index.css · frontend/src/notion/notion.css · frontend/src/install/install.css · frontend/src/pages/Guide.tsx · docs/SPEC.md §6 · docs/DECISIONS.md
+**What it does:**
+- **Settings:** the companion studio is untouched (the viewer, Portrait/Full body, Say hi, Rotate, the list and the Use button). Everything that was squeezed under it into a 340px column now has its own sections below it: **Account**, **Connections**, **Your Gemini key** and **This device**. Each section has a title and one line of context on the left, and a card of rows on the right. Every row has the same shape: icon, name, one-line status, one action. Timesheet sits under Google, and Repositories (with its checklist) sits under GitHub, because each belongs to that service.
+- **Dashboard:** a new page at `#dashboard` (the four-squares icon in the nav). It shows a grid of panels on desktop (Today, Approvals, Waiting for your review, Your pull requests, Activity), two columns on tablets and one column on phones. Home keeps the mascot, the greeting and Call, plus a slim **Today** card (the next 3 events and what's waiting) with an **Open dashboard** link.
+- **Navigation:** a **?** button in the top bar opens the Guide. A footer on Home, Dashboard, Notion and Settings links to the Guide, Install the app, Privacy and Terms.
+- **Notion:** layout only. The page uses the full width again, the heading weight matches the other pages, and panels are flat surfaces with consistent corner radii instead of a border drawn on top of a fill.
+**Core concept:**
+- *One data source, many views.* The dashboard WebSocket lives in `App` (`useDashboard`). Home's summary, the Dashboard page and the call's Day card all read the same `data`, so opening the Dashboard never opens a second socket.
+- The list pieces (`TodayList`, `PRList`, `ApprovalList`, `ActivityFeed`) are shared by the compact tabbed card and the full page, so both always show the same thing.
+- *A row pattern* (icon, name, status, action) makes a settings page scannable: your eye runs down the left edge for names and the right edge for buttons.
+**How it connects:** `App` → `useDashboard()` → `{data, connected}` → `TodaySummary` (Home) / `DashboardPage` (#dashboard) / `Dashboard` (call → Day). Approve/Reject on the Dashboard page calls the live call's `decide`, the same path the call panel uses. Settings rows call the same endpoints as before (`/api/connections…`, `/auth/<provider>/connect`, and the push and install helpers).
+**Try it yourself:** run `npm run dev` and sign in. Click the four-squares icon (Dashboard) and the ? icon (Guide), then scroll to the bottom of Home or Settings to see the footer. Narrow the window to 375px to see the panels stack.
+**Gotchas:**
+- Hash routing: an in-page anchor like `#connections` would switch the app back to Home, so the Settings sections aren't linked with anchors.
+- The footer needs every page to be at least one screen tall, so `.app` is now a flex column (except on Chat). An auto margin in a flex column shrinks a box to its content, which is why the Notion and Install pages also need `width: 100%`.
+- On Home the footer stays in the right-hand column, so it never covers her desk.
+**Measured:**
+- `tsc -b`, `npm run lint` (0 errors, 4 existing warnings), `npm test` (18 pass) and `npm run build` all pass.
+- Headless Chrome screenshots at 1280px and 375px, in light and dark, of Home, Dashboard, Settings, Notion and Install. Settings was also captured with a mocked Google + GitHub connection, to check the Timesheet and Repositories rows and the checklist.
+**Interview line:** "I split one overloaded screen into a mascot-first Home, a dedicated dashboard and a sectioned settings page. All three read one shared WebSocket state through shared list components, so the views can't drift apart."

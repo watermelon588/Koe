@@ -1,5 +1,5 @@
 /* The phone setup portal (#install): one narrow column of steps; the QR shows only where there's room (a laptop). */
-.install-page { max-width: 560px; margin: 0 auto; padding: 48px 20px 64px; display: grid; gap: 32px; }
+.install-page { width: 100%; max-width: 560px; margin: 0 auto; padding: 48px 20px 64px; display: grid; gap: 32px; }
 .install-head { display: grid; justify-items: center; gap: 8px; text-align: center; }
 .install-head img { width: 72px; height: 72px; border-radius: 50%; object-fit: cover; object-position: 50% 15%; box-shadow: 0 0 0 3px var(--bg), 0 0 0 4.5px var(--accent); margin-bottom: 8px; }
 .install-head h1 { font-size: 26px; font-weight: 300; letter-spacing: -0.01em; }
