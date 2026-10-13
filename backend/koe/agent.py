@@ -236,9 +236,9 @@ async def _run_tool(name: str, args: dict | None, *, context: Conversation | Non
     except Exception as e:
         result = _error("tool_failed", str(e), "Tell the user it failed; don't guess.")
     if context:
-        await store.record_best_effort(context.channel, context.session_id, "tool", name,
-                                       {"args": args or {}, "result": result,
-                                        "latency": {"tool_ms": round((time.perf_counter()-started)*1000)}})
+        store.record_later(context.channel, context.session_id, "tool", name,
+                           {"args": args or {}, "result": result,
+                            "latency": {"tool_ms": round((time.perf_counter()-started)*1000)}})
     return result
 
 

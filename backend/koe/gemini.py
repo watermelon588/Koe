@@ -7,6 +7,7 @@ A key or model that failed sits out for a while, so the next turn goes straight 
 Google's client retries 503s by itself for minutes (one turn took 185 s); here every attempt is single and short,
 and Koe decides where to go next. https://ai.google.dev/gemini-api/docs/troubleshooting#error-codes
 """
+import logging
 import time
 
 import httpx
@@ -16,13 +17,17 @@ from google.genai import errors, types
 from koe import usage
 from koe.config import settings
 
+log = logging.getLogger("koe.gemini")
 KEY_REST = 600  # a key out of quota sits out 10 minutes
-MODEL_REST = 120  # an overloaded model sits out 2 minutes
-TIMEOUT_MS = 45_000  # one attempt; a slower answer counts as overloaded
+MODEL_REST = 300  # an overloaded model sits out 5 minutes
+# One attempt. Measured 2026-10-13: a healthy model answers a tool request in 3–5 s, but a busy one can hang ~42 s
+# before a 504, so waiting longer than this only delays the fallback.
+TIMEOUT_MS = 15_000
 OVERLOADED = {500, 503, 504}
 
 _clients: dict[str, genai.Client] = {}
 _resting: dict[tuple[str, str], float] = {}  # ("key"|"model", name) → monotonic time it may be tried again
+_last_good: str | None = None  # the model that answered last: tried first next time
 
 
 def keys() -> list[str]:
@@ -75,12 +80,22 @@ async def generate(*, contents, config=None, models: list[str] | None = None, on
     `models=[m]` pins a model (later tool rounds of a turn stay on the model that started it).
     `only` uses one given client (tests, the CLI) with model fallback but no key rotation."""
     last: Exception | None = None
-    for model in _ordered("model", models or text_models()):
+    global _last_good
+    order = models or text_models()
+    if not models and _last_good in order:
+        order = [_last_good, *[m for m in order if m != _last_good]]
+    for model in _ordered("model", order):
         for key in ([None] if only else _ordered("key", keys())):
+            started = time.perf_counter()
+            which = "given client" if only else f"key {keys().index(key) + 1}"
             try:
                 c = only or client(key)
-                return await c.aio.models.generate_content(model=model, contents=contents, config=config), model
+                response = await c.aio.models.generate_content(model=model, contents=contents, config=config)
+                _last_good = model
+                log.info("%s on %s: ok in %.1fs", model, which, time.perf_counter() - started)
+                return response, model
             except errors.APIError as exc:
+                log.info("%s on %s: %s in %.1fs", model, which, exc.code, time.perf_counter() - started)
                 last = exc
                 if exc.code == 429 and key:
                     rest("key", key, KEY_REST)
@@ -90,6 +105,7 @@ async def generate(*, contents, config=None, models: list[str] | None = None, on
                     break  # next model
                 raise
             except httpx.TimeoutException as exc:
+                log.info("%s on %s: timeout in %.1fs", model, which, time.perf_counter() - started)
                 last = exc
                 rest("model", model, MODEL_REST)
                 break

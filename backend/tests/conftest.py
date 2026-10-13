@@ -6,7 +6,7 @@ os.environ.setdefault("GEMINI_API_KEY", "test")
 import pytest
 
 from koe.config import settings
-from koe import agent, app_channel, connections, db, events, gemini, usage, whatsapp
+from koe import agent, app_channel, connections, db, events, gemini, store, usage, whatsapp
 
 
 @pytest.fixture(autouse=True)
@@ -22,6 +22,8 @@ def isolate_live_storage(monkeypatch, tmp_path):
     monkeypatch.setattr(connections, "_github", {})  # GitHub account cache: fresh per test
     monkeypatch.setattr(gemini, "_clients", {})  # Gemini clients and resting keys/models: fresh per test
     monkeypatch.setattr(gemini, "_resting", {})
+    monkeypatch.setattr(gemini, "_last_good", None)
+    monkeypatch.setattr(store, "_con", None)  # the reused Neon connection: never shared between tests
     monkeypatch.setattr(settings, "gemini_api_key_2", "")
     # With DATABASE_URL cleared above, the Koe app's chat falls back to SQLite: point it at a temp file.
     data = tmp_path / "data"

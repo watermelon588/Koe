@@ -781,3 +781,29 @@ The OpenRouter backup never ran, because `.env` said `OPEN_ROUTER_API_KEY` while
 - OpenRouter: OK in 4.6 s.
 - 273 backend tests pass.
 **Interview line:** "I distinguished per-key quota errors from model-wide overload and routed each to the right fallback, with circuit-breaker rests and the SDK's hidden retries turned off, so a busy model costs seconds instead of minutes."
+
+## Step 49: real end-to-end test, and making a turn fast  (2026-10-13)
+**Files:** backend/koe/{gemini.py,store.py,text_agent.py,agent.py} · backend/tests/{test_gemini.py,test_store.py,test_isolation.py,conftest.py}
+**What it does:**
+- Tested Koe end to end against the owner's **real** accounts, through the same HTTP API the app uses, then removed every test item:
+  - Calendar read;
+  - finding a free slot;
+  - booking a "Koe E2E test" event (proposal → Confirm → checked directly in Google Calendar: 16:00–16:15 IST, no attendees → deleted);
+  - a timesheet row (proposal → Confirm → checked directly in Google Sheets, row 3 with the action ID → deleted);
+  - a Notion task (proposal → Confirm → checked directly in Notion, Type Task, Status Open → moved to trash through Koe with approval).
+- Then made turns faster. One reused Neon connection for the activity/approval store (it opened a new one per write, ~1.3 s each). Activity records are written in the background. Each Gemini attempt is capped at 15 s, an overloaded model rests 5 min, and the model that answered last is tried first. Later tool rounds may fall back too, because a turn begun on gemini-3.6-flash (with thought signatures) finished correctly on gemini-3.5-flash and gemini-3-flash-preview.
+**Core concept:** *Measure the whole turn before optimising.* Logging every model attempt (model, key, result, seconds) showed where time went:
+- busy models that hang ~42 s before a 504;
+- a key out of quota (429 in 0.6 s);
+- ~1.3 s for every activity-log write.
+
+Each had its own fix. No guessing.
+**How it connects:** `text_agent.chat()` → `gemini.generate()` (logs `koe.gemini: <model> on key N: ok|503|504|429 in Xs`) → tools → `store.rpc()` on the reused connection (one transaction per call; a failed write is never retried). Activity records go through `store.record_later()`.
+**Gotchas:**
+- On Windows Git Bash, a command-line argument like `/status` is silently rewritten into a Windows path (`C:/Program Files/Git/status`), so the first Notion API check returned 404 from the test harness, not from Koe. Use `MSYS_NO_PATHCONV=1`.
+- Free-tier Gemini was congested during the test (503/504 on most models), so turns still took 22–59 s, though they no longer fail. At calmer times gemini-3.8-flash answers in ~3 s.
+**Measured:**
+- activity write 1.37 s → 0.43 s on a reused connection, and it's no longer on the turn's critical path;
+- approve → execute: 8.3 s (Calendar), 6.7 s (Sheets), 9.5 s (Notion);
+- 274 backend tests pass.
+**Interview line:** "I tested the agent end to end against real Calendar, Sheets and Notion, verified every write at the source and cleaned up. Then I instrumented each model attempt and removed per-write connection setup to cut the parts of the latency I control."

@@ -36,7 +36,7 @@ async def chat(text: str, history: list, context: agent.Conversation, client: ge
     if not text:
         return {"text": "Please enter a message."}
     history.append(types.Content(role="user", parts=[types.Part.from_text(text=text)]))
-    await store.record_best_effort(context.channel, context.session_id, "message", text, {"role": "user"})
+    store.record_later(context.channel, context.session_id, "message", text, {"role": "user"})
     decision = agent.confirmation(text)
     if decision is not None and context.pending:
         result = await agent.confirm(context, decision)
@@ -50,10 +50,11 @@ async def chat(text: str, history: list, context: agent.Conversation, client: ge
                 response = await text_fallback.generate(history)
             else:
                 try:
-                    # Round 0 may fall back across models and keys; later rounds stay on the model that started the
-                    # turn (its tool calls and thought signatures are already in the history).
+                    # Later rounds prefer the model that started the turn but may still fall back: measured
+                    # 2026-10-13, a tool turn begun on gemini-3.6-flash (with thought signatures) finished fine on
+                    # gemini-3.5-flash and gemini-3-flash-preview. Tools never re-run either way.
                     response, model = await gemini.generate(
-                        contents=history, models=[model] if model else None, only=client,
+                        contents=history, models=list(dict.fromkeys([model, *gemini.text_models()])) if model else None, only=client,
                         config={"system_instruction": agent.system_prompt(),
                                 "tools": [{"function_declarations": agent.declarations()}],
                                 "automatic_function_calling": {"disable": True}})
@@ -75,7 +76,7 @@ async def chat(text: str, history: list, context: agent.Conversation, client: ge
             if not calls:
                 reply = "".join(p.text for p in content.parts if p.text and not p.thought) or "The model returned no answer."
                 result = _reply(reply, context)
-                await store.record_best_effort(context.channel, context.session_id, "message", result["text"], {"role": "koe"})
+                store.record_later(context.channel, context.session_id, "message", result["text"], {"role": "koe"})
                 return result
             parts = []
             for fc in calls:

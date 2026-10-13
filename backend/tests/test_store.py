@@ -26,15 +26,23 @@ def fake_database(monkeypatch, results):
             return [(row,) for row in self.result]
 
     class Connection:
+        closed = broken = False
+
+        def close(self):
+            pass
+
+        @contextmanager
+        def transaction(self):
+            yield
+
         def execute(self, query, params=None):
             if query == "SET LOCAL statement_timeout = 10000":
                 return Cursor(None)
             calls.append((query.as_string() if hasattr(query, "as_string") else query, params))
             return Cursor(results.pop(0))
 
-    @contextmanager
     def connect(*args, **kwargs):
-        yield Connection()
+        return Connection()
 
     monkeypatch.setattr(store.psycopg, "connect", connect)
     return calls
@@ -107,16 +115,24 @@ def test_blocking_database_work_does_not_block_the_event_loop(monkeypatch):
     main_thread = threading.get_ident()
     observed = []
 
-    @contextmanager
     def connect(*a, **kw):
         observed.append(threading.get_ident())
         class Connection:
+            closed = broken = False
+
+            def close(self):
+                pass
+
+            @contextmanager
+            def transaction(self):
+                yield
+
             def execute(self, *a, **kw):
                 class Cursor:
                     def fetchone(self):
                         return (None,)
                 return Cursor()
-        yield Connection()
+        return Connection()
 
     monkeypatch.setattr(store.psycopg, "connect", connect)
     assert asyncio.run(store.claim("action", "session", True)) is None

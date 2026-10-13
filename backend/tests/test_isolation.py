@@ -15,14 +15,22 @@ def test_activity_and_approvals_are_stored_under_the_person_asking(monkeypatch):
     sent = []
 
     class Connection:
+        closed = broken = False
+
+        def close(self):
+            pass
+
+        @contextmanager
+        def transaction(self):
+            yield
+
         def execute(self, query, params=None):
             if params:
                 sent.append(params["p_owner"])
             return type("Cursor", (), {"fetchone": lambda self: ({"id": "a", "status": "pending"},)})()
 
-    @contextmanager
     def connect(*args, **kwargs):
-        yield Connection()
+        return Connection()
 
     monkeypatch.setattr(store.psycopg, "connect", connect)
     asyncio.run(store.propose("s", "app", "calendar_upsert_event", {}, "Book it"))

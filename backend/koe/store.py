@@ -6,6 +6,9 @@ https://www.psycopg.org/psycopg3/docs/basic/transactions.html
 """
 import asyncio
 import logging
+import threading
+import time
+from contextlib import contextmanager
 
 import psycopg
 from psycopg import sql
@@ -49,6 +52,35 @@ def connection_options() -> dict:
     return options
 
 
+# One reused connection for every call below. Measured 2026-10-13: opening a new one costs ~1.3 s (TLS + auth to
+# Neon in Singapore), a statement on an open one ~0.12 s, and a chat turn makes 3+ activity writes. Each use is
+# still one transaction (commit on success, rollback on error), exactly like `with psycopg.connect()` was; a failed
+# write is never retried. ponytail: one connection behind a lock serializes statements; psycopg_pool if that queues.
+IDLE_RECONNECT = 240  # Neon suspends idle compute after ~5 min: reconnect first rather than write down a dead line
+_con: psycopg.Connection | None = None
+_con_used = 0.0
+_con_lock = threading.Lock()
+
+
+@contextmanager
+def _connection(options: dict):
+    global _con, _con_used
+    with _con_lock:
+        if _con is None or _con.closed or _con.broken or time.monotonic() - _con_used > IDLE_RECONNECT:
+            if _con is not None:
+                _con.close()
+            _con = psycopg.connect(**options, autocommit=True, prepare_threshold=None)
+        try:
+            with _con.transaction():
+                yield _con
+        except psycopg.OperationalError:
+            _con.close()
+            _con = None
+            raise
+        finally:
+            _con_used = time.monotonic()
+
+
 async def rpc(name: str, **params):
     if name not in RPC_PARAMS or set(params) != set(RPC_PARAMS[name]):
         raise StoreError("Unsupported database operation.")
@@ -63,7 +95,7 @@ async def rpc(name: str, **params):
 
     def execute():
         try:
-            with psycopg.connect(**options) as con:
+            with _connection(options) as con:
                 con.execute("SET LOCAL statement_timeout = 10000")
                 return con.execute(query, values).fetchone()[0]
         except psycopg.Error:
@@ -100,6 +132,17 @@ async def record_best_effort(*args, **kwargs):
         log.warning("Activity could not be saved to Neon")
 
 
+_background: set[asyncio.Task] = set()
+
+
+def record_later(*args, **kwargs) -> None:
+    """The activity log is an audit trail, not part of the answer: write it without making the turn wait
+    (~0.4 s per record). Proposals, claims and results are never written this way."""
+    task = asyncio.create_task(record_best_effort(*args, **kwargs))
+    _background.add(task)  # keep a reference so it isn't garbage-collected mid-write
+    task.add_done_callback(_background.discard)
+
+
 async def dashboard_read() -> dict:
     """Owner-scoped display fields as JSON; never execution args or backend secrets."""
     if not configured():
@@ -109,7 +152,7 @@ async def dashboard_read() -> dict:
 
     def read():
         try:
-            with psycopg.connect(**options) as con:
+            with _connection(options) as con:
                 con.execute("SET LOCAL statement_timeout = 10000")
                 queries = {
                     "activity": """SELECT to_jsonb(display) FROM (
@@ -136,7 +179,7 @@ async def check_connection() -> None:
 
     def read():
         try:
-            with psycopg.connect(**options) as con:
+            with _connection(options) as con:
                 con.execute("SET LOCAL statement_timeout = 10000")
                 for table in TABLES:
                     con.execute(sql.SQL("SELECT 1 FROM public.{} LIMIT 0").format(sql.Identifier(table)))
@@ -154,7 +197,7 @@ async def pending_for_session(session: str) -> dict | None:
 
     def read():
         try:
-            with psycopg.connect(**options) as con:
+            with _connection(options) as con:
                 con.execute('SET LOCAL statement_timeout = 10000')
                 row = con.execute("""SELECT to_jsonb(p) FROM public.koe_pending_actions p
                     WHERE owner_id=%s AND session_id=%s AND status='pending'
@@ -174,7 +217,7 @@ async def notion_activity() -> list[dict]:
 
     def read():
         try:
-            with psycopg.connect(**options) as con:
+            with _connection(options) as con:
                 con.execute('SET LOCAL statement_timeout = 10000')
                 rows = con.execute("""SELECT to_jsonb(display) FROM (
                     SELECT a.id,a.ts,a.kind,a.summary,p.tool

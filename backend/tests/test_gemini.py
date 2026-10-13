@@ -80,3 +80,12 @@ def test_a_friends_own_key_is_used_alone(calls, monkeypatch):
         identity.OWNER.reset(token)
     assert {k for k, _ in calls.tried} == {"friends-key"}  # never the shared keys
     assert response.text == "friends-key:backup-a"  # its 429 rests it; the next model still uses the friend's key
+
+
+def test_the_model_that_answered_last_is_tried_first(calls):
+    calls.failing[("*", "main")] = 503
+    run()  # main fails, backup-a answers
+    gemini._resting.clear()  # even once main may be tried again…
+    calls.tried.clear()
+    run()
+    assert calls.tried[0] == ("key-1", "backup-a")  # …the last good model goes first: no wasted seconds on main
