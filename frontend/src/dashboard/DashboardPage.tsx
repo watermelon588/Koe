@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
-import { ArrowClockwise, ArrowRight, CalendarBlank, Eye, GitPullRequest, Pulse, SealCheck, type Icon } from '@phosphor-icons/react'
-import { ActivityFeed, ApprovalList, PRList, TodayList } from './Dashboard'
+import { ArrowClockwise, ArrowRight, CalendarBlank, ChartBar, Eye, GitPullRequest, Pulse, SealCheck, type Icon } from '@phosphor-icons/react'
+import { ActivityFeed, ApprovalList, GitHubStats, PRList, TodayList } from './Dashboard'
 import { clockTime, isBusy, type Approval, type DashboardState } from './state'
 import { usePending } from './useDashboard'
 import './dashboard.css'
@@ -47,6 +47,9 @@ export function DashboardPage({ data, connected, status, refresh, currentApprova
         </Tile>
         <Tile area="prs" icon={GitPullRequest} title="Your pull requests" count={prs?.result.prs?.length} busy={isBusy(data, 'github_my_prs')}>
           <PRList panel={prs} label="No open pull requests." />
+        </Tile>
+        <Tile area="github" icon={ChartBar} title="GitHub stats" busy={isBusy(data, 'github_activity') || isBusy(data, 'github_contributions')}>
+          <GitHubStats data={data} />
         </Tile>
         <Tile area="activity" icon={Pulse} title="Activity">
           <ActivityFeed data={data} />

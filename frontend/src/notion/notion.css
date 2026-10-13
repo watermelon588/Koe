@@ -70,3 +70,19 @@
   .workspace-connection small { margin-left: 0; }
   .workspace-feedback { flex-direction: column; align-items: start; }
 }
+
+/* Verbatim approval summary + schema-driven optional properties (FRONTEND_BACKEND_HANDOFF.md) */
+.approval-summary { white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
+.record-fields { border-top: 1px solid var(--line); padding-top: 12px; display: grid; gap: 10px; }
+.record-fields summary { cursor: pointer; font-size: 14px; }
+.record-field { display: grid; gap: 4px; }
+.record-field > label { display: block; font-size: 13px; }
+.record-field + .record-field { margin-top: 10px; }
+.record-field > label small { color: var(--muted); margin-left: 4px; }
+.record-field[data-touched] > label { color: var(--accent); }
+.record-field-input { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.record-field-input > input, .record-field-input > select { flex: 1; min-width: 0; }
+.record-field-input .ghost { height: 32px; padding: 0 12px; font-size: 12px; }
+.record-multi { border: 0; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; }
+.record-multi label { display: inline-flex; align-items: center; gap: 6px; }
+.record-multi input { width: auto; }

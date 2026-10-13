@@ -9,8 +9,9 @@ const CONTENTS = [
   ['around', 'Find your way around'],
   ['connect', 'Connect your tools'],
   ['talk', 'Talk to Koe'],
-  ['notion', 'Notion workspace'],
   ['approvals', 'Approvals: nothing changes without you'],
+  ['calendar', 'Calendar details'],
+  ['notion', 'Notion workspace'],
   ['notifications', 'Notifications'],
   ['troubleshooting', 'If something doesn’t work'],
   ['later', 'Coming later'],
@@ -26,10 +27,10 @@ export function Guide() {
       <Section id="what" title="What Koe is">
         <p>Koe (声, “voice”) is a voice-first personal assistant for developers. You talk to an anime mascot in a live call, or send text and voice notes from the Koe app on your phone. Koe can:</p>
         <ul>
-          <li><b>GitHub:</b> list PRs waiting for your review, your open PRs and their CI, summarise a PR, show what you shipped, and post a PR comment.</li>
-          <li><b>Google Calendar:</b> find free slots and create or move events.</li>
-          <li><b>Google Sheets:</b> log hours to a timesheet.</li>
-          <li><b>Notion:</b> keep a daily developer log.</li>
+          <li><b>GitHub:</b> list PRs waiting for your review, your open PRs and their CI, summarise a PR, post a PR comment, and count what you shipped: commits and merged PRs for a day or range, your contribution streak, and (only when you ask) changed lines in the commits it analysed.</li>
+          <li><b>Google Calendar:</b> find free slots; create, move or cancel events, including all-day and repeating events, with a Google Meet link and Calendar reminders if you want them.</li>
+          <li><b>Google Sheets:</b> log hours to a timesheet, find an entry, correct its values, and add new columns.</li>
+          <li><b>Notion:</b> keep a daily developer log, and create, edit or trash records in your database, including its other properties.</li>
         </ul>
         <p>Koe is invite-only. If you can read this, someone shared it with you.</p>
       </Section>
@@ -55,7 +56,7 @@ export function Guide() {
         <p>The bar at the top of the app has five pages, plus the <b>?</b> button for this guide and the sun or moon button for the light and dark theme. On a phone the pages show as icons only.</p>
         <ul>
           <li><b>Home:</b> your companion, the <b>Call Koe</b> button and a short <b>Today</b> summary: your next events and anything waiting on you. <b>Open dashboard</b> takes you to the full view.</li>
-          <li><b>Dashboard:</b> your whole day in panels: Today’s calendar, Approvals, pull requests waiting for your review, your own pull requests with their CI, and Activity (what Koe did, and how fast it answered). It updates live.</li>
+          <li><b>Dashboard:</b> your whole day in panels: Today’s calendar, Approvals, pull requests waiting for your review, your own pull requests with their CI, GitHub stats (the numbers from the last time you asked Koe about your activity or streak), and Activity (what Koe did, and how fast it answered). It updates live.</li>
           <li><b>Chat:</b> text and voice notes with Koe.</li>
           <li><b>Notion:</b> your Notion workspace (see below).</li>
           <li><b>Settings:</b> choose your companion at the top. Below it: <b>Account</b> (sign out), <b>Connections</b> (Google, GitHub, Notion, plus your timesheet and repositories), <b>Your Gemini key</b>, and <b>This device</b> (install the app, notifications).</li>
@@ -78,20 +79,32 @@ export function Guide() {
         <ul>
           <li><b>Call:</b> on Home, press the call button and just speak. You can interrupt Koe at any time; it stops and listens. Type in the call panel if you can’t talk.</li>
           <li><b>Chat:</b> type a message, or tap the mic to record a voice note (up to 90 s). Koe answers a voice note with a voice note, plus the text.</li>
-          <li><b>Try:</b> “What’s on my plate today?”, “Any PRs waiting for my review?”, “Find me an hour tomorrow afternoon”, “Log 2 hours for Acme: API work”.</li>
+          <li><b>Try:</b> “What’s on my plate today?”, “Any PRs waiting for my review?”, “Find me an hour tomorrow afternoon”, “Log 2 hours for Acme: API work”, “How much did I ship yesterday?”, “Book a weekly sync every Monday for 4 weeks with a Meet link”.</li>
+          <li><b>Live workspace:</b> while Koe works on your Calendar, Sheets or Notion, the panel beside the chat (or the call’s <b>Workspace</b> tab) shows the slot, row or record it’s looking at, and what it proposes to change.</li>
         </ul>
       </Section>
 
       <Section id="approvals" title="Approvals: nothing changes without you">
-        <p>Reading is automatic. Anything that changes something in another service requires your approval: booking or moving an event, commenting on a PR, adding a timesheet row. Koe shows exactly what it will do, with <b>Confirm</b> and <b>Cancel</b> buttons. In a call, saying “yes” or “no” works too. A proposal expires after 10 minutes.</p>
+        <p>Reading is automatic. Anything that changes something in another service requires your approval: booking, moving or cancelling an event, commenting on a PR, adding or correcting a timesheet row, adding a column or property. Koe shows exactly what it will do, with <b>Confirm</b> and <b>Cancel</b> buttons. In a call, saying “yes” or “no” works too. A proposal expires after 10 minutes.</p>
         <p>Proposals waiting on you also appear in the <b>Approvals</b> panel on the Dashboard. During a call you can <b>Approve</b> or <b>Reject</b> the call’s proposal there; a proposal from Chat is confirmed in the chat that asked.</p>
         <p>The one exception is your own Notion daily log: Koe adds lines to it without asking, and never edits or deletes what is already there. Koe never merges pull requests.</p>
+        <p>Approve a proposal in the place that asked for it. If one fails or expires, nothing is retried for you; ask Koe again.</p>
+      </Section>
+
+      <Section id="calendar" title="Calendar details">
+        <ul>
+          <li><b>Repeating events:</b> daily or weekly (every 1 to 4 days or weeks), 2 to 20 times. The preview spells it out, for example “Repeats every 2 weeks, 5 times”.</li>
+          <li><b>Google Meet:</b> ask for a Meet link when booking. <b>Join Meet</b> appears only once Google has created the link; if Google is still making it, ask Koe to check the event again in a moment.</li>
+          <li><b>Reminders</b> are Calendar notifications (pop-up or email), not phone alarms.</li>
+          <li><b>Cancelling a repeating event</b> asks which you mean: this one occurrence, or the whole series. Cancelling the series removes every occurrence, including past ones. Guests are notified if the event has any.</li>
+        </ul>
       </Section>
 
       <Section id="notion" title="Notion workspace">
         <p>Open <a href="/#notion">Notion</a> from the app navigation to search your connected database, filter daily logs, tasks, meeting records and notes, and preview a record. You can also ask Koe to read or prepare changes from Chat or a call.</p>
         <p>Choose <b>New record</b>, enter its details, then <b>Preview change</b>. Read the full preview and choose <b>Confirm change</b> or <b>Cancel</b>. Editing appends additional notes and preserves existing content. Moving a record to trash also asks for confirmation; you can restore it in Notion. The workspace works directly even when the AI service is busy.</p>
-        <p>A meeting record stores notes and a date range. To reserve a slot or invite people, ask Koe to book it in <b>Google Calendar</b>. Saving a Notion record does not book time. Nested and non-text blocks are labeled in the preview; use <b>Open in Notion</b> for the full page.</p>
+        <p><b>More properties</b> in the record form lists the other columns of your database (text, numbers, dates, links, checkboxes, choices). Only what you change is sent; everything else keeps its value. To add a new column, choose <b>Add property</b>, preview it and confirm; then fill it on records as a separate change. People, relations and formulas stay read-only.</p>
+        <p>A meeting record stores notes and a date range. To reserve a slot or invite people, ask Koe to book it in <b>Google Calendar</b>. Saving a Notion record does not book time. Nested and non-text blocks are labeled in the preview; Notion pages can’t be shown inside Koe, so use <b>Open in Notion</b> for the full page.</p>
       </Section>
 
       <Section id="notifications" title="Notifications">
@@ -120,7 +133,6 @@ export function Guide() {
 
       <Section id="later" title="Coming later">
         <ul>
-          <li>Connecting your own Notion workspace from Settings.</li>
           <li>A weekly check-up: a summary of what you shipped, your meetings and logged hours.</li>
           <li>WhatsApp, once Meta approves the business account.</li>
         </ul>

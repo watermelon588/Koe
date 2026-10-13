@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
-import { ArrowSquareOut, ArrowsClockwise, Check, FileText, MagnifyingGlass, Plus, Trash, X } from '@phosphor-icons/react'
+import { ArrowSquareOut, ArrowsClockwise, Check, Columns, FileText, MagnifyingGlass, Plus, Trash, X } from '@phosphor-icons/react'
 import { inputDate, localDate, notionLink, notionRequest, type Connection, type Detail, type Pending, type RecordRow } from './api'
+import { AddPropertyForm, PropertyFields, type FieldValues, type Schema } from './NotionFields'
 import './notion.css'
 
 type Draft = { title: string; kind: string; status: string; date: string; end: string; body: string; page_id: string; expected_edited: string }
 const blank = (): Draft => ({ title: '', kind: 'Note', status: 'Open', date: localDate(), end: '', body: '', page_id: '', expected_edited: '' })
-type Result = { error?: { message: string; hint?: string }; status?: string; title?: string; url?: string; message?: string }
+type Result = { error?: { message: string; hint?: string }; status?: string; title?: string; url?: string; message?: string; added_properties?: string[] }
 
 export function NotionPage({ token, onToken }: { token: string; onToken: (value: string) => void }) {
   const [connection, setConnection] = useState<Connection | null>(null)
@@ -16,6 +17,9 @@ export function NotionPage({ token, onToken }: { token: string; onToken: (value:
   const [cursor, setCursor] = useState<string | null>(null)
   const [pending, setPending] = useState<Pending | null>(null)
   const [draft, setDraft] = useState<Draft | null>(null)
+  const [fields, setFields] = useState<FieldValues>({})
+  const [schema, setSchema] = useState<Schema | null>(null)
+  const [adding, setAdding] = useState(false)
   const [busy, setBusy] = useState('')
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
@@ -37,14 +41,16 @@ export function NotionPage({ token, onToken }: { token: string; onToken: (value:
       const status = await request<Connection>('/status')
       if (gen !== generation.current) return
       setConnection(status)
-      const [list, approval, audit] = await Promise.all([
+      const [list, approval, audit, properties] = await Promise.all([
         request<{ pages: RecordRow[]; next_cursor: string | null }>('/records?' + new URLSearchParams({ query, kind })),
         request<{ pending_action: Pending | null }>('/pending'),
         request<{ activity: typeof activity; unavailable?: boolean }>('/activity').catch(() => ({ activity: [], unavailable: true })),
+        status.workflow_ready ? request<Schema>('/schema').catch(() => null) : Promise.resolve(null), // read before offering optional fields
       ])
       if (gen !== generation.current) return
       setRows(list.pages); setCursor(list.next_cursor); setPending(approval.pending_action)
       setActivity(audit.activity)
+      setSchema(properties)
       setActivityUnavailable(!!audit.unavailable)
       setRefreshed(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))
     } catch (e) { if (gen === generation.current) setError(e instanceof Error ? e.message : 'Could not load Notion.') }
@@ -81,7 +87,7 @@ export function NotionPage({ token, onToken }: { token: string; onToken: (value:
   async function propose(tool: string, args: unknown) {
     const data = await request<Result & { pending_action?: Pending }>('/proposals', { tool, args })
     inspectResult(data)
-    if (data.pending_action) { setPending(data.pending_action); setDraft(null); setNotice('Review the complete change below. Nothing has been saved yet.') }
+    if (data.pending_action) { setPending(data.pending_action); setDraft(null); setAdding(false); setFields({}); setNotice('Review the complete change below. Nothing has been saved yet.') }
   }
 
   function submit(e: FormEvent) {
@@ -89,12 +95,14 @@ export function NotionPage({ token, onToken }: { token: string; onToken: (value:
     if (!draft) return
     void run('Preparing preview', async () => {
       const args = { ...draft, date: draft.kind === 'Meeting' ? new Date(draft.date).toISOString() : draft.date,
-        end: draft.kind === 'Meeting' ? new Date(draft.end).toISOString() : '' }
+        end: draft.kind === 'Meeting' ? new Date(draft.end).toISOString() : '',
+        ...(Object.keys(fields).length ? { fields } : {}) } // only the properties the person touched
       await propose('notion_save', args)
     })
   }
 
   function edit(row: RecordRow) {
+    setFields({}); setAdding(false)
     setDraft({ title: row.title, kind: row.kind, status: row.status, date: inputDate(row.date?.start ?? localDate(), row.kind === 'Meeting'),
       end: row.date?.end ? inputDate(row.date.end, true) : '', body: '', page_id: row.id, expected_edited: row.last_edited_time })
   }
@@ -104,7 +112,9 @@ export function NotionPage({ token, onToken }: { token: string; onToken: (value:
     void run(approve ? 'Saving to Notion' : 'Cancelling', async () => {
       const data = await request<{ result: Result; pending_action: Pending | null }>('/approvals/' + pending.id, { approve })
       setPending(data.pending_action); inspectResult(data.result)
-      setNotice(data.result.status === 'executed' ? data.result.message || 'Saved to Notion.' : 'Cancelled. Nothing changed.')
+      setNotice(data.result.status !== 'executed' ? 'Cancelled. Nothing changed.'
+        : data.result.added_properties?.length ? `Added ${data.result.added_properties.join(', ')}. Fill it on a record as a separate change (New record or Edit record → More properties).`
+        : data.result.message || 'Saved to Notion.')
       setDetail(null); await refresh()
     })
   }
@@ -115,7 +125,8 @@ export function NotionPage({ token, onToken }: { token: string; onToken: (value:
       <div><h1>Notion</h1><p>Your daily work, notes and next steps.</p></div>
       <div className="workspace-actions">
         <button className="ghost" onClick={() => void refresh()} disabled={!!busy || !token}><ArrowsClockwise />Refresh</button>
-        <button className="primary" disabled={!!busy || !connection?.workflow_ready || !!pending} onClick={() => { setDraft(blank()); setDetail(null) }}><Plus />New record</button>
+        <button className="ghost" disabled={!!busy || !connection?.workflow_ready || !!pending} onClick={() => { setAdding(true); setDraft(null); setDetail(null) }}><Columns />Add property</button>
+        <button className="primary" disabled={!!busy || !connection?.workflow_ready || !!pending} onClick={() => { setDraft(blank()); setFields({}); setAdding(false); setDetail(null) }}><Plus />New record</button>
       </div>
     </div>
     {!token && <form className="workspace-connect" onSubmit={e => { e.preventDefault(); onToken(tokenDraft.trim()) }}>
@@ -138,8 +149,9 @@ export function NotionPage({ token, onToken }: { token: string; onToken: (value:
       })}>Add missing properties</button>
     </section>}
     {pending && <section className="workspace-approval" aria-label="Confirm Notion change">
-      <div><h2>{expired ? 'This preview expired' : 'Review before saving'}</h2><p>{pending.summary.replace(/^Destination: (?:database|source):[0-9a-f-]+/m, 'Destination: ' + (connection?.name || 'your configured Notion workspace'))}</p>
-        <small>{expired ? 'Refresh to prepare a new change.' : 'This change waits for your confirmation.'}</small></div>
+      <div><h2>{expired ? 'This preview expired' : 'Review before saving'}</h2>
+        <p className="approval-summary">{pending.summary}</p>{/* verbatim: the authoritative preview of the exact change */}
+        <small>{expired ? 'Refresh to prepare a new change.' : `Destination: ${connection?.name || 'your configured Notion database'} · expires in ${countdown(pending.expires_ts, clock)}`}</small></div>
       <div className="pair"><button className="ghost" disabled={!!busy || !!expired} onClick={() => decision(false)}><X />Cancel</button>
         <button className="primary" disabled={!!busy || !!expired} onClick={() => decision(true)}><Check />Confirm change</button></div>
     </section>}
@@ -164,7 +176,9 @@ export function NotionPage({ token, onToken }: { token: string; onToken: (value:
         })}>Load more</button>}
       </section>
       <section className="workspace-preview" aria-label="Record preview">
-        {draft ? <form className="record-editor" onSubmit={submit}>
+        {adding ? <AddPropertyForm disabled={!!busy || !!pending} onClose={() => setAdding(false)}
+          onPropose={property => void run('Preparing property preview', () => propose('notion_add_properties', { properties: [property] }))} />
+        : draft ? <form className="record-editor" onSubmit={submit}>
           <div className="record-editor-heading"><h2>{draft.page_id ? 'Edit record' : 'New record'}</h2><button className="icon-btn" type="button" aria-label="Close editor" onClick={() => setDraft(null)}><X /></button></div>
           <label>Title<input ref={editor} required maxLength={200} value={draft.title} onChange={e => update('title', e.target.value)} /></label>
           <div className="editor-pair"><label>Type<select value={draft.kind} onChange={e => setDraft(d => d ? { ...d, kind: e.target.value, date: localDate(), end: '' } : d)}>
@@ -174,6 +188,7 @@ export function NotionPage({ token, onToken }: { token: string; onToken: (value:
           {draft.kind === 'Meeting' && <><label>Ends (your local time)<input required type="datetime-local" value={draft.end} onChange={e => update('end', e.target.value)} /></label>
             <p className="record-help">This saves meeting notes. To reserve a slot or invite people, ask Koe to book it in Calendar.</p></>}
           <label>{draft.page_id ? 'Additional notes (appended)' : 'Notes'}<textarea rows={7} maxLength={6000} value={draft.body} onChange={e => update('body', e.target.value)} /></label>
+          <PropertyFields schema={schema} values={fields} onChange={setFields} />
           <p className="record-help">Existing page content is preserved. You’ll review the exact change before it is saved.</p>
           <button className="primary" disabled={!!busy || !!pending}>Preview change</button>
         </form> : detail ? <article className="record-detail">
@@ -200,4 +215,9 @@ export function NotionPage({ token, onToken }: { token: string; onToken: (value:
       </li>)}</ol> : <p>Notion tool activity and approval outcomes appear here after you use Koe. Refresh to see the latest.</p>}
     </section>
   </main>
+}
+
+function countdown(expires: string, now: number) {
+  const left = Math.max(0, Math.round((new Date(expires).getTime() - now) / 1000))
+  return `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`
 }

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { calendarLayout, clockTime, type WorkCard } from './workState'
+import { calendarLayout, clockTime, meetLink, MEET_STATUS, recurrenceText, reminderText, serviceLink, type CalendarEvent, type WorkCard } from './workState'
 import { notionRequest, type Detail } from '../notion/api'
 import { savedToken } from '../chat/api'
 import './work.css'
@@ -12,9 +12,13 @@ export function CalendarWork({ card }: { card: WorkCard }) {
   const layout = calendarLayout(card)
   const hours = Array.from({ length: layout.to - layout.from + 1 }, (_, i) => layout.from + i)
   const proposal = work.operation === 'calendar_upsert_event'
+  const cancelling = work.operation === 'calendar_cancel_event'
   return <>
     <div className="work-context"><strong>{layout.date || 'Your calendar'}</strong><span>{layout.timezone}</span></div>
-    {layout.allDay.length > 0 && <ul className="work-all-day">{layout.allDay.map(e => <li key={e.id}>All day · {e.title}</li>)}</ul>}
+    {(layout.allDay.length > 0 || layout.proposedAllDay) && <ul className="work-all-day">
+      {layout.allDay.map(e => <li key={e.id}>All day · {e.title}</li>)}
+      {layout.proposedAllDay && <li className="lw-target" data-tone={phase === 'saved' ? 'saved' : 'proposed'}>All day · {work.title || work.details.title}</li>}
+    </ul>}
     {layout.items.length > 0 ? <>
       <div className="work-legend"><span>Calendar events</span><span>{proposal ? phase === 'saved' ? 'Confirmed slot' : phase === 'cancelled' ? 'Cancelled slot' : 'Proposed slot' : 'Free windows'}</span></div>
       <div className="work-timeline" style={{ height: (layout.to - layout.from) * 60 + 32 }} aria-label="Calendar day timeline">
@@ -30,13 +34,75 @@ export function CalendarWork({ card }: { card: WorkCard }) {
         })}
       </div>
     </> : phase === 'ready' && <p className="work-help">{work.operation === 'calendar_find_free' ? 'No free window matched this duration and range.' : 'No timed events returned for this date.'}</p>}
-    {proposal && <div className="work-selection"><h3>{work.details.title}</h3>
-      <p>{work.details.start && clockTime(work.details.start, layout.timezone)} – {work.details.end && clockTime(work.details.end, layout.timezone)}</p>
-      <p>{work.details.attendees?.length ? `Attendees: ${work.details.attendees.join(', ')}` : work.details.event_id && work.details.attendees === undefined ? 'Existing attendees retained' : 'No attendees'}</p>
-      <small>{phase === 'saved' ? 'Google confirmed the booking.' : phase === 'cancelled' ? 'This proposal was cancelled.' : 'Proposed change · availability is rechecked before saving.'}</small></div>}
+    {proposal && <EventProposal card={card} timezone={layout.timezone} />}
+    {cancelling && <CancelCard card={card} timezone={layout.timezone} />}
+    {work.operation === 'calendar_get_event' && work.event && <EventCard event={work.event} timezone={layout.timezone} />}
     {work.operation === 'calendar_find_free' && <p className="work-help">{work.details.duration_min}-minute meeting · free windows are suggestions, not reservations.</p>}
     {work.truncated && <p className="work-help">Showing the first 100 of {work.total} results. Ask Koe for a narrower range.</p>}
   </>
+}
+
+const when = (value: string | undefined, timezone: string, allDay?: boolean) =>
+  !value ? '' : allDay || /^\d{4}-\d{2}-\d{2}$/.test(value) ? value.slice(0, 10) : `${value.slice(0, 10)} ${clockTime(value, timezone)}`
+
+// The proposal Koe prepared (before Confirm) or Google's verified copy (after). Every field the approval names is shown;
+// the complete approval summary in the conversation stays the authoritative preview.
+function EventProposal({ card, timezone }: { card: WorkCard; timezone: string }) {
+  const { work, phase } = card
+  const d = work.details
+  const allDay = work.all_day ?? d.all_day
+  const saved = phase === 'saved'
+  const meet = meetLink(work.conference)
+  const reminders = reminderText(d.reminders)
+  return <div className="work-selection">
+    <h3>{work.title || d.title}</h3>
+    <p>{allDay ? `All day · ${when(work.start || d.start, timezone, true)}${(work.end || d.end) ? ` (ends before ${when(work.end || d.end, timezone, true)})` : ''}`
+      : `${when(work.start || d.start, timezone)} – ${clockTime(work.end || d.end || '', timezone)}`}</p>
+    {d.recurrence && <p>{recurrenceText(d.recurrence)}</p>}
+    {d.location && <p>Location: {d.location}</p>}
+    {d.description && <p className="work-description">{d.description}</p>}
+    {reminders && <p>{reminders}</p>}
+    <p>{d.attendees?.length ? `Guests: ${d.attendees.join(', ')}` : d.event_id && d.attendees === undefined ? 'Existing guests kept' : 'No guests'}</p>
+    {d.create_meet && !saved && <p>Adds a Google Meet link.</p>}
+    {saved && work.occurrences && work.occurrences.length > 1 && <details className="work-occurrences"><summary>{work.occurrences.length} occurrences ({timezone})</summary>
+      <ol>{work.occurrences.map((o, i) => <li key={i}>{when(o.start, timezone, allDay)}{allDay ? '' : ` – ${clockTime(o.end, timezone)}`}</li>)}</ol></details>}
+    {saved && work.conference && <p className="work-meet" data-status={work.conference.status}>{MEET_STATUS[work.conference.status]}
+      {meet && <a className="soft" href={meet} target="_blank" rel="noopener">Join Meet</a>}</p>}
+    <small>{saved ? work.verified ? 'Google confirmed the saved event.' : 'Saved.'
+      : phase === 'cancelled' ? 'This proposal was cancelled. Nothing changed.'
+      : `Proposed change · availability is rechecked before saving.${d.attendees?.length ? ' Guests get an email from Google when it’s saved.' : ''}`}</small>
+  </div>
+}
+
+function CancelCard({ card, timezone }: { card: WorkCard; timezone: string }) {
+  const { work, phase } = card
+  const d = work.details
+  const scope = work.scope || d.scope
+  const done = phase === 'saved' && work.cancelled
+  return <div className="work-selection" data-danger>
+    <h3>{done ? 'Cancelled' : 'Cancel'}: {work.title || d.title || 'event'}</h3>
+    <p>{when(work.start || d.start, timezone, work.all_day ?? d.all_day)}{d.end && !(work.all_day ?? d.all_day) ? ` – ${clockTime(work.end || d.end, timezone)}` : ''}</p>
+    {d.attendees?.length ? <p>Guests: {d.attendees.join(', ')}</p> : null}
+    <p className="work-warning">{scope === 'series' ? 'Cancels ALL occurrences of this series, including past ones.'
+      : scope === 'instance' ? 'Cancels this one occurrence only.' : 'Cancels this one event.'}</p>
+    <small>{done ? 'Google cancelled the meeting and notified its guests.' : phase === 'cancelled' ? 'Not cancelled. The meeting is unchanged.'
+      : 'Guests are notified by Google if you confirm.'}</small>
+  </div>
+}
+
+function EventCard({ event, timezone }: { event: CalendarEvent; timezone: string }) {
+  const start = event.start.dateTime || event.start.date, end = event.end.dateTime || event.end.date
+  const meet = meetLink(event.conference)
+  const link = serviceLink(event.url, 'calendar')
+  return <div className="work-selection">
+    <h3>{event.title}</h3>
+    <p>{event.all_day ? `All day · ${start}` : `${when(start, timezone)} – ${clockTime(end || '', timezone)}`}</p>
+    {event.recurring_event_id && <p>Part of a recurring series.</p>}
+    {event.attendees?.length ? <p>Guests: {event.attendees.join(', ')}{event.attendees_omitted ? ' (and more)' : ''}</p> : null}
+    {event.conference && <p className="work-meet" data-status={event.conference.status}>{MEET_STATUS[event.conference.status]}
+      {meet && <a className="soft" href={meet} target="_blank" rel="noopener">Join Meet</a>}</p>}
+    {link && <a className="work-link" href={link} target="_blank" rel="noopener">Open in Google Calendar</a>}
+  </div>
 }
 
 export function SheetsWork({ card }: { card: WorkCard }) {

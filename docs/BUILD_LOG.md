@@ -1025,3 +1025,48 @@ Next phase: approved schema creation and safe Sheets row editing is tracked in [
 - Background browser tabs don't run `requestAnimationFrame`, so GSAP waits until the tab is visible.
 **Measured:** 277 backend tests and 21 frontend tests pass; tsc, lint (no new warnings) and build pass. Browser (mocked API, no real writes): proposal → saving → saved, failure and cancel for Sheets; Calendar proposal + bubble confirm; Notion proposal + saved + re-read; live view framed a public Google Sheet and a public Google Calendar; call Workspace tab with fake `/ws/call` events; 1280px dark, phone light, reduced motion.
 **Interview line:** "I made the agent's side effects observable: the same event projection drives a call over WebSockets and a chat over plain HTTP, the UI only marks a write saved after the approval gate reports it executed, and I checked each provider's frame headers before embedding its live page."
+
+## Step 60: the frontend catches up with the backend handoff (2026-10-14)
+**Files:** frontend/src/workspace/{workState.ts, WorkViews.tsx, work.css} · frontend/src/notion/{NotionFields.tsx (new), NotionPage.tsx, notion.css} · frontend/src/dashboard/{state.ts, Dashboard.tsx, DashboardPage.tsx, dashboard.css} · frontend/src/call/useCall.ts · frontend/src/pages/Guide.tsx · frontend/tests/{workspace, dashboard}.test.mjs
+**What it does:** It implements docs/FRONTEND_BACKEND_HANDOFF.md on the screens that have real data:
+- *Calendar (live workspace):*
+  - All-day proposals sit in the all-day strip, not on the hour grid.
+  - The proposal card spells out recurrence ("Repeats every 2 weeks, 5 times"), reminders, location, guests and the saved occurrences.
+  - **Join Meet** appears only when `conference.status` is `success` with a meet.google.com link. Otherwise the status is explained (pending, failed, unavailable).
+  - Cancelling a series warns that it removes every occurrence, past ones included.
+- *Notion:*
+  - **More properties** builds controls from the database's real schema (`GET /api/notion/schema`). Only touched properties are sent; Clear sends `null`.
+  - **Add property** proposes a new column (8 types; options one per line, 1–30, unique, no commas) as its own approval.
+  - The approval card shows the backend's summary word for word, with a countdown to expiry.
+- *Dashboard:* a **GitHub stats** tile shows the latest successful `github_activity` / `github_contributions` result in the activity feed:
+  - commits and merged PRs, kept separate, with per-repository rows and merged-PR links;
+  - the exact window (end not included) and partial flags;
+  - optional "changed lines in analyzed commits";
+  - contributions, active days, current streak ("at least" when it may start before the window) and longest streak in the window.
+- *Guide:* matches what the backend really does: daily/weekly repeats 2–20 times, Meet, reminders as Calendar notifications (not alarms), series cancel, Sheets find/correct/add columns, Notion properties, GitHub stats.
+**Core concept:**
+- *Unknown is not zero.* The API says `null` when it couldn't count, for example a search that failed or a repository without permission. Showing `0` there would be a lie the user acts on, so `null` renders as a muted "unknown".
+- *The UI asks the server what exists.* Property controls come from the schema endpoint, so the form never invents a column or a select option.
+- *A summary written by the server is shown verbatim.* The approval gate's text is the contract, and the UI doesn't paraphrase it.
+**How it connects:**
+- `/ws/events` tool end events (they carry `result`) → `reduceEvent` → `latestResult(data, 'github_activity')` → `GitHubStats` tile.
+- Notion: `GET /api/notion/schema` → `PropertyFields` → `fields` in `POST /api/notion/proposals` (notion_save) → approval → `POST /api/approvals/{id}`. Add property → `notion_add_properties` → a separate approval.
+- Calendar: `work` projections (`call_work.py`) → `reduceWork` → `EventProposal` / `CancelCard` / `EventCard`.
+**Try it yourself:**
+- Ask Koe "How much did I ship yesterday?" then open the Dashboard: the GitHub stats tile fills in.
+- Notion → New record → More properties, change one, then Preview change.
+- `npm test` (26 tests).
+**Gotchas:**
+- A `.visually-hidden` legend only works if the CSS defining it is loaded on that page. It lived in the Settings and Install CSS, so on the Notion page it showed twice; `aria-label` doesn't depend on CSS.
+- `.record-editor label { display: grid }` also hit the field labels and pushed the type tag to its own line.
+- Nothing is fetched automatically for GitHub stats. Changed-line reads are expensive and the handoff says never poll them.
+**Measured:**
+- `tsc -b` clean, lint 0 errors (no new warnings), 26 frontend tests, `vite build` OK, 428 backend tests.
+- Browser, via a throwaway harness with fake data and no real writes:
+  - the GitHub tile with unknown merged PRs and an "at least 9 days" streak;
+  - property fields produced exactly `{"Priority":"High","Tags":["api"],"Done":false,"Estimate":null}`;
+  - add-property validation caught commas and duplicate options;
+  - the Guide sections render in contents order.
+- Signed-in pages weren't driven live, because sign-in needs the owner's Google account.
+**Gaps reported (backend contract):** no `/api/sheets`, `/api/calendar` or `/api/github` HTTP routes, so there's no standalone Sheets or GitHub screen. Sheets row/schema tools and GitHub stats have no `work` projection, so the call/chat panel shows only the activity line for them. GitHub stats live only in the in-memory activity feed and disappear when Render restarts.
+**Interview line:** "I built the UI from the API's own truth: schema-driven forms, verbatim approval text, and null rendered as unknown rather than zero."

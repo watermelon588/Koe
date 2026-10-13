@@ -1,6 +1,7 @@
 import { useState, type KeyboardEvent, type ReactNode } from 'react'
 import { ArrowClockwise, CalendarBlank, GitPullRequest, Pulse, SealCheck, type Icon } from '@phosphor-icons/react'
-import { activityText, clockTime, isBusy, latencyStats, type Approval, type DashboardState, type Panel, type PullRequest } from './state'
+import { activityText, clockTime, isBusy, latencyStats, latestResult, type Approval, type DashboardState, type GitHubActivity,
+  type GitHubContributions, type Panel, type PullRequest } from './state'
 import { usePending } from './useDashboard'
 
 // Your day. The pieces below (TodayList, PRList, ApprovalList, ActivityFeed) are shared by two layouts:
@@ -48,6 +49,46 @@ export function ApprovalList({ pending, currentApproval, decide }: { pending: Ap
       <button className="soft" onClick={() => decide(true)}>Approve</button>
     </div>}
   </li>)}</ul>
+}
+
+const known = (n: number | null | undefined) => typeof n === 'number' ? n.toLocaleString('en-IN') : 'unknown'
+const Stat = ({ n, unit = '' }: { n: number | null | undefined; unit?: string }) =>
+  typeof n === 'number' ? <>{known(n)}{unit && <small> {unit}</small>}</> : <small>unknown</small>
+
+// Only what Koe actually read this session: commits and merged PRs stay separate, unknown is never shown as zero,
+// and lines are "changed lines in analyzed commits", not a total.
+export function GitHubStats({ data }: { data: DashboardState }) {
+  const activity = latestResult<GitHubActivity>(data, 'github_activity')?.result
+  const streaks = latestResult<GitHubContributions>(data, 'github_contributions')?.result
+  if (!activity && !streaks) return <p className="dash-empty">Ask Koe “How much did I ship yesterday?” or “What’s my GitHub streak?”
+    and the numbers it read show up here.</p>
+  return <>
+    {activity && <div className="gh-stats">
+      <dl className="gh-totals">
+        <div><dt>Commits</dt><dd><Stat n={activity.totals.commits} /></dd></div>
+        <div><dt>Merged PRs</dt><dd><Stat n={activity.totals.merged_prs} /></dd></div>
+        {activity.lines && <div><dt>Changed lines in analyzed commits</dt><dd>{activity.lines.additions == null ? <small>unavailable</small>
+          : `+${known(activity.lines.additions)} / −${known(activity.lines.deletions)}`}</dd></div>}
+      </dl>
+      {!!activity.by_repository?.length && <ul className="rows">{activity.by_repository.map((r) => <li key={r.repo}>
+        <span>{r.repo}</span><small>{known(r.commits)} commits · {known(r.merged_prs)} merged</small></li>)}</ul>}
+      {!!activity.prs?.length && <ul className="rows">{activity.prs.slice(0, 5).map((pr) => <li key={`${pr.repo}#${pr.number}`}>
+        <SafeLink url={pr.url}>{pr.title}</SafeLink><small>merged · {pr.repo}#{pr.number}</small></li>)}</ul>}
+      <p className="dash-meta">{activity.since} to {activity.until}{activity.end_exclusive ? ' (end not included)' : ''} · {activity.timezone}
+        {(activity.partial || activity.totals_are_complete === false) && ' · partial: some data could not be read'}
+        {activity.lines && ` · lines from ${activity.lines.commits_analyzed ?? '?'} analyzed commits${activity.lines.partial ? ' (partial)' : ''}`}</p>
+    </div>}
+    {streaks && <div className="gh-stats">
+      <dl className="gh-totals">
+        <div><dt>Contributions</dt><dd><Stat n={streaks.total_contributions} /></dd></div>
+        <div><dt>Active days</dt><dd><Stat n={streaks.active_days} /></dd></div>
+        <div><dt>Current streak</dt><dd>{streaks.current_streak_may_extend_before_window && streaks.current_streak != null && <small>at least </small>}
+          <Stat n={streaks.current_streak} unit="days" /></dd></div>
+        <div><dt>Longest in window</dt><dd><Stat n={streaks.longest_streak_in_window} unit="days" /></dd></div>
+      </dl>
+      <p className="dash-meta">{streaks.window_start} to {streaks.window_end}{streaks.note ? ` · ${streaks.note}` : ''}</p>
+    </div>}
+  </>
 }
 
 export function ActivityFeed({ data }: { data: DashboardState }) {

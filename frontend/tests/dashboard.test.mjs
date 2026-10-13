@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { activityText, emptyState, latencyStats, reduceEvent } from '../src/dashboard/state.ts'
+import { activityText, emptyState, latencyStats, latestResult, reduceEvent } from '../src/dashboard/state.ts'
 
 test('snapshot restores state; unknown events do not reset it', () => {
   const state = reduceEvent(emptyState, { type: 'snapshot', panels: { calendar: { result: { events: [] } } },
@@ -44,4 +44,13 @@ test('percentiles use measured values only with explicit nearest-rank p95', () =
     { count: 4, p50: 250, p95: 400 })
   assert.deepEqual(latencyStats(Array.from({ length: 20 }, (_, i) => ({ ms: (i + 1) * 100 }))),
     { count: 20, p50: 1050, p95: 1900 })
+})
+
+test('GitHub stats come only from the latest successful tool result', () => {
+  const ok = { id: '2', ts: 't2', type: 'tool', phase: 'end', name: 'github_activity', ok: true, result: { totals: { commits: 3, merged_prs: null } } }
+  const failed = { id: '1', ts: 't1', type: 'tool', phase: 'end', name: 'github_activity', ok: false, result: { error: { message: 'x' } } }
+  assert.equal(latestResult({ ...emptyState, activity: [failed] }, 'github_activity'), null)
+  const found = latestResult({ ...emptyState, activity: [failed, ok] }, 'github_activity')
+  assert.equal(found.result.totals.commits, 3)
+  assert.equal(found.result.totals.merged_prs, null) // unknown stays unknown, never zero
 })

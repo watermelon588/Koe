@@ -86,3 +86,39 @@ test('screen readers hear pending, saved (with the row) and failures', () => {
   assert.equal(announce('sheets',{phase:'error',work:{...row,error:{message:'Sheets did not confirm the entry.'}}}),
     'Google Sheets needs attention: Sheets did not confirm the entry.')
 })
+
+// Calendar extensions (docs/CALENDAR_EXTENSIONS.md)
+import { meetLink, recurrenceText, reminderText } from '../src/workspace/workState.ts'
+test('Join Meet appears only for a ready conference with a real meet.google.com link', () => {
+  assert.equal(meetLink({status:'success', url:'https://meet.google.com/abc-defg-hij'}), 'https://meet.google.com/abc-defg-hij')
+  assert.equal(meetLink({status:'pending', url:'https://meet.google.com/abc-defg-hij'}), '')
+  assert.equal(meetLink({status:'success', url:'https://evil.example/meet'}), '')
+  assert.equal(meetLink({status:'success', url:''}), '')
+  assert.equal(meetLink(undefined), '')
+})
+test('recurrence and reminders read as plain English; omitted reminders say nothing', () => {
+  assert.equal(recurrenceText({frequency:'weekly', interval:2, count:5}), 'Repeats every 2 weeks, 5 times')
+  assert.equal(recurrenceText({frequency:'daily', count:3}), 'Repeats daily, 3 times')
+  assert.equal(recurrenceText(undefined), '')
+  assert.equal(reminderText(undefined), '')
+  assert.equal(reminderText([]), 'Reminders off')
+  assert.equal(reminderText([{method:'popup', minutes:10}, {method:'email', minutes:60}]), 'Reminders: pop-up 10 min before, email 60 min before')
+})
+test('an all-day proposal goes in the all-day strip, never on the timed grid', () => {
+  const allDay = { ...booking, details: { title: 'Offsite', start: '2026-10-15', end: '2026-10-16', all_day: true } }
+  const s = reduceWork(emptyWork, {type:'approval_pending', work:allDay})
+  const layout = calendarLayout(s.calendar)
+  assert.equal(layout.proposedAllDay, true)
+  assert.equal(layout.items.some(i => i.id === 'proposal'), false)
+})
+test('a confirmed cancellation removes the event from the day view', () => {
+  const day = { service:'calendar', operation:'calendar_list', timezone:'Asia/Kolkata', date:'2026-10-13', details:{date:'2026-10-13'},
+    events:[{id:'e1', title:'Sync', start:{dateTime:'2026-10-13T10:00:00+05:30'}, end:{dateTime:'2026-10-13T10:30:00+05:30'}}] }
+  let s = reduceWork(emptyWork, {type:'tool', phase:'end', work:day})
+  const cancel = { service:'calendar', operation:'calendar_cancel_event', action_id:'c', timezone:'Asia/Kolkata', date:'2026-10-13',
+    details:{event_id:'e1', title:'Sync', start:'2026-10-13T10:00:00+05:30', end:'2026-10-13T10:30:00+05:30', scope:'single', date:'2026-10-13'} }
+  s = reduceWork(s, {type:'approval_pending', work:cancel})
+  s = reduceWork(s, {type:'approval_result', status:'executed', work:{...cancel, cancelled:true}})
+  assert.equal(s.calendar.phase, 'saved')
+  assert.deepEqual(s.calendar.work.events, [])
+})

@@ -47,3 +47,17 @@
   .call-tabs .seg svg { display: none; }
 }
 @media (prefers-reduced-motion: reduce) { .work-phase > span { animation: none !important; } }
+
+/* Calendar extensions: description, occurrences, Meet status, cancellation (CALENDAR_EXTENSIONS.md) */
+.work-selection[data-danger] { border-color: color-mix(in srgb, #e5534b 45%, transparent); }
+.work-description { white-space: pre-wrap; color: var(--muted); max-height: 9em; overflow: auto; }
+.work-warning { color: var(--text); font-weight: 500; }
+.work-occurrences { margin: 6px 0; font-size: 12px; }
+.work-occurrences summary { cursor: pointer; color: var(--muted); }
+.work-occurrences ol { margin: 6px 0 0; padding-left: 20px; display: grid; gap: 2px; }
+.work-meet { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.work-meet[data-status='failure'], .work-meet[data-status='unavailable'] { color: var(--muted); }
+.work-meet .soft { height: 30px; padding: 0 12px; font-size: 12px; text-decoration: none; color: var(--text); }
+.work-link { display: inline-block; margin-top: 6px; font-size: 12px; color: var(--accent); }
+.work-all-day li[data-tone='proposed'] { border: 1px dashed var(--accent); border-radius: 8px; padding: 4px 8px; margin-top: 4px; }
+.work-all-day li[data-tone='saved'] { border: 1px solid var(--accent); border-radius: 8px; padding: 4px 8px; margin-top: 4px; }

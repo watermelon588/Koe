@@ -26,6 +26,18 @@ const TOOL_LABEL: Record<string, string> = {
   notion_save: 'Preparing your Notion record',
   notion_archive: 'Preparing to move a Notion record to trash',
   notion_log: 'Writing your Notion daily log',
+  notion_read: 'Reading your Notion records',
+  notion_schema: 'Reading your Notion properties',
+  notion_add_properties: 'Preparing new Notion properties',
+  calendar_get_event: 'Reading the event',
+  calendar_cancel_event: 'Preparing a cancellation',
+  sheets_schema: 'Reading your timesheet columns',
+  sheets_find_rows: 'Finding timesheet rows',
+  sheets_add_columns: 'Preparing new timesheet columns',
+  sheets_update_row: 'Preparing a timesheet edit',
+  github_activity: 'Counting your GitHub activity',
+  github_contributions: 'Reading your contribution graph',
+  github_comment: 'Preparing your pull request comment',
 }
 export const moodOf = (s: CallState): Mood => (s === 'thinking' ? 'thinking' : s === 'idle' || s === 'connecting' ? 'idle' : 'listening')
 

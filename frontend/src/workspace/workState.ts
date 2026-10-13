@@ -3,13 +3,22 @@
 export type Service = 'calendar' | 'sheets' | 'notion'
 export const SERVICES: Service[] = ['calendar', 'sheets', 'notion']
 export type Phase = 'working' | 'preparing' | 'ready' | 'waiting' | 'saving' | 'saved' | 'cancelled' | 'error'
-type When = { dateTime?: string; date?: string }
+type When = { dateTime?: string; date?: string; timeZone?: string }
+export type Conference = { status: 'none' | 'pending' | 'success' | 'failure' | 'unavailable'; url: string }
+export type CalendarEvent = { id: string; title: string; start: When; end: When; url?: string; all_day?: boolean; etag?: string
+  attendees?: string[]; attendees_omitted?: boolean; recurring_event_id?: string; recurrence?: string[]; conference?: Conference }
 export type Work = {
   service: Service; operation: string; action_id?: string; timezone?: string; date?: string
   details: { date?: string; title?: string; start?: string; end?: string; attendees?: string[]; event_id?: string;
     duration_min?: number; client?: string; hours?: number; note?: string; sheet_name?: string
-    kind?: string; status?: string; body?: string; page_id?: string; entries?: string[] }
-  events?: { id: string; title: string; start: When; end: When; url?: string }[]
+    kind?: string; status?: string; body?: string; page_id?: string; entries?: string[]
+    // Calendar extensions (docs/CALENDAR_EXTENSIONS.md): what the proposal asks for, as projected by call_work.py
+    all_day?: boolean; create_meet?: boolean; scope?: 'single' | 'instance' | 'series'; description?: string; location?: string
+    reminders?: { method?: string; minutes?: number }[]; recurrence?: { frequency?: string; interval?: number; count?: number } }
+  events?: CalendarEvent[]
+  // Calendar results: what Google returned (verified means Google echoed the approved fields back)
+  event?: CalendarEvent; occurrences?: { start: string; end: string }[]; conference?: Conference
+  cancelled?: boolean; verified?: boolean; all_day?: boolean; recurrence?: string | null; id?: string; scope?: string
   slots?: { start: string; end: string }[]; total?: number; truncated?: boolean
   row?: number; range?: string; url?: string; title?: string; start?: string; end?: string
   page_id?: string; kind?: string; record_status?: string; added?: number; message?: string
@@ -44,10 +53,10 @@ export function reduceWork(state: WorkState, event: WorkEvent): WorkState {
     [w.service]: { work, phase, operationId: event.operation_id ?? old?.operationId } }
 }
 
-const HOSTS: Record<Service, string[]> = { calendar: ['calendar.google.com', 'www.google.com'], sheets: ['docs.google.com'],
-  notion: ['notion.so', 'www.notion.so', 'app.notion.com'] }
+const HOSTS: Record<Service | 'meet', string[]> = { calendar: ['calendar.google.com', 'www.google.com'], sheets: ['docs.google.com'],
+  notion: ['notion.so', 'www.notion.so', 'app.notion.com'], meet: ['meet.google.com'] }
 // Only https links to the service's own hosts are ever rendered or framed (the backend checks the same list).
-export function serviceLink(value: string | undefined, service: Service): string {
+export function serviceLink(value: string | undefined, service: Service | 'meet'): string {
   try {
     const url = new URL(value || '')
     return url.protocol === 'https:' && !url.username && !url.password && HOSTS[service].includes(url.hostname) ? url.href : ''
@@ -119,7 +128,8 @@ export function calendarLayout(card: WorkCard) {
   const allDay = (work.events || []).filter(e => e.start.date && !e.start.dateTime)
   for (const e of work.events || []) add(e.id, e.title, e.start.dateTime, e.end.dateTime, 'busy')
   for (const [i, s] of (work.slots || []).entries()) add(`free-${i}`, 'Available', s.start, s.end, 'free')
-  if (work.operation === 'calendar_upsert_event') add('proposal', work.title || work.details.title || 'Meeting',
+  const proposedAllDay = work.operation === 'calendar_upsert_event' && (work.all_day ?? work.details.all_day)
+  if (work.operation === 'calendar_upsert_event' && !proposedAllDay) add('proposal', work.title || work.details.title || 'Meeting',
     work.start || work.details.start, work.end || work.details.end, phase === 'saved' ? 'saved' : phase === 'cancelled' ? 'cancelled' : 'proposed')
   // Put overlapping events in separate lanes so none is hidden beneath another event.
   const laneEnds: number[] = []
@@ -132,5 +142,32 @@ export function calendarLayout(card: WorkCard) {
   for (const item of busy) item.lanes = laneEnds.length
   const from = items.length ? Math.max(0, Math.floor(Math.min(...items.map(i => i.start)) / 60) - 1) : 8
   const to = items.length ? Math.min(24, Math.ceil(Math.max(...items.map(i => i.end)) / 60) + 1) : 18
-  return { date, timezone, items, allDay, from, to }
+  return { date, timezone, items, allDay, proposedAllDay: !!proposedAllDay, from, to }
+}
+
+// Join Meet only for a real, ready conference: success with an https meet.google.com link (CALENDAR_EXTENSIONS.md).
+export function meetLink(conference?: Conference): string {
+  return conference?.status === 'success' ? serviceLink(conference.url, 'meet') : ''
+}
+
+export const MEET_STATUS: Record<Conference['status'], string> = {
+  none: 'No Meet link on this event.',
+  pending: 'Google is still creating the Meet link. Ask Koe to check the event again in a moment.',
+  success: 'Meet link ready.',
+  failure: 'Google could not create a Meet link. The event itself is saved.',
+  unavailable: 'Meet isn’t available for this calendar. The event itself is saved.',
+}
+
+// "daily, every 2 days, 5 times" from the small input object; the saved series' RRULE is shown as Google returned it.
+export function recurrenceText(r?: { frequency?: string; interval?: number; count?: number }): string {
+  if (!r?.frequency) return ''
+  const unit = r.frequency === 'weekly' ? 'week' : 'day'
+  const every = (r.interval ?? 1) > 1 ? `every ${r.interval} ${unit}s` : r.frequency
+  return `Repeats ${every}, ${r.count} times`
+}
+
+export function reminderText(reminders?: { method?: string; minutes?: number }[]): string {
+  if (!reminders) return '' // omitted: Google's defaults / current reminders are kept
+  if (!reminders.length) return 'Reminders off'
+  return 'Reminders: ' + reminders.map(r => `${r.method === 'email' ? 'email' : 'pop-up'} ${r.minutes} min before`).join(', ')
 }
