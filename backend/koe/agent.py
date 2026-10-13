@@ -113,6 +113,12 @@ TOOLS.update({
         "type": "object", "properties": {"title": {"type": "string"}, "start": {"type": "string"},
         "end": {"type": "string"}, "attendees": {"type": "array", "items": {"type": "string"}},
         'description': {'type': 'string', 'maxLength': 6000}, 'location': {'type': 'string', 'maxLength': 500},
+        'all_day': {'type': 'boolean', 'description': 'Only true for all-day events: start/end YYYY-MM-DD, end exclusive.'},
+        'recurrence': {'type': 'object', 'description': 'New bounded series only. Every occurrence is checked; at most90 days through final end.',
+            'properties': {'frequency': {'type': 'string', 'enum': ['daily', 'weekly']},
+                'interval': {'type': 'integer', 'minimum': 1, 'maximum': 4},
+                'count': {'type': 'integer', 'minimum': 2, 'maximum': 20}},
+            'required': ['frequency', 'count'], 'additionalProperties': False},
         'reminders': {'type': 'array', 'maxItems': 5, 'description': 'Override event notifications; [] disables reminders. Omit to preserve defaults/existing settings. Not a phone alarm.',
             'items': {'type': 'object', 'properties': {'method': {'type': 'string', 'enum': ['popup', 'email']},
                 'minutes': {'type': 'integer', 'minimum': 0, 'maximum': 40320}}, 'required': ['method', 'minutes'], 'additionalProperties': False}},
@@ -229,6 +235,12 @@ def prepare_write(name: str, args: dict) -> tuple[dict, str]:
     if normalized['reminders'] is not None:
         summary += '\nReminders: ' + (', '.join(f"{r['method']} {r['minutes']} minutes before" for r in normalized['reminders']) or 'disabled')
         summary += '. Delivery depends on Calendar/device settings.'
+    plan = calendar.event_plan(normalized)
+    if normalized['all_day']:
+        summary += '\nAll-day dates; end date is exclusive.'
+    if plan['rrule']:
+        summary += '\nNew series: ' + plan['rrule'] + '\nEvery occurrence:\n' + '\n'.join(
+            f"{p['start']} to {p['end']}" for p in plan['occurrences'])
     return normalized, summary
 
 

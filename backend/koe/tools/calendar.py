@@ -59,10 +59,18 @@ def _iso(value: str) -> datetime:
 
 def prepare_event(title: str, start: str, end: str, attendees: list[str] | None = None,
                   event_id: str | None = None, description: str | None = None,
-                  location: str | None = None, reminders: list[dict] | None = None) -> dict:
+                  location: str | None = None, reminders: list[dict] | None = None,
+                  all_day: bool = False, recurrence: dict | None = None) -> dict:
     if not isinstance(title, str) or not title.strip() or len(title) > 200:
         raise ValueError("Provide a title of 1 to 200 characters.")
-    start_dt, end_dt = _iso(start), _iso(end)
+    if type(all_day) is not bool:
+        raise ValueError('all_day must be true or false.')
+    if all_day:
+        if any(not isinstance(v, str) or Date.fromisoformat(v).isoformat() != v for v in (start, end)):
+            raise ValueError('All-day events need YYYY-MM-DD dates and an exclusive end date.')
+        start_dt, end_dt = _day(start)[0], _day(end)[0]
+    else:
+        start_dt, end_dt = _iso(start), _iso(end)
     if end_dt <= start_dt:
         raise ValueError("The end must be after the start.")
     if attendees is not None and (not isinstance(attendees, list) or len(attendees) > 50 or any(
@@ -79,9 +87,44 @@ def prepare_event(title: str, start: str, end: str, attendees: list[str] | None 
             not isinstance(r, dict) or set(r) != {'method', 'minutes'} or r['method'] not in ('popup', 'email')
             or type(r['minutes']) is not int or not 0 <= r['minutes'] <= 40320 for r in reminders):
             raise ValueError('Use at most five popup/email reminders with integer minutes from 0 to 40320.')
-    return {"title": title.strip(), "start": start_dt.isoformat(), "end": end_dt.isoformat(),
+    result = {"title": title.strip(), "start": start if all_day else start_dt.isoformat(),
+            "end": end if all_day else end_dt.isoformat(),
             "attendees": attendees, "event_id": event_id, 'description': description,
-            'location': location, 'reminders': reminders}
+            'location': location, 'reminders': reminders, 'all_day': all_day, 'recurrence': recurrence}
+    event_plan(result)  # Validate and bound the entire plan before any API access.
+    return result
+
+
+def event_plan(args):
+    """A deliberately small recurrence language; never accept arbitrary RRULEs from the model."""
+    all_day, recurrence = args.get('all_day', False), args.get('recurrence')
+    start = _day(args['start'])[0] if all_day else _iso(args['start'])
+    end = _day(args['end'])[0] if all_day else _iso(args['end'])
+    if end <= start or end - start > timedelta(days=31):
+        raise ValueError('Each event must end after it starts and span at most31 days.')
+    count, step, rrule = 1, 0, None
+    if recurrence is not None:
+        if args.get('event_id'):
+            raise ValueError('Recurrence is supported for new series only; existing series cannot be rewritten.')
+        if not isinstance(recurrence, dict) or set(recurrence) - {'frequency', 'interval', 'count'}:
+            raise ValueError('Use frequency, interval and count only; raw recurrence rules are not accepted.')
+        frequency, count, interval = recurrence.get('frequency'), recurrence.get('count'), recurrence.get('interval', 1)
+        if frequency not in ('daily', 'weekly') or type(count) is not int or not 2 <= count <= 20 or type(interval) is not int or not 1 <= interval <= 4:
+            raise ValueError('Use daily/weekly, count2–20 and interval1–4.')
+        step = interval * (7 if frequency == 'weekly' else 1)
+        if end - start > timedelta(days=step):
+            raise ValueError('Recurring occurrences must not overlap one another.')
+        rrule = f'RRULE:FREQ={frequency.upper()};INTERVAL={interval};COUNT={count}'
+    occurrences = []
+    for i in range(count):
+        a, b = start + timedelta(days=step * i), end + timedelta(days=step * i)
+        if b - start > timedelta(days=90):
+            raise ValueError('The entire event plan must end within90 days of its first start.')
+        if recurrence and not all_day and (a.utcoffset() != start.utcoffset() or b.utcoffset() != end.utcoffset()):
+            raise ValueError('Recurring windows across a UTC-offset transition are not supported in this phase.')
+        occurrences.append({'start': a.date().isoformat() if all_day else a.isoformat(),
+                            'end': b.date().isoformat() if all_day else b.isoformat()})
+    return {'occurrences': occurrences, 'rrule': rrule}
 
 
 async def _events(start: datetime, end: datetime) -> list[dict]:
@@ -169,25 +212,32 @@ async def calendar_find_free(date: str, duration_min: int, between: str | None =
 
 async def calendar_upsert_event(title: str, start: str, end: str, attendees: list[str] | None = None,
                                 event_id: str | None = None, description: str | None = None,
-                                location: str | None = None, reminders: list[dict] | None = None, *,
+                                location: str | None = None, reminders: list[dict] | None = None,
+                                all_day: bool = False, recurrence: dict | None = None, *,
                                 request_id: str | None = None) -> dict:
     """Only agent.resolve may invoke a write after claiming its stored approval."""
     try:
-        args = prepare_event(title, start, end, attendees, event_id, description, location, reminders)
-        start_dt, end_dt = _iso(args["start"]), _iso(args["end"])
+        args = prepare_event(title, start, end, attendees, event_id, description, location, reminders, all_day, recurrence)
+        plan = event_plan(args)
+        intervals = [(_day(p['start'])[0], _day(p['end'])[0]) if all_day else (_iso(p['start']), _iso(p['end']))
+                     for p in plan['occurrences']]
         async with _write_lock:
             old = await request("GET", _path() + "/" + quote(event_id, safe="")) if event_id else None
             if old and (old.get("recurrence") or old.get("recurringEventId")):
                 return error("recurring_event", "Moving recurring events isn't supported in v1.")
             # Paginated event overlap check can exclude the event being moved, unlike freeBusy.
-            for event in await _events(start_dt, end_dt):
+            for event in await _events(intervals[0][0], intervals[-1][1]):
                 if event_id and event.get("id") == event_id:
                     continue
                 interval = _interval(event)
-                if interval and interval[0] < end_dt and interval[1] > start_dt:
+                if interval and any(interval[0] < b and interval[1] > a for a, b in intervals):
                     return error("calendar_conflict", "That slot is now busy. Nothing was booked.", "Find another slot and approve again.")
             body = {"summary": args["title"], "start": {"dateTime": args["start"], "timeZone": settings.timezone},
                     "end": {"dateTime": args["end"], "timeZone": settings.timezone}}
+            if all_day:
+                body.update(start={'date': args['start']}, end={'date': args['end']})
+            if plan['rrule']:
+                body['recurrence'] = [plan['rrule']]
             if attendees is not None:
                 body["attendees"] = [{"email": e} for e in attendees]
             for field in ('description', 'location'):
@@ -206,7 +256,8 @@ async def calendar_upsert_event(title: str, start: str, end: str, attendees: lis
                     body["id"] = "koe" + request_id.replace("-", "")
                 result = await request("POST", _path(), json=body, params=params)
             return {"id": result["id"], "url": result.get("htmlLink"), "title": args["title"],
-                    "start": args["start"], "end": args["end"]}
+                    "start": args["start"], "end": args["end"], 'all_day': all_day,
+                    'occurrences': plan['occurrences'], 'recurrence': plan['rrule']}
     except CalendarError as exc:
         return exc.result
     except (ValueError, TypeError) as exc:

@@ -952,3 +952,16 @@ Next phase: approved schema creation and safe Sheets row editing is tracked in [
 - **Verification:** Compared routes, schema descriptors, message shapes and event envelopes directly with backend/frontend sources. GitHub fetch confirmed nine local commits ahead and no remote divergence. No frontend source, credentials or deployment configuration changed.
 - **Interview line:** “I handed off a verified API contract that separates proposals, execution results and unsupported interfaces.”
 
+## 2026-10-14 — Bounded Calendar series and all-day creation
+
+**Files:** Calendar adapter and shared tool declaration/preview, Calendar extension contract and regressions.
+
+**What it does:** Supports all-day dates with an exclusive end and a small daily/weekly recurrence language. Python builds at most20 exact occurrences, checks every occurrence for conflicts and inserts one provider series with a canonical RRULE. Whole plans must end within90 days; unsupported DST transitions and overlapping occurrences are refused. Existing series moves remain excluded.
+
+**Core concept:** Expanding a bounded schedule in code makes every proposed date and every conflict check inspectable. The LLM cannot supply raw recurrence rules or silently book an unbounded series.
+
+**Verification:** Eleven regressions first failed. Calendar tests then passed; shared proposal → JSON storage roundtrip → approval → real adapter test confirms one series insertion and no duplicate execution. **54 focused tests passed.** No real bookings/invitations were sent. Official Calendar event/recurrence docs verified before implementation.
+
+**Try it:** Ask Koe to book three weekly reviews with explicit start/end, or block an all-day date with the following day as exclusive end. Review every occurrence before confirming.
+
+**Interview line:** “I use a bounded recurrence language and deterministic expansion to validate all dates before creating a series.”

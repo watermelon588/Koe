@@ -20,6 +20,8 @@ Schema/row editing phase (2026-10-14): [SCHEMA_ROW_EDIT_PLAN.md](SCHEMA_ROW_EDIT
 
 Integration expansion (2026-10-13): [DETERMINISTIC_FEATURES.md](DETERMINISTIC_FEATURES.md) defines the implementation order and acceptance contract for exact GitHub history/statistics/streaks, Calendar details/reminders and typed optional Sheets/Notion fields. Python validates and executes; the LLM chooses tools and explains evidence. The UI remains frozen. Queued features are not advertised as implemented.
 
+Calendar follow-up (2026-10-14): [CALENDAR_EXTENSIONS.md](CALENDAR_EXTENSIONS.md) defines bounded daily/weekly and all-day creation, unique asynchronous Meet requests, versioned event reads, explicit single/instance/whole-series cancellation and exact approvals. External invitation tests remain synthetic. The frontend integration contract is [FRONTEND_BACKEND_HANDOFF.md](FRONTEND_BACKEND_HANDOFF.md).
+
 1. *At my desk*, I click **Call** and ask "What's my day?". Koe speaks a summary of today's meetings, PRs waiting on me, and my open PRs' CI status, while the dashboard highlights each item.
 2. *At my desk*, I say "Summarize PR #42, is it risky?" and get a spoken summary with the main risk.
 3. *Walking*, I send a WhatsApp voice note: "Am I free at 7? Book a call with Rahul." Koe replies with the slot and **Confirm / Cancel** buttons; I tap Confirm and it's booked.
