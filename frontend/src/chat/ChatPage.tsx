@@ -177,33 +177,46 @@ function Bubble({ m, onDecide }: { m: Message; onDecide: (approve: boolean) => v
   )
 }
 
+// One voice note plays at a time, like WhatsApp: starting one pauses the other.
+let nowPlaying: HTMLAudioElement | null = null
+
 function VoiceNote({ name }: { name: string }) {
   const audio = useRef<HTMLAudioElement | null>(null)
-  const [playing, setPlaying] = useState(false)
+  const [state, setState] = useState<'idle' | 'loading' | 'playing'>('idle')
   const [progress, setProgress] = useState(0)
   const [length, setLength] = useState<number | null>(null)
 
   async function toggle() {
+    if (state === 'loading') return // a second tap while downloading used to start a second copy: an echo
+    if (state === 'playing') return audio.current?.pause()
     if (!audio.current) {
-      const a = new Audio(await api.voice(name))
-      a.ontimeupdate = () => setProgress(a.duration ? a.currentTime / a.duration : 0)
-      a.onloadedmetadata = () => setLength(a.duration)
-      a.onended = () => { setPlaying(false); setProgress(0) }
-      audio.current = a
+      setState('loading')
+      try {
+        const a = new Audio(await api.voice(name))
+        a.ontimeupdate = () => setProgress(a.duration ? a.currentTime / a.duration : 0)
+        a.onloadedmetadata = () => setLength(a.duration)
+        a.onplay = () => setState('playing')
+        a.onpause = () => setState('idle')
+        a.onended = () => { setState('idle'); setProgress(0) }
+        audio.current = a
+      } catch {
+        return setState('idle')
+      }
     }
-    if (playing) audio.current.pause()
-    else void audio.current.play()
-    setPlaying(!playing)
+    if (nowPlaying && nowPlaying !== audio.current) nowPlaying.pause()
+    nowPlaying = audio.current
+    void audio.current.play()
   }
   useEffect(() => () => audio.current?.pause(), [])
 
   return (
     <div className="voice">
-      <button type="button" className="icon-btn round small" aria-label={playing ? 'Pause voice note' : 'Play voice note'} onClick={toggle}>
-        {playing ? <Pause weight="fill" /> : <Play weight="fill" />}
+      <button type="button" className="icon-btn round small" aria-label={state === 'playing' ? 'Pause voice note' : 'Play voice note'}
+        aria-busy={state === 'loading'} disabled={state === 'loading'} onClick={() => void toggle()}>
+        {state === 'playing' ? <Pause weight="fill" /> : <Play weight="fill" />}
       </button>
       <span className="voice-track"><span style={{ transform: `scaleX(${progress})` }} /></span>
-      <time>{length ? `${Math.floor(length / 60)}:${String(Math.round(length % 60)).padStart(2, '0')}` : 'Voice'}</time>
+      <time>{state === 'loading' ? 'Loading…' : length ? `${Math.floor(length / 60)}:${String(Math.round(length % 60)).padStart(2, '0')}` : 'Voice'}</time>
     </div>
   )
 }

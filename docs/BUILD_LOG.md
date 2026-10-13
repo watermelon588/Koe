@@ -504,3 +504,19 @@ A QR code is just a URL drawn as squares. Since the URL is fixed, the image is g
 - The built-in browser pane blocks notifications, so step 3 says "Blocked" there.
 **Measured:** 156 backend tests and 10 frontend tests pass; types check. The laptop layout at 1280 px puts the QR on the left (280 px) and the steps on the right, with no horizontal overflow. The phone layout at 600 px is a single column with the QR hidden.
 **Interview line:** "I made phone onboarding self-verifying: each step is checked against the real backend and push service, so a green tick means the whole path works, not just that a button was pressed."
+
+## Step 38: no echo on voice notes, no glitch when a call starts  (Phase 5b · 2026-10-13)
+**Files:** frontend/src/chat/ChatPage.tsx (`VoiceNote`) · frontend/src/call/player.ts (`LEAD_SECONDS`) · frontend/public/manifest.webmanifest (`start_url: "/"`) · frontend/index.html (favicon) · docs/SPEC.md
+**What it does:**
+- A voice note plays once, even if you tap again while it downloads. Starting one note pauses any other.
+- Koe's voice in a call starts 150 ms later, but cleanly.
+- The installed app opens on Home.
+- The site's favicon is Kami's portrait until the Koe logo arrives.
+**Core concept:**
+- *Measure before fixing.* The recorded WAV from the hosted app was analysed: no repeated 40 ms chunks and no echo peak (autocorrelation 0.14, which is normal for speech). So the echo wasn't in the audio. It was **two copies playing at once**. The play button was async: the first tap was still downloading from Render, so a second tap created a second `Audio`.
+- *Jitter buffer.* Streamed audio arrives in bursts. If the first chunk is scheduled to start "now", the next one can arrive late, and the gap is heard as a glitch. This was worse at call start, while the mascot loads. Scheduling the first chunk of each turn 150 ms ahead gives later chunks time to arrive. Once audio is flowing, nothing changes.
+**How it connects:** Each `/ws/call` audio chunk goes to `player.play()`. If the queue had run dry, it starts at `currentTime + 0.15 s`; otherwise it starts right after the previous chunk.
+**Try it yourself:** Tap a voice note twice quickly: it shows "Loading…", then plays once. Start a call and listen to the first words. Install the app: it opens on Home.
+**Gotchas:** The 150 ms applies only after silence, so barge-in and steady speech are unaffected. A note that fails to download goes back to the play icon, so you can retry.
+**Measured:** Hosted voice note #5: 208 chunks, 0 identical in a row, 0 silent, autocorrelation 0.14 at 44 ms (no echo). 10 frontend tests pass; types check. The call fix still needs your ears: listen to the first second of a call.
+**Interview line:** "I measured the 'echo' before touching code. The recording was clean, so the bug was concurrency: a second tap during an async download started a second player. Separately, I added a small jitter buffer so streamed speech doesn't stutter at the start of a turn."

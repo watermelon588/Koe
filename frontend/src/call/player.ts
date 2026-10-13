@@ -2,6 +2,8 @@
 // Each chunk becomes its own AudioBufferSourceNode (a node can only start() once),
 // scheduled to begin exactly where the previous chunk ends.
 // https://developer.mozilla.org/en-US/docs/Web/API/AudioBufferSourceNode/start
+const LEAD_SECONDS = 0.15 // jitter buffer: delays only the first word of a turn
+
 export function createPlayer(sampleRate = 24000) {
   // Context runs at the stream's own rate, so no resampling code is needed.
   // https://developer.mozilla.org/en-US/docs/Web/API/AudioContext/AudioContext
@@ -23,7 +25,9 @@ export function createPlayer(sampleRate = 24000) {
     const src = ctx.createBufferSource()
     src.buffer = buffer
     src.connect(analyser)
-    nextStart = Math.max(nextStart, ctx.currentTime) // if we fell behind, start now
+    // Start of a turn (or we ran dry): begin a little in the future. Chunks arrive with network jitter and the
+    // page is busy at call start (mascot loading), so starting the first chunk 'now' left gaps: the opening glitch.
+    if (nextStart < ctx.currentTime) nextStart = ctx.currentTime + LEAD_SECONDS
     src.start(nextStart)
     nextStart += buffer.duration
     queued.add(src)

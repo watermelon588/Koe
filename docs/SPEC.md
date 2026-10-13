@@ -173,7 +173,7 @@ Visual revision: Settings uses one viewport-adaptive companion studio, actual VR
 The dedicated `#settings` page owns mascot selection: Kami, Miku, Aoi and Kobashi. Users preview one live VRM at a time, try gestures, expressions and call moods, and explicitly apply their choice. Browsing previews does not change the home mascot. The selected mascot persists locally on this browser/device, with Kami as the fallback. The home page retains layout and theme controls but has no mascot picker. Settings cannot interrupt an active call. No backend profile, voice or account behavior changes in this slice.
 
 ## 14. Koe app (mobile channel, replaces WhatsApp while Meta needs business verification)
-- **What it is:** the same web app, installable from an **Install app** button (Chrome's install prompt; on iPhone, Share → Add to Home Screen). No app store. Opens on **Chat**: a WhatsApp-style conversation with Koe, the mascot as the avatar.
+- **What it is:** the same web app, installable from an **Install app** button (Chrome's install prompt; on iPhone, Share → Add to Home Screen). No app store. Opens on **Home** (the mascot); **Chat** is one tap away: a WhatsApp-style conversation with Koe, the mascot as the avatar.
 - **Phone setup page (`#install`):** on a laptop it shows a QR code for `https://koe-pi.vercel.app/#install`. On the phone the same page walks through four steps, each marked ✓ when verified:
   1. **Install** (Chrome's prompt, or the iPhone instructions).
   2. **Connect**: saves the token, then checks it against the backend.
