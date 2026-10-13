@@ -92,6 +92,33 @@ Implementation is verified locally against simulated API boundaries; live accept
 - [ ] Live check on Rohit's phone over the cloudflared tunnel: install, enable notifications, send a voice note, receive a pushed reply.
 **Done when:** with the app closed, a GitHub alert and a Koe reply arrive as phone notifications, and a voice note gets a spoken answer.
 
+## Phase 5c: accounts, connections and guides (spec: [ACCOUNTS_SPEC.md](ACCOUNTS_SPEC.md))
+Goal: an invited friend goes from link to working assistant without touching code. One vertical slice per task; checkpoint with Rohit after each group.
+
+**Group 1: public pages (no login)**
+- [x] 1. Path-routed public pages `/guide`, `/privacy`, `/terms` with a shared footer; Vercel SPA fallback. *Accept:* each loads signed-out at 375/1280 px, links work, content matches real data handling. *Verify:* tsc, lint, tests, browser check.
+- **Checkpoint:** Rohit reads Guide/Privacy/Terms; links usable as the Google/Meta/Notion privacy-policy URL.
+
+**Group 2: identity**
+- [ ] 2. Migration `002_accounts.sql` (users, invites, sessions) + `auth.py`: Google sign-in (PKCE/state/nonce, ID-token checks), allow-list, session cookie, logout, `current_user` dependency. *Accept:* invited → session; uninvited → no session; tests for each, with Google faked. *Needs Rohit:* a Google **Web** OAuth client + `KOE_SECRET_KEY`, `KOE_ADMIN_EMAIL`.
+- [ ] 3. Vercel rewrites `/api` + `/auth` → Render with `no-store`; frontend sign-in screen and logout; HTTP APIs accept the session (token still accepted in single-owner mode). *Accept:* sign in on the phone, chat works with no token typed.
+- [ ] 4. WebSocket tickets (`POST /api/ws-ticket`, single use, 60 s, Origin check) for `/ws/call` and `/ws/events`; remove token UI from Home/Settings/Install. *Accept:* a call works signed-in; a reused ticket is refused.
+- **Checkpoint:** end-to-end sign-in on laptop and phone; Rohit invites one friend.
+
+**Group 3: per-user data**
+- [ ] 5. App chat (messages, voice notes, push subscriptions) moves from SQLite to Neon with `owner_id` = user; conversations and pending approvals keyed by user. *Accept:* user B sees none of user A's chat/activity/approvals (tests); survives a Render restart.
+
+**Group 4: connections**
+- [ ] 6. `connections.py` + encrypted token store + Settings → Connections list (connect / disconnect / status). Google Calendar connect; calendar tools use the caller's token. *Accept:* "what's on my calendar today?" uses the caller's calendar.
+- [ ] 7. Google Sheets: same consent; "Create my Hours sheet" button. *Accept:* sheet created with headers; a timesheet row needs approval.
+- [ ] 8. GitHub OAuth App connect + repo picker; GitHub tools use the caller's token. *Needs Rohit:* GitHub OAuth App.
+- [ ] 9. Notion public integration connect + "Create Koe Daily Log". *Needs Rohit:* Notion public integration (uses the privacy/terms URLs from task 1).
+- **Checkpoint:** a friend connects all four from Settings with no code changes.
+
+**Group 5: quota and admin**
+- [ ] 10. Daily turn cap on the shared Gemini key + optional own key (encrypted). *Accept:* the cap message appears at the limit; an own key removes it.
+- [ ] 11. Owner's Settings → People: invite/remove emails. *Accept:* an invited email can sign in, a removed one is signed out.
+
 ## Phase 6: shared memory
 - [ ] Context builder: today's activity summary + last WhatsApp turns, injected into every new Live session and WhatsApp turn.
 - [ ] End-of-day roll-up into `daily_notes`.

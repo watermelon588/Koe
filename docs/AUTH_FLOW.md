@@ -1,6 +1,6 @@
 # Koe sign-in before hosting
 
-Status: proposed final flow, not implemented. The current access-token UI remains available for local testing. The user requested an explanation of its replacement on 2026-10-13.
+Status: **superseded 2026-10-13 by [ACCOUNTS_SPEC.md](ACCOUNTS_SPEC.md)** (invite-only multi-user). The session, PKCE and CSRF requirements below still apply. Originally: proposed final flow, not implemented. The current access-token UI remains available for local testing. The user requested an explanation of its replacement on 2026-10-13.
 
 ## Current behavior
 

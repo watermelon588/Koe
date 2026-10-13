@@ -63,7 +63,7 @@ export function InstallPage({ model }: { model: MascotId }) {
       <header className="install-head">
         <img src={profile.portrait} alt="" width="72" height="72" />
         <h1>Koe on your phone</h1>
-        <p>Chat by text or voice note, and get Koe’s replies and GitHub alerts as notifications.</p>
+        <p>Chat by text or voice note, and get Koe’s replies and GitHub alerts as notifications. New here? Read the <a href="/guide">guide</a>.</p>
       </header>
 
       <figure className="install-qr">

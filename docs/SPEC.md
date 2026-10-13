@@ -187,4 +187,6 @@ The dedicated `#settings` page owns mascot selection: Kami, Miku, Aoi and Kobash
 
 
 ## Pre-hosting owner sign-in (planned, 2026-10-13)
+**Superseded 2026-10-13:** Koe is becoming invite-only multi-user. The contract for sign-in, per-user data, connections, quota and the public Guide/Privacy/Terms pages is [ACCOUNTS_SPEC.md](ACCOUNTS_SPEC.md). The paragraph below is kept for history.
+
 Manual `KOE_ACCESS_TOKEN` entry is a development mechanism. Before public hosting, replace it with provider login restricted to the owner and an expiring, revocable, HttpOnly session cookie across the dashboard, calls, chat and voice-note endpoints. This is not multi-user signup, does not expose database credentials, and does not replace tool-specific consent or explicit write approvals. The flow and acceptance requirements are in [AUTH_FLOW.md](AUTH_FLOW.md); this storage migration does not implement OAuth login.

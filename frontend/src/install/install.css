@@ -4,6 +4,7 @@
 .install-head img { width: 72px; height: 72px; border-radius: 50%; object-fit: cover; object-position: 50% 15%; box-shadow: 0 0 0 3px var(--bg), 0 0 0 4.5px var(--accent); margin-bottom: 8px; }
 .install-head h1 { font-size: 26px; font-weight: 300; letter-spacing: -0.01em; }
 .install-head p { color: var(--muted); max-width: 40ch; }
+.install-head a { color: var(--accent); }
 
 /* The QR keeps a white quiet zone in both themes: phone cameras need the contrast. */
 .install-qr { margin: 0; display: grid; justify-items: center; gap: 12px; text-align: center; }

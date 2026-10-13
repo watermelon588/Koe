@@ -520,3 +520,21 @@ A QR code is just a URL drawn as squares. Since the URL is fixed, the image is g
 **Gotchas:** The 150 ms applies only after silence, so barge-in and steady speech are unaffected. A note that fails to download goes back to the play icon, so you can retry.
 **Measured:** Hosted voice note #5: 208 chunks, 0 identical in a row, 0 silent, autocorrelation 0.14 at 44 ms (no echo). 10 frontend tests pass; types check. The call fix still needs your ears: listen to the first second of a call.
 **Interview line:** "I measured the 'echo' before touching code. The recording was clean, so the bug was concurrency: a second tap during an async download started a second player. Separately, I added a small jitter buffer so streamed speech doesn't stutter at the start of a turn."
+
+## Step 39: a plan for friends, and the public Guide, Privacy and Terms  (Phase 5c, task 1 · 2026-10-13)
+**Files:** docs/ACCOUNTS_SPEC.md (new) · docs/{PLAN,DECISIONS,SPEC,AUTH_FLOW}.md · frontend/src/pages/{Layout,Guide,Privacy,Terms}.tsx + pages.css (new) · frontend/src/main.tsx · frontend/vercel.json · frontend/src/install/{InstallPage.tsx,install.css}
+**What it does:**
+- Writes the spec for turning Koe into an invite-only app that friends can use: Google sign-in, per-user data and connections, a Gemini quota.
+- Ships its first slice: `/guide`, `/privacy` and `/terms`, readable without signing in.
+**Core concept:**
+- *Capability map.* One big request ("make it usable by others") becomes modules with a one-way dependency order: pages → identity → user-data → connections → quota → admin. Each module ships and is verified alone.
+- *Real URLs for legal pages.* Google, Meta and Notion ask for a privacy-policy URL before they approve an OAuth app. So these pages use paths, not `#hash` routes. Vercel serves `index.html` for those paths, and `main.tsx` picks the page from `location.pathname`.
+- *A privacy policy is a technical document.* It lists exactly what the code stores and who processes it, including that Gemini's free tier may use content to improve Google's products. It has to change whenever the code does.
+**How it connects:** `main.tsx` → `/guide | /privacy | /terms` render `Layout` + content; anything else renders `App` (hash routes inside). The footer links all three; the Install page links the Guide.
+**Try it yourself:** Open https://koe-pi.vercel.app/guide, then /privacy and /terms, signed out, on the phone and the laptop.
+**Gotchas:**
+- `CONTACT_URL` points at the GitHub issues page until Koe has its own domain and email.
+- The Guide marks unbuilt features as "Coming soon"; update it in the same commit as each feature.
+- An app route added later must not reuse these three paths.
+**Measured:** No horizontal overflow at 320 px or 1280 px (the reading column is 760 px). Footer links work. Light and dark themes both render, with no console errors. 10 frontend tests pass; types check.
+**Interview line:** "Before adding multi-user auth, I wrote a capability map with a dependency order and shipped the decision-free slice first: the public policy pages that the OAuth providers require."

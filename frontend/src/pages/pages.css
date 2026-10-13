@@ -1,0 +1,38 @@
+/* Public pages: a calm reading column in the app's flat, light-type style. */
+.doc-page { min-height: 100dvh; display: grid; grid-template-rows: auto 1fr auto; }
+.doc-top, .doc-foot { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; padding: 16px 20px; max-width: 760px; width: 100%; margin: 0 auto; }
+.doc-brand { display: inline-flex; align-items: center; gap: 10px; color: var(--text); text-decoration: none; font-size: 16px; }
+.doc-brand img { border-radius: 50%; object-fit: cover; }
+.doc-brand span { color: var(--muted); }
+.doc-page nav { display: flex; gap: 18px; flex-wrap: wrap; font-size: 14px; }
+.doc-page nav a { color: var(--muted); text-decoration: none; }
+.doc-page nav a:hover, .doc-page nav a[aria-current='page'] { color: var(--text); }
+
+.doc-page main { max-width: 760px; width: 100%; margin: 0 auto; padding: 32px 20px 64px; outline: none; }
+.doc-page h1 { font-size: 34px; font-weight: 300; letter-spacing: -0.015em; }
+.doc-intro { margin-top: 10px; color: var(--muted); font-size: 17px; max-width: 58ch; }
+.doc-page section { margin-top: 40px; scroll-margin-top: 24px; }
+.doc-page h2 { font-size: 20px; font-weight: 400; margin-bottom: 12px; }
+.doc-page h2 a { color: inherit; text-decoration: none; }
+.doc-page h2 a:hover::after { content: ' #'; color: var(--muted); }
+.doc-page p, .doc-page li, .doc-page dd { max-width: 68ch; }
+.doc-page p + p { margin-top: 12px; }
+.doc-page :is(ul, ol) { display: grid; gap: 8px; padding-left: 22px; margin: 12px 0; }
+.doc-page section ul { list-style: disc; }
+.doc-page section ol { list-style: decimal; }
+.doc-page li::marker { color: var(--muted); }
+.doc-page b { font-weight: 500; }
+.doc-page main a:not(h2 a) { color: var(--accent); text-underline-offset: 3px; }
+.doc-page dl { display: grid; gap: 4px; margin-top: 8px; }
+.doc-page dt { margin-top: 12px; }
+.doc-page dd { margin: 0; color: var(--muted); }
+.doc-note { padding: 12px 14px; border-radius: 12px; background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); }
+
+.doc-toc { margin-top: 28px; padding: 16px 18px; border-radius: 16px; background: var(--surface); }
+.doc-toc ol { list-style: decimal; margin: 0; gap: 6px; font-size: 14px; }
+.doc-toc a { color: var(--text) !important; text-decoration: none; }
+.doc-toc a:hover { color: var(--accent) !important; }
+
+.doc-foot { border-top: 1px solid var(--line); padding-top: 20px; padding-bottom: max(20px, env(safe-area-inset-bottom)); }
+.doc-foot small { color: var(--muted); font-size: 12px; }
+@media (max-width: 520px) { .doc-page h1 { font-size: 28px; } .doc-top nav { gap: 14px; } }
