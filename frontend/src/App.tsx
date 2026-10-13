@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from 'react'
 import { CalendarBlank, ChatCircle, ChatCircleDots, GearSix, HandWaving, House, Key, Microphone, MicrophoneSlash, Moon, PaperPlaneRight,
-  Phone, PhoneDisconnect, Sun, IconContext, Notebook, Table } from '@phosphor-icons/react'
+  Phone, PhoneDisconnect, Sun, IconContext, Notebook, Table, SquaresFour, Question } from '@phosphor-icons/react'
 import { WorkPanel } from './call/WorkPanel'
 import { moodOf, useCall, type Line } from './call/useCall'
 import { MascotView, type MascotController } from './mascot/MascotView'
@@ -13,6 +13,8 @@ import { SESSION } from './session'
 import { NotionPage } from './notion/NotionPage'
 import { Dashboard } from './dashboard/Dashboard'
 import { useDashboard } from './dashboard/useDashboard'
+import { DashboardPage, TodaySummary } from './dashboard/DashboardPage'
+import { AppFooter } from './AppFooter'
 
 // Layout (Engawa, "veranda"): she stands on the left; your day sits on the right; a call raises a sheet
 // over it while she shows her full figure.
@@ -31,9 +33,9 @@ function savedTheme(): Theme {
     return 'dark' // storage can be blocked (private mode); dark is the default anyway
   }
 }
-type Page = 'home' | 'chat' | 'settings' | 'install' | 'notion'
-const pageOf = (hash: string): Page =>
-  hash === '#settings' ? 'settings' : hash === '#chat' ? 'chat' : hash === '#install' ? 'install' : hash === '#notion' ? 'notion' : 'home'
+type Page = 'home' | 'dashboard' | 'chat' | 'settings' | 'install' | 'notion'
+const PAGES: Page[] = ['dashboard', 'chat', 'settings', 'install', 'notion']
+const pageOf = (hash: string): Page => PAGES.find((p) => hash === `#${p}`) ?? 'home'
 
 function greeting() {
   const h = new Date().getHours()
@@ -98,6 +100,17 @@ export default function App() {
     if (inCall && !wide) scrollTo({ top: 0 })
   }, [inCall, wide])
 
+  // One quiet row until the dashboard is live (Home and Dashboard); signed-in users connect by themselves.
+  const connectRow = !dashboard.connected && accessToken !== SESSION && <form className="connect" onSubmit={(e) => { e.preventDefault(); saveToken(accessToken); dashboard.connect(accessToken) }}>
+    <label className="connect-field">
+      <Key aria-hidden="true" />
+      <input type="password" value={accessToken} onChange={(e) => setAccessToken(e.target.value)}
+        placeholder="Koe access token" aria-label="Koe access token" autoComplete="off" />
+    </label>
+    <button className="ghost" disabled={!accessToken.trim()}>Connect</button>
+    <p className="note" role="status">{dashboard.status}</p>
+  </form>
+
   return (
     <IconContext.Provider value={{ size: 18, weight: 'light' }}>
     <div className="app" data-page={page} data-model={model} data-call={inCall ? 'on' : 'off'} data-state={call.state}>
@@ -126,6 +139,9 @@ export default function App() {
           <a className="nav-link" href="#home" aria-label="Home" title="Home" aria-current={page === 'home' ? 'page' : undefined}>
             <House weight={page === 'home' ? 'fill' : 'light'} /><span>Home</span>
           </a>
+          <a className="nav-link" href="#dashboard" aria-label="Dashboard" title="Dashboard" aria-current={page === 'dashboard' ? 'page' : undefined}>
+            <SquaresFour weight={page === 'dashboard' ? 'fill' : 'light'} /><span>Dashboard</span>
+          </a>
           <a className="nav-link" href="#chat" aria-label="Chat" title="Chat" aria-current={page === 'chat' ? 'page' : undefined}>
             <ChatCircleDots weight={page === 'chat' ? 'fill' : 'light'} /><span>Chat</span>
           </a>
@@ -136,6 +152,7 @@ export default function App() {
             <GearSix weight={page === 'settings' ? 'fill' : 'light'} /><span>Settings</span>
           </a>
           <span className="bar-divider" aria-hidden="true" />
+          <a className="icon-btn" href="/guide" aria-label="Guide" title="Guide"><Question /></a>
           <button className="icon-btn" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
             aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'} title={theme === 'dark' ? 'Light theme' : 'Dark theme'}>
             {theme === 'dark' ? <Sun /> : <Moon />}
@@ -148,7 +165,10 @@ export default function App() {
         return saveMascot(id)
       }} /> : page === 'chat' ? <ChatPage model={model} /> : page === 'notion' ? <NotionPage token={accessToken} onToken={value => {
         setAccessToken(value); saveToken(value)
-      }} /> : page === 'install' ? <InstallPage model={model} /> : <>
+      }} /> : page === 'install' ? <InstallPage model={model} /> : page === 'dashboard' ? <DashboardPage data={dashboard.data}
+        connected={dashboard.connected} status={dashboard.status} refresh={dashboard.refresh} currentApproval={call.approval} decide={call.decide}>
+        {connectRow}
+      </DashboardPage> : <>
       <main className="home" id="main-content" tabIndex={-1} inert={inCall}>
         <section className="hello">
           <p className="date">{new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })}</p>
@@ -162,21 +182,12 @@ export default function App() {
           </div>
         </section>
 
-        {/* One quiet row until the dashboard is live; it disappears once connected. */}
-        {!dashboard.connected && accessToken !== SESSION && <form className="connect" onSubmit={(e) => { e.preventDefault(); saveToken(accessToken); dashboard.connect(accessToken) }}>
-          <label className="connect-field">
-            <Key aria-hidden="true" />
-            <input type="password" value={accessToken} onChange={(e) => setAccessToken(e.target.value)}
-              placeholder="Koe access token" aria-label="Koe access token" autoComplete="off" />
-          </label>
-          <button className="ghost" disabled={!accessToken.trim()}>Connect</button>
-          <p className="note" role="status">{dashboard.status}</p>
-        </form>}
-
-        <Dashboard data={dashboard.data} connected={dashboard.connected} refresh={dashboard.refresh} />
+        {connectRow}
+        <TodaySummary data={dashboard.data} connected={dashboard.connected} />
       </main>
 
       </>}
+      {page !== 'chat' && page !== 'install' && !(page === 'home' && inCall) && <AppFooter />}
       <CallPanel open={inCall && page === 'home'} call={call} dashboard={dashboard} />
       {inCall && page !== 'home' && <aside className="workspace-call" aria-label="Active Koe call">
         <span className="dot" aria-hidden="true" /><span>{call.approval ? 'Your call has a pending approval' : `Koe · ${STATUS[call.state]}`}</span>

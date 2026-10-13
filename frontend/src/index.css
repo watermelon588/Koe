@@ -82,8 +82,20 @@ button:disabled { opacity: 0.4; cursor: default; }
 .workspace-call { position: fixed; z-index: 5; bottom: 18px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 10px; width: max-content; max-width: calc(100% - 24px); padding: 12px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); box-shadow: 0 8px 32px rgb(0 0 0 / .2); font-size: 13px; }
 .workspace-call a { text-decoration: none; }
 .app:not([data-page='home']) .panel { visibility: hidden; pointer-events: none; }
-@media (max-width: 600px) { .nav-link { padding: 9px; } .nav-link span { display: none; } .workspace-call { flex-wrap: wrap; justify-content: center; } .workspace-call > span:not(.dot) { flex-basis: calc(100% - 40px); } }
+@media (max-width: 600px) { .nav-link { padding: 8px; } .nav-link span { display: none; } .workspace-call { flex-wrap: wrap; justify-content: center; } .workspace-call > span:not(.dot) { flex-basis: calc(100% - 40px); } }
 .bar-divider { width: 1px; height: 18px; background: var(--line); margin: 0 4px; }
+
+/* Pages with a footer: a column at least one screen tall, so the footer sits at the bottom of short pages.
+   Chat is full-height on its own and has no footer. */
+.app:not([data-page='chat']) { display: flex; flex-direction: column; min-height: 100dvh; }
+.app-foot { position: relative; z-index: 1; margin-top: auto; width: 100%; max-width: 1280px; margin-inline: auto; display: flex; align-items: center; justify-content: space-between; gap: 12px 24px; flex-wrap: wrap; padding: 20px 32px; padding-bottom: max(20px, env(safe-area-inset-bottom)); border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; }
+.app-foot .brand { font-size: 14px; color: var(--text); }
+.app-foot nav { display: flex; flex-wrap: wrap; gap: 4px 20px; }
+.app-foot a { color: var(--muted); text-decoration: none; padding: 4px 0; transition: color 200ms ease; }
+@media (hover: hover) and (pointer: fine) { .app-foot a:hover { color: var(--text); } }
+/* Home: the footer stays in her right-hand column, so it never covers her desk. */
+.app[data-page='home'] .app-foot { width: min(580px, 50vw); margin-left: auto; margin-right: clamp(24px, 6vw, 96px); padding-inline: 0; }
+.app[data-page='settings'] .app-foot { max-width: none; padding-left: clamp(32px, 8vw, 128px); }
 
 /* Home: greeting, call, and your day in one card, on the right of her. */
 .home { position: relative; z-index: 1; width: min(580px, 50vw); margin: 0 clamp(24px, 6vw, 96px) 0 auto; padding: 104px 0 28px; display: flex; flex-direction: column; gap: 26px; transition: opacity 260ms var(--ease-out), transform 420ms var(--ease-out); }
@@ -189,6 +201,8 @@ button:disabled { opacity: 0.4; cursor: default; }
   .desk-hint, .desk .ghost { display: none; }
   .bar { position: absolute; padding: 12px 16px; }
   .home { width: auto; margin: 0 16px; padding: 16px 0 40px; gap: 22px; }
+  .app[data-page='home'] .app-foot { width: auto; margin-inline: 16px; }
+  .app-foot, .app[data-page='settings'] .app-foot { padding-inline: 16px; }
   .dash-tabs button span:not(.count) { display: none; } /* icons + counts only on phones */
   .dash-tabs button { padding: 0 11px; }
   .dash-body { height: clamp(260px, 48dvh, 420px); padding: 4px 16px 16px; }

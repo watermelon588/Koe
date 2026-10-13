@@ -51,15 +51,6 @@
 .rec time { color: var(--text); font-size: 15px; }
 .rec-dot { width: 9px; height: 9px; border-radius: 50%; background: #e5534b; animation: blink 1s ease-in-out infinite; }
 
-/* Settings: this device (install + notifications + token) */
-.device { display: grid; gap: 10px; margin-top: 36px; padding-top: 24px; border-top: 1px solid var(--line); }
-.device h2 { font-size: 13px; font-weight: 400; color: var(--muted); }
-.device-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.device-row > span { display: grid; font-size: 14px; }
-.device-row small { color: var(--muted); font-size: 12px; }
-.device .ghost, .device .soft { height: 34px; padding: 0 14px; font-size: 13px; flex-shrink: 0; }
-.device .token-row input { height: 36px; }
-
 .app[data-page='chat'] .chat-page { margin-top: 82px; height: calc(100dvh - 82px); }
 @media (prefers-reduced-motion: reduce) {
   .msg, .typing i, .rec-dot { animation: none; }

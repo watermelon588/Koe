@@ -1,19 +1,20 @@
-.notion-workspace { position: relative; z-index: 1; max-width: 1280px; margin: auto; padding: 112px 32px 48px; }
+.notion-workspace { position: relative; z-index: 1; width: 100%; max-width: 1280px; margin: 0 auto; padding: 104px 32px 56px; outline: none; }
 .workspace-heading, .workspace-actions, .workspace-connection, .workspace-list-meta, .record-detail-meta, .record-editor-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-.workspace-heading { align-items: flex-start; margin-bottom: 28px; }
-.workspace-heading h1 { font-size: clamp(30px, 4vw, 44px); font-weight: 400; letter-spacing: -.03em; }
+.workspace-heading { align-items: flex-end; margin-bottom: 20px; flex-wrap: wrap; }
+.workspace-heading h1 { font-size: clamp(30px, 3vw, 40px); font-weight: 300; letter-spacing: -.03em; line-height: 1.1; }
+.workspace-heading p { margin-top: 6px; }
 .workspace-heading p, .workspace-connection, .workspace-list-meta, .record-help, .record-date, .workspace-notice { color: var(--muted); font-size: 13px; }
 .workspace-actions { justify-content: flex-start; gap: 8px; flex-wrap: wrap; }
-.workspace-connection { justify-content: flex-start; flex-wrap: wrap; border-block: 1px solid var(--line); padding: 14px 0; margin-bottom: 24px; gap: 10px; }
+.workspace-connection { justify-content: flex-start; flex-wrap: wrap; padding: 0 0 20px; margin-bottom: 20px; gap: 6px 10px; border-bottom: 1px solid var(--line); }
 .workspace-connection small { margin-left: auto; }
 .workspace-connection a, .record-detail-meta a { display: inline-flex; align-items: center; gap: 6px; color: var(--text); text-decoration: none; }
-.workspace-layout { display: grid; grid-template-columns: minmax(280px, .85fr) minmax(0, 1.4fr); min-height: 510px; border: 1px solid var(--line); border-radius: 16px; overflow: hidden; background: var(--surface); }
+.workspace-layout { display: grid; grid-template-columns: minmax(280px, .85fr) minmax(0, 1.4fr); min-height: 510px; border-radius: 18px; overflow: hidden; background: var(--surface); }
 .workspace-list { min-width: 0; border-right: 1px solid var(--line); }
-.workspace-filter { display: flex; gap: 10px; padding: 18px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.workspace-filter { display: flex; align-items: center; gap: 10px; padding: 14px 16px 14px 20px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
 .workspace-search { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 130px; }
 .workspace-search input { width: 100%; min-width: 0; border: 0; background: transparent; outline: 0; }
-.workspace-filter select { max-width: 130px; border: 0; padding: 4px; border-radius: 4px; background: var(--surface-2); color: var(--text); font: inherit; font-size: 12px; }
-.workspace-list-meta { padding: 12px 18px; font-size: 11px; }
+.workspace-filter select { max-width: 140px; height: 30px; border: 0; padding: 0 10px; border-radius: 999px; background: var(--surface-2); color: var(--text); font: inherit; font-size: 12px; }
+.workspace-list-meta { padding: 12px 20px; font-size: 12px; }
 .record-row { display: grid; width: 100%; gap: 5px; padding: 17px 20px; text-align: left; border-top: 1px solid var(--line); transition: background-color 150ms ease; }
 .record-row[aria-pressed='true'] { background: var(--surface-2); box-shadow: inset 2px 0 var(--accent); }
 .record-kind { color: var(--accent); font-size: 11px; }
@@ -33,16 +34,16 @@
 .record-detail .workspace-actions { margin-top: 24px; }
 .record-editor { display: grid; gap: 18px; }
 .record-editor label, .workspace-connect label { display: grid; gap: 6px; font-size: 13px; color: var(--muted); }
-.record-editor :is(input, select, textarea), .workspace-connect input { width: 100%; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text); padding: 10px 12px; font: inherit; }
+.record-editor :is(input, select, textarea), .workspace-connect input { width: 100%; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); color: var(--text); padding: 10px 12px; font: inherit; }
 .record-editor textarea { resize: vertical; min-height: 130px; }
 .editor-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .record-editor .primary { justify-self: start; }
 .record-help { line-height: 1.6; }
-.workspace-feedback, .workspace-setup, .workspace-approval { padding: 22px; margin-bottom: 22px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.workspace-feedback, .workspace-setup, .workspace-approval { padding: 20px 22px; margin-bottom: 20px; border-radius: 18px; background: var(--surface); }
 .workspace-feedback { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .workspace-feedback p, .workspace-setup p { font-size: 14px; }
 .workspace-setup button { margin-top: 16px; }
-.workspace-approval { display: flex; justify-content: space-between; gap: 24px; border-color: var(--accent); }
+.workspace-approval { display: flex; justify-content: space-between; gap: 24px; box-shadow: inset 0 0 0 1px var(--accent); }
 .workspace-approval p { white-space: pre-wrap; font-size: 13px; overflow-wrap: anywhere; }
 .workspace-approval small { display: block; margin-top: 12px; color: var(--muted); }
 .workspace-notice { margin-bottom: 18px; }
@@ -50,14 +51,16 @@
 .workspace-connect label { min-width: 220px; }
 .workspace-connect p { flex-basis: 100%; font-size: 12px; color: var(--muted); }
 .workspace-more { margin: 16px; }
-.workspace-history { margin-top: 32px; }
-.workspace-history h2 { font-size: 19px; font-weight: 400; margin-bottom: 14px; }
+.workspace-history { margin-top: 40px; }
+.workspace-history h2 { font-size: 17px; font-weight: 400; margin-bottom: 12px; }
 .workspace-history p, .workspace-history time { font-size: 12px; color: var(--muted); }
 .workspace-history li { display: grid; grid-template-columns: 140px minmax(0, 1fr); gap: 16px; padding: 10px 0; border-top: 1px solid var(--line); font-size: 13px; }
 @media (hover: hover) { .record-row:hover { background: var(--surface-2); } }
 @media (max-width: 760px) {
-  .notion-workspace { padding: 96px 16px 32px; }
-  .workspace-heading { flex-direction: column; gap: 16px; margin-bottom: 20px; }
+  .notion-workspace { padding: 80px 16px 40px; }
+  .workspace-heading { align-items: stretch; }
+  .workspace-history li { grid-template-columns: 1fr; gap: 2px; }
+  .workspace-heading { flex-direction: column; gap: 16px; margin-bottom: 16px; }
   .workspace-layout { grid-template-columns: 1fr; }
   .workspace-list { border-right: 0; border-bottom: 1px solid var(--line); }
   .workspace-list ul { max-height: 340px; overflow-y: auto; }

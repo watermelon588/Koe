@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowsClockwise, BellSimple, DeviceMobile, HandWaving, Key, Person, UserFocus } from '@phosphor-icons/react'
+import { ArrowsClockwise, BellSimple, DeviceMobile, HandWaving, Key, Person, UserCircle, UserFocus } from '@phosphor-icons/react'
 import { savedToken, saveToken } from '../chat/api'
 import { SESSION, signOut } from '../session'
-import { ConnectionsSection } from './Connections'
+import { ConnectionsSection, SettingRow, SettingSection } from './Connections'
 import { disablePush, enablePush, pushState, useInstall, type PushState } from '../pwa'
 import { MASCOTS, mascotProfile, type MascotId } from '../mascot/catalog'
 import { MascotView, type LoadState, type MascotController } from '../mascot/MascotView'
@@ -11,8 +11,9 @@ import './settings.css'
 
 type Props = { selected: MascotId; onSelect: (id: MascotId) => boolean }
 
-// Companion settings: a quiet list on the left, the model standing in a flat viewer on the right.
-// Browsing previews a mascot; only "Use …" changes the one on Home.
+// Settings: the companion studio on top (a quiet list on the left, the model standing in a flat viewer on the
+// right; browsing previews a mascot, only "Use …" changes the one on Home), then calm sections below it:
+// Account, Connections, Your Gemini key, This device.
 export function SettingsPage({ selected, onSelect }: Props) {
   const [preview, setPreview] = useState(selected)
   const [shot, setShot] = useState<Shot>('bust')
@@ -52,6 +53,7 @@ export function SettingsPage({ selected, onSelect }: Props) {
 
   return (
     <main className="settings-page" id="main-content" tabIndex={-1} data-mascot={preview}>
+      <div className="settings-studio">
       <aside className="settings-side">
         <h1>Companion</h1>
         <p className="sub">Who stands beside you on Home.</p>
@@ -70,8 +72,6 @@ export function SettingsPage({ selected, onSelect }: Props) {
           {applied ? 'Current companion' : `Use ${profile.name}`}
         </button>
         <p className="note" role="status">{notice}</p>
-        <ConnectionsSection />
-        <DeviceSection />
       </aside>
 
       <section className="viewer" ref={viewer} aria-label={`${profile.name} preview`}>
@@ -86,17 +86,41 @@ export function SettingsPage({ selected, onSelect }: Props) {
         </div>
         <p className="viewer-hint" aria-hidden="true">Drag to turn · Scroll to zoom</p>
       </section>
+      </div>
+
+      <div className="settings-sections">
+        <AccountSection />
+        <ConnectionsSection />
+        <DeviceSection />
+      </div>
     </main>
   )
 }
 
-// This device: install Koe like an app, turn on notifications, remember the access token (SPEC §14).
+// Account: signed in with Google (sign out), or the development access token kept on this device.
+function AccountSection() {
+  const [token, setToken] = useState(savedToken)
+  const [tokenSaved, setTokenSaved] = useState(false)
+  return (
+    <SettingSection id="set-account" title="Account" intro="How this device signs in to Koe.">
+      {token === SESSION
+        ? <SettingRow icon={UserCircle} title="Google account" status="Signed in with Google." on
+          action={<button className="ghost" onClick={() => void signOut()}>Sign out</button>} />
+        : <SettingRow icon={Key} title="Access token" status={tokenSaved ? 'Saved on this device.' : 'KOE_ACCESS_TOKEN from backend/.env.'} on={tokenSaved}>
+          <form className="token-row" onSubmit={(e) => { e.preventDefault(); setTokenSaved(saveToken(token)) }}>
+            <input type="password" value={token} onChange={(e) => { setToken(e.target.value); setTokenSaved(false) }} aria-label="Koe access token" autoComplete="off" />
+            <button className="soft" disabled={!token.trim()}>Save</button>
+          </form>
+        </SettingRow>}
+    </SettingSection>
+  )
+}
+
+// This device: install Koe like an app and turn on notifications (SPEC §14).
 function DeviceSection() {
   const install = useInstall()
   const [push, setPush] = useState<PushState | 'busy'>('off')
   const [pushError, setPushError] = useState('')
-  const [token, setToken] = useState(savedToken)
-  const [tokenSaved, setTokenSaved] = useState(false)
   useEffect(() => { void pushState().then(setPush) }, [])
 
   async function togglePush() {
@@ -113,35 +137,19 @@ function DeviceSection() {
   }
 
   return (
-    <section className="device" aria-label="This device">
-      <h2>This device</h2>
-      <div className="device-row">
-        <span><span><DeviceMobile size={16} /> Koe app</span>
-          <small>{install.installed ? 'Installed on this device.' : install.canPrompt ? 'Add Koe to your home screen, like an app.'
-            : install.ios ? 'On iPhone: Share, then Add to Home Screen.' : 'Scan a QR code to set Koe up on your phone.'}</small></span>
-        {!install.installed && install.canPrompt && <button className="soft" onClick={() => void install.install()}>Install app</button>}
-        {!install.installed && !install.canPrompt && <a className="ghost" href="#install">Phone setup</a>}
-      </div>
-      <div className="device-row">
-        <span><span><BellSimple size={16} /> Notifications</span>
-          <small>{push === 'unsupported' ? (install.ios ? 'Install Koe to your home screen first.' : 'Not supported in this browser.')
-            : push === 'denied' ? 'Blocked. Allow notifications for this site in the browser settings.'
-            : pushError || 'Koe’s replies and GitHub alerts, like WhatsApp messages.'}</small></span>
-        {(push === 'on' || push === 'off' || push === 'busy') &&
-          <button className={push === 'on' ? 'ghost' : 'soft'} disabled={push === 'busy'} onClick={() => void togglePush()}>{push === 'on' ? 'Turn off' : 'Turn on'}</button>}
-      </div>
-      {token === SESSION ? <div className="device-row">
-        <span><span><Key size={16} /> Account</span><small>Signed in with Google.</small></span>
-        <button className="ghost" onClick={() => void signOut()}>Sign out</button>
-      </div> : <>
-      <form className="device-row" onSubmit={(e) => { e.preventDefault(); setTokenSaved(saveToken(token)) }}>
-        <span><span><Key size={16} /> Access token</span><small>{tokenSaved ? 'Saved on this device.' : 'KOE_ACCESS_TOKEN from backend/.env.'}</small></span>
-      </form>
-      <form className="token-row" onSubmit={(e) => { e.preventDefault(); setTokenSaved(saveToken(token)) }}>
-        <input type="password" value={token} onChange={(e) => { setToken(e.target.value); setTokenSaved(false) }} aria-label="Koe access token" autoComplete="off" />
-        <button className="soft" disabled={!token.trim()}>Save</button>
-      </form>
-      </>}
-    </section>
+    <SettingSection id="set-device" title="This device" intro="Install Koe like an app and get its replies as notifications.">
+      <SettingRow icon={DeviceMobile} title="Koe app" on={install.installed}
+        status={install.installed ? 'Installed on this device.' : install.canPrompt ? 'Add Koe to your home screen, like an app.'
+          : install.ios ? 'On iPhone: Share, then Add to Home Screen.' : 'Scan a QR code to set Koe up on your phone.'}
+        action={!install.installed && (install.canPrompt
+          ? <button className="soft" onClick={() => void install.install()}>Install app</button>
+          : <a className="ghost" href="#install">Phone setup</a>)} />
+      <SettingRow icon={BellSimple} title="Notifications" on={push === 'on'}
+        status={push === 'unsupported' ? (install.ios ? 'Install Koe to your home screen first.' : 'Not supported in this browser.')
+          : push === 'denied' ? 'Blocked. Allow notifications for this site in the browser settings.'
+          : pushError || 'Koe’s replies and GitHub alerts, like WhatsApp messages.'}
+        action={(push === 'on' || push === 'off' || push === 'busy') &&
+          <button className={push === 'on' ? 'ghost' : 'soft'} disabled={push === 'busy'} onClick={() => void togglePush()}>{push === 'on' ? 'Turn off' : 'Turn on'}</button>} />
+    </SettingSection>
   )
 }

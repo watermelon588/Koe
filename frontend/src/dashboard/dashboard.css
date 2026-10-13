@@ -1,0 +1,53 @@
+/* The Dashboard page (#dashboard) and Home's slim Today summary. Rows, feeds and asks reuse the list styles
+   in index.css, so the call's Day card and these panels read the same. */
+.dash-page { position: relative; z-index: 1; width: 100%; max-width: 1280px; margin: 0 auto; padding: 104px 32px 48px; outline: none; }
+.dash-page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 28px; }
+.dash-page-head h1 { font-size: clamp(30px, 3vw, 40px); font-weight: 300; letter-spacing: -0.03em; line-height: 1.1; }
+.dash-page-head p { color: var(--muted); font-size: 13px; margin-top: 6px; }
+.dash-page-head .ghost { height: 34px; padding: 0 14px; font-size: 13px; margin-left: 6px; }
+.dash-page .connect { margin-bottom: 24px; max-width: 580px; }
+.dash-page-status { margin-bottom: 20px; }
+
+/* Desktop: today is the widest panel with approvals beside it; GitHub and activity share the row below. */
+.dash-grid { display: grid; gap: 16px; grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-areas: 'today today approvals' 'reviews prs activity'; }
+.dash-tile { display: flex; flex-direction: column; min-width: 0; background: var(--surface); border-radius: 18px; }
+.dash-tile[data-attention] { box-shadow: inset 0 0 0 1px var(--accent); }
+.dash-tile header { display: flex; align-items: center; gap: 10px; padding: 16px 20px 6px; color: var(--muted); }
+.dash-tile header svg[data-busy] { color: var(--accent); animation: pulse 0.7s ease-in-out infinite alternate; }
+.dash-tile h2 { font-size: 14px; font-weight: 400; color: var(--text); }
+.dash-tile header small { margin-left: auto; font-size: 12px; }
+.dash-tile-body { flex: 1; min-height: 120px; max-height: 380px; overflow-y: auto; overscroll-behavior: contain; padding: 0 20px 16px; }
+.dash-tile a { color: inherit; text-decoration: none; }
+/* Pull request tiles are narrow: CI and conflicts go under the title instead of squeezing it. */
+.dash-tile:is([data-area='reviews'], [data-area='prs']) .rows li { grid-template-columns: 40px minmax(0, 1fr); }
+.dash-tile:is([data-area='reviews'], [data-area='prs']) .rows li > small:last-child { grid-column: 2; margin-top: -8px; }
+.dash-tile a:hover { text-decoration: underline; text-decoration-color: var(--accent); text-underline-offset: 3px; }
+
+@media (max-width: 1099px) {
+  .dash-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-areas: 'today today' 'approvals activity' 'reviews prs'; }
+}
+@media (max-width: 699px) {
+  .dash-page { padding: 80px 16px 40px; }
+  .dash-page-head { margin-bottom: 20px; }
+  .dash-grid { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'today' 'approvals' 'reviews' 'prs' 'activity'; gap: 12px; }
+  .dash-tile header { padding: 14px 16px 4px; }
+  .dash-tile-body { max-height: none; min-height: 0; padding: 0 16px 14px; }
+}
+
+/* Home: a slim summary, not the whole day. */
+.today { background: var(--surface); border-radius: 18px; padding: 14px 20px 16px; }
+.today header { display: flex; align-items: center; gap: 10px; margin-bottom: 2px; }
+.today h2 { font-size: 14px; font-weight: 400; }
+.today-link { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; text-decoration: none; padding: 6px 4px; transition: color 200ms ease; }
+.today-link svg { transition: transform 200ms var(--ease-out); }
+.today a { color: inherit; text-decoration: none; }
+.today-foot { display: flex; flex-wrap: wrap; gap: 4px 16px; padding-top: 10px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; }
+@media (hover: hover) and (pointer: fine) {
+  .today-link:hover { color: var(--text); }
+  .today-link:hover svg { transform: translateX(2px); }
+  .today .rows a:hover { text-decoration: underline; text-decoration-color: var(--accent); text-underline-offset: 3px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dash-tile header svg[data-busy] { animation: none; }
+}
