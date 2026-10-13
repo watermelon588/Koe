@@ -1,6 +1,7 @@
 # secrets — never commit (CLAUDE.md)
 .env
 credentials.json
+client_secret_*.json
 token.json
 token.json.tmp
 .env.*
