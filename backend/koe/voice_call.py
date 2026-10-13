@@ -26,7 +26,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from google import genai
 from google.genai import errors, types
 
-from koe import agent, auth, events, store
+from koe import agent, auth, events, identity, store
 from koe.config import settings
 
 router = APIRouter()
@@ -284,8 +284,10 @@ async def call(ws: WebSocket):
     if auth.ws_required():
         try:
             first = await asyncio.wait_for(ws.receive_json(), timeout=10)
-            if not isinstance(first, dict) or first.get("type") != "auth" or not auth.ws_owner(first.get("token")):
+            owner = auth.ws_owner(first.get("token")) if isinstance(first, dict) and first.get("type") == "auth" else None
+            if not owner:
                 raise ValueError("Unauthorized")
+            identity.OWNER.set(owner)  # the call's activity, approvals and tools are this person's
         except (ValueError, asyncio.TimeoutError, WebSocketDisconnect):
             await ws.close(code=1008, reason="Sign in to Koe again.")
             return

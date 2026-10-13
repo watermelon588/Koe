@@ -646,3 +646,23 @@ A QR code is just a URL drawn as squares. Since the URL is fixed, the image is g
 - The prefs cache is per process. Tests reset it in `conftest.py`, so one test's sheet can't leak into another.
 **Measured:** 2 new tests: the request carries the headers and your token, the ID is stored and used by the tool, and a friend without a timesheet is refused rather than given the owner's. 232 backend tests and 18 frontend tests pass.
 **Interview line:** "I replaced a five-step manual setup with one API call that creates a correctly shaped spreadsheet in the user's own Drive, and stored the result as a per-user preference with an owner-only fallback."
+
+## Step 45: everyone's activity, approvals and conversation are their own  (Phase 5c, task 5 · 2026-10-13)
+**Files:** backend/koe/{store.py,app_channel.py,dashboard.py,voice_call.py} · backend/tests/{test_isolation.py (new),conftest.py}
+**What it does:**
+- The activity log, pending approvals and daily notes in Neon are stored under the person who is asking, not the one configured owner.
+- The Koe app keeps one conversation per person: their history, working memory and open approvals.
+- Calls and the dashboard record who connected (from their one-time ticket), so a call's tools and records belong to that person.
+**Core concept:** *The owner comes from authentication, never from input.* `identity.OWNER` is set where a request or socket is authenticated. That's the session cookie or ticket, or the access token for the owner. Storage reads the owner from there. The browser and the model can't choose whose data they touch, so approving someone else's action fails: the database function checks owner + conversation.
+**How it connects:**
+- `auth.http_owner` / `auth.ws_owner` → `identity.OWNER` → `store.rpc(p_owner=…)` → `koe_propose_action` / `koe_claim_action` (owner-checked SQL).
+- `app_channel.chat()` → `CHATS[owner]`.
+**Try it yourself:** `uv run pytest -q tests/test_isolation.py` runs two tests:
+- proposals and claims carry the asking person's owner id;
+- two people chatting get separate histories and separate approval contexts.
+**Gotchas:**
+- `whatsapp.py` and `github_hooks.py` still act as the owner, which is correct: WhatsApp and GitHub alerts are owner-only channels for now.
+- The Notion workspace (another session's work in progress) still uses the configured owner. It should switch to `identity.owner_id()` when it's committed.
+- Friends stay blocked at sign-in until their own connections exist, so this is groundwork that's already enforced.
+**Measured:** 234 backend tests pass. Reverting the store to the fixed owner fails the new test.
+**Interview line:** "Multi-tenancy is enforced where identity is established: a context variable set at authentication flows into every storage call, so no request body or model output can pick whose rows it touches."

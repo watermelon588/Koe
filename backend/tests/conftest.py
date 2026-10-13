@@ -21,4 +21,4 @@ def isolate_live_storage(monkeypatch, tmp_path):
     data = tmp_path / "data"
     monkeypatch.setattr(app_channel, "DATA", data)
     monkeypatch.setattr(db, "DB", data / "app.db")
-    monkeypatch.setattr(app_channel, "CHAT", whatsapp.Chat(context=agent.Conversation("app")))  # fresh lock per test loop
+    monkeypatch.setattr(app_channel, "CHATS", {})  # fresh conversations (and locks) per test loop

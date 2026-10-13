@@ -7,7 +7,7 @@ from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
-from koe import auth, events, store
+from koe import auth, events, identity, store
 from koe.config import settings
 from koe.tools import calendar, github
 
@@ -88,8 +88,10 @@ async def dashboard(ws: WebSocket):
         return
     try:
         first = await asyncio.wait_for(ws.receive_json(), timeout=10)
-        if not isinstance(first, dict) or first.get("type") != "auth" or not auth.ws_owner(first.get("token")):
+        owner = auth.ws_owner(first.get("token")) if isinstance(first, dict) and first.get("type") == "auth" else None
+        if not owner:
             raise ValueError("Unauthorized")
+        identity.OWNER.set(owner)  # this socket shows its owner's day
     except (ValueError, TypeError, KeyError, asyncio.TimeoutError, WebSocketDisconnect):
         with contextlib.suppress(WebSocketDisconnect, RuntimeError):
             await ws.close(code=1008, reason="Sign in to Koe again.")

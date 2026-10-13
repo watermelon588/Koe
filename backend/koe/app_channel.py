@@ -90,14 +90,20 @@ async def save_voice(audio: bytes) -> str:
 
 # ── The conversation ──────────────────────────────────────────────────────────────────────────────
 
-CHAT = whatsapp.Chat(context=agent.Conversation("app"))  # one user, one conversation; the lock keeps turns in order
+# One conversation per person (their history, working memory and open approvals); the lock keeps turns in order.
+CHATS: dict[str, whatsapp.Chat] = {}
+
+
+def chat() -> whatsapp.Chat:
+    return CHATS.setdefault(owner(), whatsapp.Chat(context=agent.Conversation("app")))
 _background: set[asyncio.Task] = set()
 
 
 async def reply(text: str, spoken: bool) -> dict:
-    async with CHAT.lock:
-        result = await text_agent.chat(text, CHAT.history, CHAT.context, whatsapp.gemini())
-        whatsapp.trim(CHAT.history)
+    mine = chat()
+    async with mine.lock:
+        result = await text_agent.chat(text, mine.history, mine.context, whatsapp.gemini())
+        whatsapp.trim(mine.history)
     voice = None
     if spoken:
         try:
@@ -195,8 +201,9 @@ async def get_voice(name: str):
 
 @router.post("/approvals/{action_id}")
 async def decide(action_id: str, body: Decision):
-    async with CHAT.lock:
-        result = await agent.confirm(CHAT.context, body.approve, action_id)
+    mine = chat()
+    async with mine.lock:
+        result = await agent.confirm(mine.context, body.approve, action_id)
     status = result.get("status") or "unavailable"  # e.g. expired, or forgotten after a server restart
     await set_action_status(action_id, status)
     return {"messages": [await add_message("koe", text_agent.approval_text(result))], "action": {"id": action_id, "status": status}}

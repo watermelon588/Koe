@@ -106,7 +106,7 @@ Goal: an invited friend goes from link to working assistant without touching cod
 - **Checkpoint:** end-to-end sign-in on laptop and phone; Rohit invites one friend.
 
 **Group 3: per-user data**
-- [ ] 5. *(storage done 2026-10-13; per-user conversation memory and approvals follow task 2)* App chat (messages, voice notes, push subscriptions) moves from SQLite to Neon with `owner_id` = user; conversations and pending approvals keyed by user. *Accept:* user B sees none of user A's chat/activity/approvals (tests); survives a Render restart.
+- [x] 5. *(done 2026-10-13)* App chat (messages, voice notes, push subscriptions) moves from SQLite to Neon with `owner_id` = user; conversations and pending approvals keyed by user. *Accept:* user B sees none of user A's chat/activity/approvals (tests); survives a Render restart.
 
 **Group 4: connections**
 - [x] 6. *(done 2026-10-13)* `connections.py` + encrypted token store + Settings → Connections list (connect / disconnect / status). Google Calendar connect; calendar tools use the caller's token. *Accept:* "what's on my calendar today?" uses the caller's calendar.

@@ -12,6 +12,7 @@ from psycopg import sql
 from psycopg.conninfo import conninfo_to_dict
 from psycopg.types.json import Jsonb
 
+from koe import identity
 from koe.config import settings
 
 log = logging.getLogger("koe.store")
@@ -52,7 +53,7 @@ async def rpc(name: str, **params):
     if name not in RPC_PARAMS or set(params) != set(RPC_PARAMS[name]):
         raise StoreError("Unsupported database operation.")
     options = connection_options()
-    values = {"p_owner": settings.koe_owner_id, **params}
+    values = {"p_owner": identity.owner_id(), **params}
     values = {key: Jsonb(value) if isinstance(value, dict) else value for key, value in values.items()}
     # Both identifiers and parameters are fixed by this module, never supplied by the browser/model.
     assignments = sql.SQL(", ").join(
@@ -104,7 +105,7 @@ async def dashboard_read() -> dict:
     if not configured():
         return {"activity": [], "pending": []}
     options = connection_options()
-    owner = settings.koe_owner_id
+    owner = identity.owner_id()
 
     def read():
         try:
