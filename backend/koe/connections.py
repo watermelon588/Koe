@@ -5,6 +5,9 @@ later GitHub and Notion, and Koe's tools act with *their* account.
   DELETE /api/connections/{provider} → forget it here and revoke it at the provider
   POST   /api/connections/google/timesheet → create "Koe timesheet" in the person's Drive with the Hours headers
   PUT    /api/connections/gemini {"key"} → use your own free Gemini key (no daily limit), checked with Google first
+  GET    /api/connections/github/repos   → your repositories + which ones Koe watches
+  PUT    /api/connections/github/repos {"repos"} → choose up to 20
+  (GitHub connects through /auth/github/connect, in auth.py.)
   (Connecting is a browser redirect: GET /auth/google/connect, in auth.py.)
 
 Tokens are encrypted with Fernet (AES-128-CBC + HMAC-SHA256) before they reach the database, under a key derived
@@ -15,6 +18,7 @@ import asyncio
 import base64
 import hashlib
 import json
+import re
 from datetime import datetime, timezone
 
 import httpx
@@ -138,7 +142,7 @@ async def list_connections():
     rows = await sql("select provider, account from koe_connections where owner_id = %s", identity.owner_id())
     have = {r["provider"]: r["account"] for r in rows}
     sheet = await asyncio.to_thread(pref, "google_sheets_id", identity.owner_id())
-    return {"ready": configured(), "timesheet": f"https://docs.google.com/spreadsheets/d/{sheet}/edit" if sheet else "",
+    return {"ready": configured(), "github_ready": github_ready(), "timesheet": f"https://docs.google.com/spreadsheets/d/{sheet}/edit" if sheet else "",
             "connections": [{"provider": p, "connected": p in have, "account": have.get(p, "")} for p in PROVIDERS]}
 
 
@@ -171,6 +175,16 @@ async def disconnect(provider: str):
         raise HTTPException(404, "No such connection.")
     owner = identity.owner_id()
     rows = await sql("select token_enc from koe_connections where owner_id = %s and provider = %s", owner, provider)
+    if rows and provider == "github":
+        try:  # https://docs.github.com/en/rest/apps/oauth-applications#delete-an-app-authorization
+            token = decrypt(rows[0]["token_enc"])
+            async with httpx.AsyncClient(timeout=10) as http:
+                await http.request("DELETE", f"{GITHUB_API}/applications/{settings.github_client_id}/grant",
+                                   auth=(settings.github_client_id, settings.github_client_secret),
+                                   json={"access_token": token["access_token"]}, headers={"Accept": "application/vnd.github+json"})
+        except (ConnectionError_, httpx.HTTPError):
+            pass
+        forget_github(owner)
     if rows and provider == "google":
         try:  # best effort: also end Koe's access at Google (https://developers.google.com/identity/protocols/oauth2/web-server#tokenrevoke)
             token = decrypt(rows[0]["token_enc"])
@@ -206,4 +220,71 @@ async def save_gemini_key(body: GeminiKey):
     owner = identity.owner_id()
     await asyncio.to_thread(save, owner, "gemini", f"key ending {key[-4:]}", [], {"key": key})
     usage.forget(owner)
+    return Response(status_code=204)
+
+
+# ── GitHub: the person's token, login and chosen repositories ──────────────────────────────────────────
+GITHUB_API = "https://api.github.com"
+_REPO = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
+_github: dict[str, dict] = {}  # ponytail: per-process cache, like _prefs (tools read it outside threads)
+
+
+def github_ready() -> bool:
+    return configured() and bool(settings.github_client_id and settings.github_client_secret)
+
+
+def github_account() -> dict:
+    """{"token", "login"} for the person asking: their connection; the owner may still use GITHUB_TOKEN from .env;
+    anyone else gets empty values, never the owner's."""
+    owner = identity.owner_id()
+    if owner not in _github:
+        row = None
+        if configured():
+            try:
+                row = load(owner, "github")
+            except ConnectionError_:
+                row = None
+        if row:
+            _github[owner] = {"token": row["token"]["access_token"], "login": row["account"]}
+        elif identity.is_owner():
+            _github[owner] = {"token": settings.github_token, "login": settings.github_login}
+        else:
+            _github[owner] = {"token": "", "login": ""}
+    return _github[owner]
+
+
+def forget_github(owner: str) -> None:
+    _github.pop(owner, None)
+
+
+def github_repos() -> list[str]:
+    mine = pref("github_repos")
+    chosen = mine or (settings.github_repos if identity.is_owner() else "")
+    return list(dict.fromkeys(x.strip() for x in chosen.split(",") if x.strip()))
+
+
+@api.get("/github/repos")
+async def github_repo_list():
+    """The person's repositories (most recently pushed first) and which ones Koe watches."""
+    account = await asyncio.to_thread(github_account)
+    if not account["token"]:
+        raise HTTPException(409, "Connect GitHub first.")
+    async with httpx.AsyncClient(timeout=15) as http:
+        r = await http.get(f"{GITHUB_API}/user/repos", params={"per_page": 100, "sort": "pushed"},
+                           headers={"Authorization": f"Bearer {account['token']}", "Accept": "application/vnd.github+json"})
+    if r.status_code != 200:
+        raise HTTPException(502, "GitHub didn't list your repositories. Try reconnecting.")
+    return {"repos": [repo["full_name"] for repo in r.json()], "selected": await asyncio.to_thread(github_repos)}
+
+
+class RepoChoice(BaseModel):
+    repos: list[str]
+
+
+@api.put("/github/repos", status_code=204)
+async def choose_github_repos(body: RepoChoice):
+    repos = list(dict.fromkeys(r.strip() for r in body.repos if r.strip()))
+    if len(repos) > 20 or any(not _REPO.fullmatch(r) for r in repos):
+        raise HTTPException(400, "Choose up to 20 repositories (owner/name).")
+    await set_pref("github_repos", ",".join(repos))
     return Response(status_code=204)

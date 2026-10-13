@@ -111,7 +111,7 @@ Goal: an invited friend goes from link to working assistant without touching cod
 **Group 4: connections**
 - [x] 6. *(done 2026-10-13)* `connections.py` + encrypted token store + Settings → Connections list (connect / disconnect / status). Google Calendar connect; calendar tools use the caller's token. *Accept:* "what's on my calendar today?" uses the caller's calendar.
 - [x] 7. *(done 2026-10-13)* Google Sheets: same consent; "Create my Hours sheet" button. *Accept:* sheet created with headers; a timesheet row needs approval.
-- [ ] 8. GitHub OAuth App connect + repo picker; GitHub tools use the caller's token. *Needs Rohit:* GitHub OAuth App.
+- [x] 8. *(done 2026-10-13; needs the OAuth App, DEPLOY.md §7)* GitHub OAuth App connect + repo picker; GitHub tools use the caller's token. *Needs Rohit:* GitHub OAuth App.
 - [ ] 9. Notion public integration connect + "Create Koe Daily Log". *Needs Rohit:* Notion public integration (uses the privacy/terms URLs from task 1).
 - **Checkpoint:** a friend connects all four from Settings with no code changes.
 

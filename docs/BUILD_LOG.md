@@ -691,3 +691,33 @@ A QR code is just a URL drawn as squares. Since the URL is fixed, the image is g
 - Friends are still kept out at sign-in until their own GitHub/Notion connections exist, so the limit has no effect yet.
 **Measured:** 238 backend tests and 18 frontend tests pass. Migration 006 is applied to Neon.
 **Interview line:** "I metered a shared free-tier API per user with an atomic upsert counter, and let users bring their own key, validated against the provider before it's encrypted and routed per request."
+
+## Step 47: connect your own GitHub and pick your repositories  (Phase 5c, task 8 · 2026-10-13)
+**Files:** backend/koe/{auth.py (GitHub connect + callback),connections.py (token/login/repos, repo picker API, revoke),dashboard.py,tools/github.py,tools/github_work.py,config.py} · backend/tests/{test_github_connect.py (new),test_events.py,conftest.py} · frontend/src/settings/{Connections.tsx,settings.css} · frontend/src/pages/Guide.tsx · backend/.env.example · docs/DEPLOY.md (§7)
+**What it does:**
+- Settings → Connections → GitHub → **Connect** goes to GitHub's authorize page and back.
+- **Choose** lists your repositories (most recently pushed first). Tick up to 20 and Save.
+- The PR tools, "what did I ship", PR comments and the dashboard's PR panel then use *your* token, *your* login and *your* repositories.
+- Disconnect revokes the grant at GitHub.
+- The owner can still fall back to `GITHUB_TOKEN`/`GITHUB_REPOS` from `.env`. Anyone else gets "connect GitHub", never the owner's token.
+**Core concept:**
+- *OAuth App + PKCE.* GitHub's web flow sends a `state` (forgery guard) and a PKCE challenge. The code is exchanged with the client secret and the verifier, asking for JSON (`Accept: application/json`). GitHub OAuth App tokens don't expire by default, so there's no refresh step, unlike Google.
+- *Where to put per-person defaults.* The token lives encrypted in `koe_connections`. The chosen repositories are a plain preference in `koe_prefs`, because they aren't secret. One cache per process keeps the tools from hitting the database on every call.
+**How it connects:**
+- Settings → `/auth/github/connect` → github.com/login/oauth/authorize → `/auth/github/callback` → token exchange → `GET /user` (login) → `connections.save`.
+- Tools → `connections.github_account()` / `github_repos()`.
+**Try it yourself:**
+- Create the OAuth App (DEPLOY.md §7), then Connect, then Choose, then ask "any PRs waiting for my review?".
+- `uv run pytest -q tests/test_github_connect.py` runs 4 tests:
+  - connect sends PKCE and the right scope, and the token is stored encrypted;
+  - repos are listed and chosen;
+  - tools use the caller's token, and a friend never gets the owner's;
+  - disconnect revokes with basic auth.
+**Gotchas:**
+- GitHub OAuth Apps can have several callback URLs, so the live site and localhost can share one app.
+- The dashboard test expected the old "add GITHUB_TOKEN" wording. It now checks the new "Settings → Connections → GitHub" message.
+**Measured:**
+- Turning the owner-only fallback into "everyone" fails the friend test.
+- 242 backend tests and 18 frontend tests pass.
+- In the browser with a temporary test account (deleted afterwards), the Connections section shows Google and GitHub connected, Notion "Coming soon", Timesheet, Repositories → Choose, and the Gemini key form. The dashboard stays Live.
+**Interview line:** "Every integration follows the same pattern: OAuth with PKCE, an encrypted token per user, non-secret choices as preferences, and tools that resolve credentials from the request's identity with an owner-only fallback, which a test proves can't leak."

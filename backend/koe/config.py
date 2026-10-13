@@ -50,6 +50,9 @@ class Settings(BaseSettings):
     koe_public_url: str = ""  # the site people open, e.g. https://koe-pi.vercel.app (Google's redirect goes back here)
     koe_secret_key: str = Field(default="", repr=False)  # encrypts connection tokens (connections.py); 32+ random chars
     koe_daily_turns: int = 60  # turns a day for friends on the shared Gemini key (usage.py); the owner is never limited
+    # GitHub connection (connections.py): an OAuth App with callback <site>/auth/github/callback. Empty = off.
+    github_client_id: str = ""
+    github_client_secret: str = Field(default="", repr=False)
 
 
 settings = Settings()

@@ -118,7 +118,7 @@ def test_refresh_coalesces_clients_and_reports_missing_credentials(monkeypatch):
         assert len(calls) == 1
         snapshot = events.hub.snapshot()
         assert "not connected" in snapshot["panels"]["calendar"]["result"]["error"]["message"]
-        assert "GITHUB_TOKEN" in snapshot["panels"]["prs"]["result"]["error"]["message"]
+        assert "Settings → Connections → GitHub" in snapshot["panels"]["prs"]["result"]["error"]["message"]
         assert "Not connected" in snapshot["storage"]
     asyncio.run(scenario())
 

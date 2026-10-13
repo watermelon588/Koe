@@ -7,7 +7,7 @@ from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
-from koe import auth, events, identity, store
+from koe import auth, connections, events, identity, store
 from koe.config import settings
 from koe.tools import calendar, github
 
@@ -36,8 +36,8 @@ async def refresh():
                 events.publish("panel", name=name, result=result, date=day, timezone=settings.timezone)
 
         async def github_read(fn):
-            if not settings.github_token:
-                return {"error": {"message": "GitHub is not connected. Add GITHUB_TOKEN to backend/.env."}}
+            if not connections.github_account()["token"]:
+                return {"error": {"message": "GitHub is not connected: Settings → Connections → GitHub."}}
             return await fn()
 
         async def history():

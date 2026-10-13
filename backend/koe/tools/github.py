@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 
 import httpx
 
-from koe.config import settings
+from koe import connections
 
 GRAPHQL = "https://api.github.com/graphql"
 _QUERY = """query($q: String!) { search(query: $q, type: ISSUE, first: 20) { nodes { ... on PullRequest {
@@ -46,7 +46,7 @@ def _client() -> httpx.AsyncClient:
 
 async def _search(q: str) -> list[dict]:
     r = await _client().post(GRAPHQL, json={"query": _QUERY, "variables": {"q": q}},
-                             headers={"Authorization": f"Bearer {settings.github_token}"})
+                             headers={"Authorization": f"Bearer {connections.github_account()['token']}"})
     r.raise_for_status()
     data = r.json()
     if data.get("errors"):

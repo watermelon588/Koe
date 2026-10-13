@@ -78,6 +78,17 @@ Sign-in replaces the access token (ACCOUNTS_SPEC.md). Connections lets each pers
 
 Until these are set, the site keeps using the access token, so nothing breaks in the meantime.
 
+## 7. GitHub connection
+Each person connects their own GitHub (Settings → Connections → GitHub → Connect, then Choose repositories).
+1. GitHub → **Settings → Developer settings → OAuth Apps → New OAuth App**. Free, no card needed.
+   - Application name `Koe`; Homepage URL `https://koe-pi.vercel.app`.
+   - Authorization callback URL `https://koe-pi.vercel.app/auth/github/callback`. Add `http://localhost:5173/auth/github/callback` too if you develop locally; an app can have several callback URLs.
+   - Leave "Enable Device Flow" off.
+2. **Generate a new client secret** and copy it straight away; GitHub shows it once.
+3. Put `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` in `backend/.env` **and** on Render.
+
+Koe asks for `repo read:user` (to read PRs and CI, and to post the PR comments you approve, private repos included). Disconnect revokes the grant at GitHub. Until you connect, you (the owner) still use `GITHUB_TOKEN`/`GITHUB_REPOS` from `.env`; nobody else ever does.
+
 ## Updating
 Push to `main`, and both Render and Vercel rebuild by themselves. The URLs stay the same.
 

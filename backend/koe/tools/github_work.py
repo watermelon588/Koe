@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 
 from koe.config import settings
 from koe.tools.github import _client, _error, GitHubError
+from koe import connections
 
 SOURCE_LIMIT = 30_000
 _REPO = re.compile(r'[A-Za-z0-9_-][A-Za-z0-9_.-]*/[A-Za-z0-9_-][A-Za-z0-9_.-]*\Z')
@@ -29,18 +30,19 @@ def target(repo: str, number: int):
 
 
 def repositories() -> list[str]:
-    repos = list(dict.fromkeys(x.strip() for x in settings.github_repos.split(',') if x.strip()))
+    repos = connections.github_repos()  # the person's choice (Settings → Connections); the owner may use GITHUB_REPOS
     if not repos or len(repos) > 20 or any(not _REPO.fullmatch(r) for r in repos):
-        raise ValueError('Set GITHUB_REPOS to 1–20 owner/name repositories.')
+        raise ValueError('Pick 1–20 repositories in Settings → Connections → GitHub.')
     return repos
 
 
 async def request(method: str, path: str, **kwargs) -> httpx.Response:
-    if not settings.github_token:
-        raise GitHubError('GitHub is not connected; set GITHUB_TOKEN.')
+    token = connections.github_account()['token']
+    if not token:
+        raise GitHubError('GitHub is not connected: Settings → Connections → GitHub.')
     try:
         response = await _client().request(method, 'https://api.github.com' + path, headers={
-            'Authorization': f'Bearer {settings.github_token}', 'Accept': 'application/vnd.github+json',
+            'Authorization': f'Bearer {token}', 'Accept': 'application/vnd.github+json',
             'X-GitHub-Api-Version': '2026-03-10'}, **kwargs)
         response.raise_for_status()
         return response
@@ -161,7 +163,7 @@ async def github_shipped(since: str = 'today', now: datetime | None = None) -> d
         now = now or datetime.now(timezone.utc)
         start = interval(since, now)
         repos = repositories()
-        login = settings.github_login or (await request('GET', '/user')).json()['login']
+        login = connections.github_account()['login'] or (await request('GET', '/user')).json()['login']
         if not _LOGIN.fullmatch(login):
             raise ValueError('Invalid GITHUB_LOGIN.')
         # Fixed endpoint pagination; never follow an absolute Link URL with auth headers.

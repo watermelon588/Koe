@@ -327,3 +327,63 @@ def ws_owner(credential) -> str | None:
     if ticket and ticket[1] >= time.monotonic():
         return ticket[0]
     return settings.koe_owner_id if _access_token_ok(credential) else None
+
+
+# ── Connect GitHub (OAuth App, authorization code + PKCE) ──────────────────────────────────────────────
+# https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps
+GITHUB_AUTHORIZE = "https://github.com/login/oauth/authorize"
+GITHUB_TOKEN = "https://github.com/login/oauth/access_token"
+GITHUB_SCOPES = "repo read:user"  # repo: read PRs/CI and post approved comments, private repos included
+
+
+@router.get("/auth/github/connect")
+async def github_connect(request: Request, next: str = "/#settings"):
+    from koe import connections
+    if not connections.github_ready():
+        raise HTTPException(404, "Connecting GitHub isn't set up on this server (GitHub OAuth App and KOE_SECRET_KEY).")
+    user = await signed_in_user(request)
+    if not user:
+        raise HTTPException(401, "Sign in to Koe first.")
+    _owner_only(user)
+    state, verifier = secrets.token_urlsafe(32), secrets.token_urlsafe(48)
+    query = {"client_id": settings.github_client_id, "redirect_uri": f"{site(request)}/auth/github/callback",
+             "scope": GITHUB_SCOPES, "state": state, "allow_signup": "false",
+             "code_challenge": _b64(hashlib.sha256(verifier.encode()).digest()), "code_challenge_method": "S256"}
+    response = RedirectResponse(f"{GITHUB_AUTHORIZE}?{urlencode(query)}", 302, headers=NO_STORE)
+    flow = {"state": state, "verifier": verifier, "next": _safe_next(next), "purpose": "github", "owner": user["id"]}
+    _cookie(response, request, FLOW_COOKIE, _b64(json.dumps(flow).encode()), FLOW_MINUTES * 60, path="/auth")
+    return response
+
+
+@router.get("/auth/github/callback")
+async def github_callback(request: Request, code: str = "", state: str = "", error: str = ""):
+    from koe import connections
+    flow = _read_flow(request.cookies.get(FLOW_COOKIE))
+
+    def back(path: str) -> RedirectResponse:
+        response = RedirectResponse(path, 303, headers=NO_STORE)
+        response.delete_cookie(FLOW_COOKIE, path="/auth")
+        return response
+
+    if error:
+        return back(_with_query(flow["next"] if flow else "/#settings", "connect=cancelled"))
+    if not flow or flow.get("purpose") != "github" or not state or not code or not hmac.compare_digest(state, flow.get("state", "")):
+        raise HTTPException(400, "This GitHub link expired or was opened twice. Please try again.")
+    user = await signed_in_user(request)
+    if not user or user["id"] != flow.get("owner"):
+        raise HTTPException(400, "Sign in to Koe again, then connect GitHub.")
+    async with httpx.AsyncClient(timeout=15) as http:
+        reply = await http.post(GITHUB_TOKEN, headers={"Accept": "application/json"}, data={
+            "client_id": settings.github_client_id, "client_secret": settings.github_client_secret, "code": code,
+            "redirect_uri": f"{site(request)}/auth/github/callback", "code_verifier": flow["verifier"]})
+        token = reply.json().get("access_token") if reply.status_code == 200 else None
+        if not token:
+            return back(_with_query(flow["next"], "connect=github-failed"))
+        me = await http.get("https://api.github.com/user", headers={"Authorization": f"Bearer {token}",
+                                                                   "Accept": "application/vnd.github+json"})
+    if me.status_code != 200:
+        return back(_with_query(flow["next"], "connect=github-failed"))
+    scopes = [x.strip() for x in str(reply.json().get("scope", "")).split(",") if x.strip()]
+    await asyncio.to_thread(connections.save, user["id"], "github", me.json()["login"], scopes, {"access_token": token})
+    connections.forget_github(user["id"])
+    return back(_with_query(flow["next"], "connected=github"))

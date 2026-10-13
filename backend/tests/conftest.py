@@ -18,6 +18,7 @@ def isolate_live_storage(monkeypatch, tmp_path):
     monkeypatch.setattr(settings, "koe_secret_key", "")  # connections off unless a test turns them on
     monkeypatch.setattr(connections, "_prefs", {})  # per-person settings cache: fresh per test
     monkeypatch.setattr(usage, "_own_keys", {})  # own-Gemini-key cache: fresh per test
+    monkeypatch.setattr(connections, "_github", {})  # GitHub account cache: fresh per test
     # With DATABASE_URL cleared above, the Koe app's chat falls back to SQLite: point it at a temp file.
     data = tmp_path / "data"
     monkeypatch.setattr(app_channel, "DATA", data)
