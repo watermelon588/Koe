@@ -560,3 +560,29 @@ A QR code is just a URL drawn as squares. Since the URL is fixed, the image is g
 - Old local SQLite chats aren't copied; on Render they had already been wiped.
 **Measured (laptop → Neon):** first query 951 ms (connect), then 119 ms per query, 324 ms for a 200 KB voice note, 966 ms to reconnect after a forced drop. Round trip, owner scoping and cleanup all verified with a throwaway owner. 157 backend tests pass (1 new).
 **Interview line:** "I moved the chat off an ephemeral disk into Postgres with an owner column on every row, proved isolation with a test, and measured connection reuse taking queries from about 1.1 s to about 120 ms."
+
+## Step 41: Continue with Google, on the server  (Phase 5c, task 2 · 2026-10-13)
+**Files:** backend/koe/auth.py (new) · backend/koe/db.py (new: the shared Neon/SQLite runner, moved out of app_channel) · backend/migrations/003_accounts.sql (new) · backend/tests/test_auth.py (new) · backend/koe/{config,main,app_channel}.py · backend/tests/conftest.py · backend/.env.example · frontend/vite.config.ts (`/auth` proxy) · .gitignore (`client_secret_*.json`)
+**What it does:** `/auth/google/start` sends you to Google's sign-in page. `/auth/google/callback` turns Google's answer into a Koe session, but only for invited emails: the owner (`KOE_ADMIN_EMAIL`) or rows in `koe_invites`. `/auth/status` says who is signed in, and `/auth/logout` ends the session. `current_user` is the dependency that per-user endpoints will use. Nothing in the app requires it yet; the frontend switch is task 3.
+**Core concept:** *OpenID Connect authorization-code flow.*
+1. Koe makes three random values: a **state** (stops forged callbacks), a **nonce** (stops a replayed ID token) and a **PKCE verifier**. The verifier's SHA-256 "challenge" goes to Google, and only Koe's server knows the verifier itself.
+2. Google returns a one-time code. Koe swaps it, together with the verifier and the client secret, for an **ID token**: a JWT signed by Google.
+3. `google-auth` checks the token's signature, expiry, issuer and audience. Koe then checks the nonce, that the email is verified, and that it's on the invite list.
+4. The session is a random token in an **HttpOnly, SameSite=Lax cookie**. The database keeps only its SHA-256, so a stolen copy of the database can't be replayed as a login.
+**How it connects:** browser → `/auth/google/start` → accounts.google.com → `/auth/google/callback` → `koe_users` / `koe_sessions` (Neon, or SQLite locally, via `db.sql`) → cookie → `current_user` (task 3 puts it on `/api/*` and on the WebSocket tickets).
+**Try it yourself:** `uv run pytest -q tests/test_auth.py` runs 11 tests:
+- the owner keeps their id;
+- a friend gets a new id;
+- a stranger gets no account and no session;
+- an unverified email is refused;
+- a forged state or a replayed nonce is refused;
+- `next` never leaves Koe;
+- a forged Host header can't steer Google's redirect;
+- logout requires Koe's own Origin, and a replayed cookie stops working;
+- an expired session is signed out.
+**Gotchas:**
+- The downloaded `client_secret_*.json` sat in `backend/` without being git-ignored. It is now ignored, and its values live only in `.env`.
+- Google matches the redirect URI exactly, so the server only builds it for `KOE_PUBLIC_URL` or `http://localhost:5173`.
+- While the Google app is in **Testing**, every friend must also be a test user in Google Cloud.
+**Measured:** Two deliberate breaks were caught: removing the invite check failed a test, and removing the nonce check failed the new replay test. With a real request, Google returned its normal "Sign in … to continue" page with no `redirect_uri_mismatch` or `invalid_client`. Migration 003 is applied to Neon. 220 backend tests pass.
+**Interview line:** "I implemented Google sign-in as an OIDC code flow with PKCE, state and nonce, an invite allow-list, and hashed server-side sessions in HttpOnly cookies. Every rejection path is tested, and the tests are proven to fail when a check is removed."

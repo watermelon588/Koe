@@ -100,7 +100,7 @@ Goal: an invited friend goes from link to working assistant without touching cod
 - **Checkpoint:** Rohit reads Guide/Privacy/Terms; links usable as the Google/Meta/Notion privacy-policy URL.
 
 **Group 2: identity**
-- [ ] 2. Migration `002_accounts.sql` (users, invites, sessions) + `auth.py`: Google sign-in (PKCE/state/nonce, ID-token checks), allow-list, session cookie, logout, `current_user` dependency. *Accept:* invited → session; uninvited → no session; tests for each, with Google faked. *Needs Rohit:* a Google **Web** OAuth client + `KOE_SECRET_KEY`, `KOE_ADMIN_EMAIL`.
+- [x] 2. *(backend done 2026-10-13: migration 003, `auth.py`, `db.py`, 11 tests; Google accepts the client)* Migration `003_accounts.sql` (users, invites, sessions) + `auth.py`: Google sign-in (PKCE/state/nonce, ID-token checks), allow-list, session cookie, logout, `current_user` dependency. *Accept:* invited → session; uninvited → no session; tests for each, with Google faked. *Needs Rohit:* a Google **Web** OAuth client + `KOE_SECRET_KEY`, `KOE_ADMIN_EMAIL`.
 - [ ] 3. Vercel rewrites `/api` + `/auth` → Render with `no-store`; frontend sign-in screen and logout; HTTP APIs accept the session (token still accepted in single-owner mode). *Accept:* sign in on the phone, chat works with no token typed.
 - [ ] 4. WebSocket tickets (`POST /api/ws-ticket`, single use, 60 s, Origin check) for `/ws/call` and `/ws/events`; remove token UI from Home/Settings/Install. *Accept:* a call works signed-in; a reused ticket is refused.
 - **Checkpoint:** end-to-end sign-in on laptop and phone; Rohit invites one friend.

@@ -3,7 +3,7 @@ import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from koe import app_channel, dashboard, github_hooks, voice_call, whatsapp
+from koe import app_channel, auth, dashboard, github_hooks, voice_call, whatsapp
 from koe.config import settings  # import = fail fast on missing config
 
 # Show Koe's own INFO lines (latency stages, delivery failures) next to uvicorn's in the host logs.
@@ -20,6 +20,7 @@ app.include_router(dashboard.router)
 app.include_router(whatsapp.router)
 app.include_router(github_hooks.router)
 app.include_router(app_channel.router)
+app.include_router(auth.router)
 
 
 @app.get("/health")

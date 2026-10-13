@@ -43,6 +43,11 @@ class Settings(BaseSettings):
     # Browser origins allowed to call the API cross-origin (comma-separated), e.g. https://koe.vercel.app.
     # Empty = same origin only (local dev through the Vite proxy).
     frontend_origins: str = ""
+    # Google sign-in (ACCOUNTS_SPEC.md): a "Web application" OAuth client. Empty = sign-in is off.
+    google_web_client_id: str = ""
+    google_web_client_secret: str = Field(default="", repr=False)
+    koe_admin_email: str = ""  # the owner: always allowed, can invite; their user id is koe_owner_id
+    koe_public_url: str = ""  # the site people open, e.g. https://koe-pi.vercel.app (Google's redirect goes back here)
 
 
 settings = Settings()
