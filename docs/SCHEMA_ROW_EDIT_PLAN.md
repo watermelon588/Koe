@@ -13,6 +13,7 @@ All three writers use the existing persisted proposal → explicit approval → 
 ## Bounds and concurrency
 
 - Existing first five Sheets headers remain Date, Client, Hours, Note, Koe action ID. At most 52 named columns, 500 physical columns and 5000 data rows in the editable dedicated tab; refuse reads beyond bounds rather than claiming a complete identity scan. Discovery returns at most 20 matches and explicitly reports additional matches.
+- Sheets API response bodies are streamed with a 4 MB cap. Row discovery returns at most 24 KB; long display strings are labeled truncated while versions still use complete typed cells. Requested old/new edit values are never silently truncated: oversized target cells/previews are refused and must be edited directly or split into smaller approvals. Each Sheets API operation has a 45-second budget, and TLS client construction/credential lookup stay off the voice event loop.
 - Serialize Koe's Sheets append/schema/edit writers per spreadsheet/tab within this single-process backend. Row metadata follows structural row moves. Before/after fingerprints and identity checks reject detected stale changes.
 - Google Sheets and Notion do not expose an atomic compare-and-set for these operations. An external edit in the short interval between the final read and write can still race. This implementation provides optimistic concurrency checks and stable addressing, not a distributed lock over human editors. Atomic Sheets batches keep each column insertion/header write together; partial multi-request updates are not claimed to be atomic.
 - Existing formula cells are never editable through the row tool. Unrequested cells, formulas, formatting and tracking IDs are preserved. Existing rows without a unique stable action ID cannot be edited through Koe in this slice.
@@ -24,9 +25,19 @@ All three writers use the existing persisted proposal → explicit approval → 
 - [x] Row discovery: bounded full identity scan, duplicate IDs, actual typed cell data, versions and match limits; final review extends malformed-response coverage.
 - [x] Row edits: approval/storage roundtrip, stale versions, moved rows, formula targets, protected fields, sparse RAW update and readback. Nine new regressions first failed; 52 focused Sheets/approval/tool tests passed. Final review extends uncertain/anchor coverage.
 - [x] Notion properties: supported types/options, name/type validation, existing names, source/schema changes, owner restriction, exact additive patch, response verification and no replay. Twelve new regressions failed before implementation; 73 focused Notion/API/tool tests then passed.
-- [ ] Full backend tests, SDK declaration serialization, no frontend/secrets/dependency/deployment changes. Optional read-only real-account probes; no real writes during automated acceptance.
+- [x] Final full backend suite: **377 passed**, one existing Starlette/httpx deprecation warning, 128.69 seconds. All 21 SDK declarations validated/serialized. Git diff and credential scan found no frontend edits, exposed secrets, new dependencies or deployment changes. Read-only real-account probes passed; no actual mutations were used for acceptance.
 
-## Sources
+## Examples
+
+1. “Add Billable and Project columns to my timesheet.” Koe previews names/destination; Confirm inserts blank columns without filling any row.
+2. “Find my Client entry from October 14.” Koe reads actual rows and resolves ambiguous matches with the user. “Change its hours to 1.5 and note to Release review.” The old/new preview identifies the record and requires Confirm. IDs/versions are handled internally.
+3. “Add a Priority select property to Notion with High, Medium and Low options.” Confirm adds only that definition. “Set Priority High on my review task.” This is a separate approved value change.
+
+The backend is saved locally; this build does not push, restart or deploy the application. The user handles Render rollout. No actual columns, metadata, row edits or Notion properties are created during automated verification. Read-only real-account probes succeeded for typed row discovery (3.29 s) and Notion schema identity (1.31 s); these are individual measurements, not percentile promises.
+
+Final streamed row read and SDK serialization also passed (4.42 s combined, 578-byte tool result for the current sheet). Twelve review cases cover disconnected OAuth, API deadlines, malformed evidence, wrong anchors, uncertain writes, readback disagreement, internal-argument injection and oversized input/output. Real write acceptance remains an intended action approved by the owner in the app; synthetic adapter tests cover the complete approval flow without modifying their data.
+
+## References
 
 - [Sheets developer metadata](https://developers.google.com/workspace/sheets/api/guides/metadata).
 - [Sheets batch update and collaboration semantics](https://developers.google.com/workspace/sheets/api/reference/rest/v4/spreadsheets/batchUpdate).

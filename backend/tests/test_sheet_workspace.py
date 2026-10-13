@@ -249,3 +249,110 @@ def test_discovery_refuses_incomplete_scan_and_reports_match_limit(sheet):
     assert len(result['matches']) == 20 and result['has_more'] and result['match_count'] == 26
     sheet.row_count = 6000
     assert 'error' in asyncio.run(workspace.sheets_find_rows())
+
+
+def test_review_disconnected_oauth_returns_safe_proposal_error(sheet, monkeypatch):
+    def unavailable(**kwargs): raise google_auth.GoogleAuthError('private OAuth diagnostics')
+    monkeypatch.setattr(google_auth, 'credentials', unavailable)
+    result = asyncio.run(agent.run_tool('sheets_add_columns', {'columns': ['Billable']}, context=agent.Conversation('cli')))
+    assert 'error' in result and 'private OAuth' not in str(result) and not sheet.writes
+
+
+def test_review_read_budget_is_total_and_does_not_hang(sheet, monkeypatch):
+    from koe.tools import sheet_workspace as workspace
+    monkeypatch.setattr(workspace, 'OPERATION_SECONDS', .01, raising=False)
+    async def stalled(*args, **kwargs): await asyncio.Event().wait()
+    monkeypatch.setattr(workspace, 'request', stalled)
+    async def scenario(): return await asyncio.wait_for(workspace.sheets_find_rows(), timeout=.2)
+    assert 'error' in asyncio.run(scenario()) and not sheet.writes
+
+
+def test_review_malformed_grid_is_an_error_not_missing_rows(sheet):
+    from koe.tools import sheet_workspace as workspace
+    sheet.rows[1][5] = {'numberValue': None}
+    result = asyncio.run(workspace.sheets_find_rows())
+    assert 'error' in result and 'matches' not in result and not sheet.writes
+
+
+def test_review_wrong_row_anchor_never_changes_values(sheet):
+    from koe.tools import sheet_workspace as workspace
+    sheet.rows.append(['2026-10-14', 'Other', 2, 'Preserve', 'other-id', 'Other'])
+    sheet.metadata.append({'metadataId': 42, 'metadataKey': 'koe.row', 'metadataValue': ROW_ID, 'visibility': 'DOCUMENT',
+        'location': {'dimensionRange': {'sheetId': 7, 'dimension': 'ROWS', 'startIndex': 2, 'endIndex': 3}}})
+    async def scenario():
+        row = (await workspace.sheets_find_rows(row_id=ROW_ID))['matches'][0]
+        args, _ = await workspace.prepare_proposal('sheets_update_row', workspace.prepare_write('sheets_update_row',
+            row_id=ROW_ID, expected_version=row['version'], changes={'Note': 'New'}))
+        return await workspace.sheets_update_row(**args, request_id='action')
+    assert 'error' in asyncio.run(scenario()) and not sheet.value_writes
+    assert sheet.rows[2][3] == 'Preserve'
+
+
+def test_review_value_timeout_is_never_replayed(sheet):
+    from koe.tools import sheet_workspace as workspace
+    def uncertain(request):
+        sheet.update(request)  # model the write taking effect before its response is lost
+        raise httpx.ReadTimeout('private timeout body')
+    respx.post(ROOT + '/values:batchUpdateByDataFilter').mock(side_effect=uncertain)
+    async def scenario():
+        row = (await workspace.sheets_find_rows(row_id=ROW_ID))['matches'][0]
+        args, _ = await workspace.prepare_proposal('sheets_update_row', workspace.prepare_write('sheets_update_row',
+            row_id=ROW_ID, expected_version=row['version'], changes={'Note': 'New'}))
+        result = await workspace.sheets_update_row(**args, request_id='action')
+        assert 'error' in result and 'private timeout' not in str(result)
+    asyncio.run(scenario())
+    assert len(sheet.value_writes) == 1 and sheet.rows[1][3] == 'New'
+
+
+def test_review_column_timeout_is_never_replayed(sheet):
+    from koe.tools import sheet_workspace as workspace
+    def uncertain(request):
+        sheet.batch(request)
+        raise httpx.ReadTimeout('private timeout body')
+    respx.post(ROOT + ':batchUpdate').mock(side_effect=uncertain)
+    async def scenario():
+        args, _ = await workspace.prepare_proposal('sheets_add_columns', workspace.prepare_write('sheets_add_columns', columns=['Billable']))
+        result = await workspace.sheets_add_columns(**args, request_id='action')
+        assert 'error' in result and 'private timeout' not in str(result)
+    asyncio.run(scenario())
+    assert len(sheet.writes) == 1 and sheet.rows[0][-1] == 'Billable'
+
+
+def test_review_readback_mismatch_never_claims_verified(sheet):
+    from koe.tools import sheet_workspace as workspace
+    def changed(request):
+        result = sheet.update(request)
+        sheet.rows[1][3] = 'Concurrent change'
+        return result
+    respx.post(ROOT + '/values:batchUpdateByDataFilter').mock(side_effect=changed)
+    async def scenario():
+        row = (await workspace.sheets_find_rows(row_id=ROW_ID))['matches'][0]
+        args, _ = await workspace.prepare_proposal('sheets_update_row', workspace.prepare_write('sheets_update_row',
+            row_id=ROW_ID, expected_version=row['version'], changes={'Note': 'New'}))
+        return await workspace.sheets_update_row(**args, request_id='action')
+    result = asyncio.run(scenario())
+    assert 'error' in result and 'verified' not in result and len(sheet.value_writes) == 1
+
+
+def test_review_model_cannot_supply_internal_snapshots_or_destination(sheet):
+    result = asyncio.run(agent.run_tool('sheets_add_columns', {'columns': ['Billable'], 'spreadsheet_id': 'other'},
+                                       context=agent.Conversation('cli')))
+    assert result['error']['code'] == 'bad_args' and not sheet.writes
+
+
+def test_review_discovery_bounds_model_context_and_labels_truncated_text(sheet):
+    from koe.tools import sheet_workspace as workspace
+    sheet.rows[1][3] = 'long note ' * 500
+    sheet.rows += [['2026-10-14', 'Client', 1, 'x' * 4000, f'row-{n}', 'Koe'] for n in range(30)]
+    sheet.row_count = 50
+    result = asyncio.run(workspace.sheets_find_rows())
+    assert len(json.dumps(result).encode()) <= workspace.MAX_RESULT_BYTES
+    assert result['matches'][0]['truncated_fields'] == ['Note'] and result['has_more']
+
+
+def test_review_large_api_payload_fails_before_using_incomplete_evidence(sheet):
+    from koe.tools import sheet_workspace as workspace
+    sheet.rows += [['2026-10-14', 'Client', 1, 'x' * 45000, f'row-{n}', 'Koe'] for n in range(100)]
+    sheet.row_count = 200
+    result = asyncio.run(workspace.sheets_find_rows())
+    assert 'error' in result and 'matches' not in result

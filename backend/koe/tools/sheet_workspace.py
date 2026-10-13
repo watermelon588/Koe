@@ -18,6 +18,9 @@ from koe.tools import sheets
 from koe.tools.github import _error
 
 MAX_ROWS = 5000
+OPERATION_SECONDS = 45
+MAX_API_BYTES = 4_000_000
+MAX_RESULT_BYTES = 24_000
 GRID_FIELDS = 'sheets(properties(sheetId,title,gridProperties),data(startRow,startColumn,rowData(values(userEnteredValue))))'
 
 
@@ -41,21 +44,35 @@ def destination():
 
 @asynccontextmanager
 async def api_client(args):
-    if await asyncio.to_thread(destination) != {key: args[key] for key in ('spreadsheet_id', 'sheet_name')}:
-        raise ValueError('The connected timesheet changed. Propose again.')
-    creds = await asyncio.to_thread(google_auth.credentials, required_scopes=[google_auth.SHEETS_SCOPE])
-    async with httpx.AsyncClient(base_url='https://sheets.googleapis.com/v4/spreadsheets/' + args['spreadsheet_id'],
-                                 timeout=15, trust_env=False, headers={'Authorization': f'Bearer {creds.token}'}) as api:
-        yield api
+    try:
+        async with asyncio.timeout(OPERATION_SECONDS):
+            if await asyncio.to_thread(destination) != {key: args[key] for key in ('spreadsheet_id', 'sheet_name')}:
+                raise ValueError('The connected timesheet changed. Propose again.')
+            creds = await asyncio.to_thread(google_auth.credentials, required_scopes=[google_auth.SHEETS_SCOPE])
+            # Constructing an HTTP client loads TLS certificates; keep that I/O off the call's event loop.
+            connection = await asyncio.to_thread(httpx.AsyncClient,
+                base_url='https://sheets.googleapis.com/v4/spreadsheets/' + args['spreadsheet_id'],
+                timeout=15, trust_env=False, headers={'Authorization': f'Bearer {creds.token}'})
+            async with connection as api:
+                yield api
+    except google_auth.GoogleAuthError:
+        raise ValueError('Google Sheets is not connected or must be reauthorized. No mutation was retried.') from None
+    except TimeoutError:
+        raise ValueError('The Sheets operation exceeded its time budget. Check the sheet before retrying; no mutation was retried.') from None
 
 
 async def request(api, method, suffix='', **kwargs):
     # httpx base_url appends a slash; colon RPC suffixes must address the spreadsheet itself.
     url = str(api.base_url).rstrip('/') + suffix
     try:
-        response = await api.request(method, url, **kwargs)
-        response.raise_for_status()
-        data = response.json()
+        async with api.stream(method, url, **kwargs) as response:
+            response.raise_for_status()
+            if int(response.headers.get('content-length', '0')) > MAX_API_BYTES: raise ValueError('Response too large.')
+            content = bytearray()
+            async for chunk in response.aiter_bytes(chunk_size=65536):
+                content.extend(chunk)
+                if len(content) > MAX_API_BYTES: raise ValueError('Response too large.')
+            data = json.loads(content)
         if not isinstance(data, dict): raise ValueError()
         return data
     except (httpx.HTTPError, ValueError):
@@ -146,12 +163,16 @@ async def prepare_proposal(name, args):
         index, cells = current_row(state, args['row_id'], args['expected_version'])
         check_changes(state, cells, args['changes'])
         before = {key: scalar(cells[state['headers'].index(key)]) for key in args['changes']}
+        context_note = str(scalar(cells[3]))
+        context_note = context_note[:400] + ('… [truncated context]' if len(context_note) > 400 else '')
         frozen = {**args, 'sheet_id': state['sheet_id'], 'expected_headers': state['headers']}
         summary = (f"Update Sheets row ID {args['row_id']} (currently row {index + 1}). "
-            f"Current entry: {json.dumps({h: scalar(cells[i]) for i, h in enumerate(state['headers'][:4])}, ensure_ascii=False)}.\n"
+            f"Current entry: {json.dumps({h: scalar(cells[i]) for i, h in enumerate(state['headers'][:3])}, ensure_ascii=False)}.\n"
+            f"Context note: {context_note}\n"
             f"Before: {json.dumps(before, ensure_ascii=False)}\nAfter: {json.dumps(args['changes'], ensure_ascii=False)}\n"
             f"Destination: https://docs.google.com/spreadsheets/d/{args['spreadsheet_id']}/edit tab {args['sheet_name']}. "
             'Only these cells change; other values, formulas and tracking ID are retained. Stable row metadata may be attached.')
+        if len(summary.encode()) > 16_000: raise ValueError('The complete edit preview is too large. Split it into smaller approvals.')
         return frozen, summary
     if any(c.casefold() in {h.casefold() for h in state['headers']} for c in args['columns']):
         raise ValueError('A requested column already exists. Read sheets_schema and use its exact name.')
@@ -221,6 +242,8 @@ def check_changes(state, cells, changes):
     if set(changes) - set(state['headers']): raise ValueError('A requested column does not exist.')
     if any('formulaValue' in cells[state['headers'].index(key)] for key in changes):
         raise ValueError('Existing formula cells cannot be edited through Koe.')
+    if any(isinstance(scalar(cells[state['headers'].index(key)]), str) and len(scalar(cells[state['headers'].index(key)])) > 2000 for key in changes):
+        raise ValueError('An existing target cell is too large for a complete approval preview. Edit it directly in Sheets.')
     if all(entered(value) == cells[state['headers'].index(key)] for key, value in changes.items()):
         raise ValueError('The requested values are already present. No edit is needed.')
 
@@ -240,7 +263,7 @@ async def sheets_find_rows(query='', client='', date='', row_id=''):
         async with api_client(args) as api:
             state = await snapshot(api, args, include_rows=True)
         counts = Counter(row_identity(cells) for cells in state['rows'].values())
-        matches = []
+        matches, match_count = [], 0
         for index, raw in sorted(state['rows'].items(), reverse=True):
             if not any(raw): continue
             cells = row_cells(state, raw)
@@ -249,11 +272,17 @@ async def sheets_find_rows(query='', client='', date='', row_id=''):
             if row_id and identifier != row_id or client and str(values['Client']).casefold() != client.casefold(): continue
             if date and values['Date'] != date: continue
             if query and not any(query.casefold() in str(value).casefold() for value in values.values()): continue
-            matches.append({'row_id': identifier, 'row': index + 1, 'fields': values, 'version': row_version(state, cells),
+            match_count += 1
+            if len(matches) >= 20: continue
+            truncated = [key for key, value in values.items() if isinstance(value, str) and len(value) > 400]
+            display_values = {key: (value[:400] + '… [truncated]' if key in truncated else value) for key, value in values.items()}
+            item = {'row_id': identifier, 'row': index + 1, 'fields': display_values, 'truncated_fields': truncated,
+                'version': row_version(state, cells),
                 'editable': bool(identifier and counts[identifier] == 1),
-                'formula_columns': [header for i, header in enumerate(state['headers']) if 'formulaValue' in cells[i]]})
-        return {'matches': matches[:20], 'has_more': len(matches) > 20, 'match_count': len(matches),
-            'note': 'Row numbers are display hints. Editing requires a unique stable row_id and exact version; never guess either.'}
+                'formula_columns': [header for i, header in enumerate(state['headers']) if 'formulaValue' in cells[i]]}
+            if len(json.dumps([*matches, item]).encode()) <= MAX_RESULT_BYTES - 1000: matches.append(item)
+        return {'matches': matches, 'has_more': match_count > len(matches), 'match_count': match_count,
+            'note': 'Row numbers are display hints. Use exact row_id/version; never guess. Long display text is labeled truncated, but versions use full data. Narrow filters when has_more is true.'}
     except (ValueError, google_auth.GoogleAuthError) as exc:
         return _error('sheets_rows', str(exc), 'No rows were changed. Read a smaller dedicated timesheet if bounds were exceeded.')
 
@@ -293,7 +322,7 @@ async def anchored_snapshot(api, args, sheet_id, metadata_id):
 async def sheets_update_row(*, row_id, expected_version, changes, spreadsheet_id, sheet_name, sheet_id, expected_headers, request_id):
     args = {'spreadsheet_id': spreadsheet_id, 'sheet_name': sheet_name}
     try:
-        checked = prepare_write('sheets_update_row', row_id=row_id, expected_version=expected_version, changes=changes)
+        checked = await asyncio.to_thread(prepare_write, 'sheets_update_row', row_id=row_id, expected_version=expected_version, changes=changes)
         changes = checked['changes']
         async with sheets.write_lock(spreadsheet_id, sheet_name), api_client(args) as api:
             state = await snapshot(api, args, include_rows=True)

@@ -1,5 +1,13 @@
 # Architecture: Koe (声)
 
+## Schema creation and stable Sheets edits — 2026-10-14
+
+`sheet_workspace.py` owns bounded typed Sheets reads, column insertion and row updates. `sheets_find_rows` returns actual IDs and row/header versions; `sheets_update_row` stores an exact old/new preview and freezes the destination/tab/schema. At approval it rescans identity, rejects stale data and formula targets, then creates/reuses Google developer metadata and verifies that the anchor resolves to the same row/version. RAW values with null skips update only requested cells. Post-write reads verify the result. Metadata-based addressing follows structural row moves; it does not provide an external-editor transaction lock.
+
+`sheets_add_columns` inserts new physical columns and literal headers in one atomic batch, shifting existing data/formulas instead of overwriting it. The canonical Sheets module supplies a shared per-tab write lock for append, schema and edit operations within this single-process backend. Typed reads are bounded to 5000 data rows/52 headers; response bodies and model output have explicit size limits.
+
+`notion_schema.py` owns additive new property definitions, validating explicit names/types/options and freezing the complete existing schema/source. Approved execution patches only new properties and verifies existing definitions plus new types/options. All three writers run through the shared persisted approval gate. The Notion proposals API also accepts `notion_add_properties`. Model-facing arguments never accept raw snapshots, API payloads or arbitrary destinations. [SCHEMA_ROW_EDIT_PLAN.md](SCHEMA_ROW_EDIT_PLAN.md) documents scope, examples, verification and optimistic concurrency limits. UI and Render are untouched.
+
 ## Deterministic integration expansion — 2026-10-13
 
 The shared tool registry now includes `github_activity`, `github_contributions`, `sheets_schema` and `notion_schema`. GitHub history has explicit exclusive-end boundaries; Python deduplicates and calculates counts/line changes/streaks. History reads have a 30-second total budget; optional commit detail reads have a 50-commit cap, four-way concurrency and a 15-second budget. Streaks use GitHub calendar dates with UTC request bounds; local-day shipped history uses the configured timezone. Contribution-day lists are opt-in to keep the model context compact.

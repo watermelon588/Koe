@@ -1,6 +1,8 @@
 # Phase 4: connect when you have time
 
-The implemented integration extensions and remaining work are tracked in [DETERMINISTIC_FEATURES.md](DETERMINISTIC_FEATURES.md). Existing connections suffice; no additional AI key or OAuth scope is required for this batch. Optional Sheets columns and Notion properties must already exist; discover their exact names with `sheets_schema` / `notion_schema` before proposing values. Every changed value appears in the existing approval summary.
+Schema/row extension (2026-10-14): Koe can now propose new optional Sheets columns, find and edit existing rows with stable IDs/versions, and add supported Notion property definitions. Each mutation has its own approval; see [SCHEMA_ROW_EDIT_PLAN.md](SCHEMA_ROW_EDIT_PLAN.md) for commands, supported types, bounds and concurrency limits. Existing Google/Notion credentials suffice. No manual cell addresses or ID copying is required by the user.
+
+The implemented integration extensions and remaining work are tracked in [DETERMINISTIC_FEATURES.md](DETERMINISTIC_FEATURES.md). Existing connections suffice; no additional AI key or OAuth scope is required. Discover exact names with `sheets_schema` / `notion_schema`; create missing fields through a separately approved schema tool before proposing values. Every changed value appears in the existing approval summary.
 
 The code can be tested without account credentials. Live summaries need GitHub and Gemini; live writes additionally need the services below. Keep secrets in `backend/.env`, never in chat or frontend `VITE_*` variables. No new paid service or dependency is required.
 

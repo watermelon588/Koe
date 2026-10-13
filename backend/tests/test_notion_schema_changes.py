@@ -102,3 +102,22 @@ def test_friend_cannot_propose_owner_schema_changes(notion_schema):
         assert 'error' in result and not notion_schema[1]
     finally:
         identity.OWNER.reset(token)
+
+
+def test_review_uncertain_schema_patch_is_not_retried(notion_schema):
+    from koe import notion_schema as schema_ops
+    route = respx.patch(f'{ROOT}/data_sources/{SOURCE}').mock(side_effect=httpx.ReadTimeout('private timeout details'))
+    async def scenario():
+        args, _ = await schema_ops.prepare_proposal(schema_ops.prepare_write([{'name': 'New', 'type': 'date'}]))
+        with pytest.raises(schema_ops.service.NotionError): await schema_ops.add_properties(**args, request_id='action')
+    asyncio.run(scenario())
+    assert route.call_count == 1
+
+
+def test_review_incomplete_patch_response_cannot_claim_success(notion_schema):
+    from koe import notion_schema as schema_ops
+    respx.patch(f'{ROOT}/data_sources/{SOURCE}').respond(200, json={'id': SOURCE, 'properties': {}})
+    async def scenario():
+        args, _ = await schema_ops.prepare_proposal(schema_ops.prepare_write([{'name': 'New', 'type': 'date'}]))
+        with pytest.raises(schema_ops.service.NotionError): await schema_ops.add_properties(**args, request_id='action')
+    asyncio.run(scenario())

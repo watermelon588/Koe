@@ -1,5 +1,7 @@
 # Plan and timeline: Koe (声)
 
+Next backend phase (2026-10-14): approved Sheets column creation, stable existing-row edits and additive Notion property creation are implemented. Contract and verification: [SCHEMA_ROW_EDIT_PLAN.md](SCHEMA_ROW_EDIT_PLAN.md). The user handles Render rollout; no UI or hosting changes belong to this phase.
+
 Backend integration expansion (requested 2026-10-13): [DETERMINISTIC_FEATURES.md](DETERMINISTIC_FEATURES.md) tracks the implemented GitHub statistics/date reports, Calendar details/reminders and optional Sheets/Notion fields, their verification, and feasible follow-up slices. UI remains frozen; implementation and approval logic are Python-owned.
 
 **Total:** about 4 weeks at 3–5 h/day (about 80–100 h). Start date: the first build session.

@@ -930,3 +930,16 @@ Next phase: approved schema creation and safe Sheets row editing is tracked in [
 **Try it yourself:** “Add Billable and Project columns to my timesheet”; confirm. “Find my Client entry from October 14”; then “Change its hours to 1.5”; inspect old/new values and confirm. “Add a Priority select property in Notion with High, Medium and Low options”; confirm. Filling new fields is a separate proposal.
 
 **Interview line:** "I use stable record identity and typed previews to turn model intent into bounded, approved mutations that preserve unrelated data."
+
+## Step 58: bound schema/row operations and verify failure outcomes (2026-10-14)
+**Files:** Sheets operation client/discovery/previews, shared prompt, twelve review regressions and integration documentation.
+
+**What it does:** Converts disconnected OAuth into a safe proposal error, bounds each Sheets API operation to 45 seconds, and constructs TLS clients off the voice event loop. Streamed API bodies are capped at 4 MB; discovery output at 24 KB with labeled text truncation. Versions continue to use complete typed data. Changed-value previews are complete or refused when oversized. Metadata pointing to another row, stale data, formula targets and divergent readbacks cannot produce a verified success. Timeouts after a simulated remote write are never replayed.
+
+**Core concept:** A lost response is an uncertain outcome, not proof of failure to apply. The application records the error and asks the user to inspect before another proposal; it never repeats the write automatically. Read limits prevent source data from overwhelming the model, while display truncation is separate from the actual mutation contract.
+
+**Verification:** Two review regressions reproduced missing OAuth handling and the deadline gap; TLS construction was then moved off-loop to make the deadline effective. Two more regressions reproduced oversized API/model output; limits fixed both. Twelve review cases also verify malformed cells, wrong anchors, no timeout replay, readback disagreement and rejection of model-supplied internal state/destinations. Final full suite: **377 passed**, one existing Starlette/httpx deprecation warning, 128.69 seconds. All 21 Google SDK declarations validated/serialized. Read-only actual-account checks passed for Sheets typed row discovery (3.29 s), Notion schema identity (1.31 s) and the final streamed row read plus declaration serialization (4.42 s). These are individual measurements, not p50/p95 claims. Credential scan found no exposed local secrets; no frontend files, OAuth scopes, dependencies or Render configuration changed. No real columns/properties/metadata/rows were mutated and no model quota was used.
+
+**Try it yourself:** Use the commands in SCHEMA_ROW_EDIT_PLAN.md after loading this backend. Review and confirm one intended schema change or row edit through the normal app. Changes are local commits; no push or deployment was performed, and existing app processes were not manually restarted.
+
+**Interview line:** "I test uncertain outcomes and bound evidence size so the backend stays honest and responsive even when an external service or large spreadsheet behaves badly."
