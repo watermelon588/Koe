@@ -943,3 +943,12 @@ Next phase: approved schema creation and safe Sheets row editing is tracked in [
 **Try it yourself:** Use the commands in SCHEMA_ROW_EDIT_PLAN.md after loading this backend. Review and confirm one intended schema change or row edit through the normal app. Changes are local commits; no push or deployment was performed, and existing app processes were not manually restarted.
 
 **Interview line:** "I test uncertain outcomes and bound evidence size so the backend stays honest and responsive even when an external service or large spreadsheet behaves badly."
+# 2026-10-14 — Frontend handoff and requested GitHub publication
+
+- **Files:** `docs/FRONTEND_BACKEND_HANDOFF.md` documents every implemented integration capability, actual HTTP and WebSocket envelopes, safe approval states, optional values, schema/row workflows, authentication and frontend acceptance checks.
+- **Concept:** A tool name is not a browser API. The handoff distinguishes existing deterministic Notion HTTP forms from conversational Sheets/GitHub tools and missing projections, so another agent cannot build fake controls against invented endpoints.
+- **Connection:** Existing backend commits remain unchanged; the frontend agent can extend the current shell/call/workspaces from a self-contained contract. Calendar follow-up contracts will be added once verified.
+- **Try it:** Hand the Markdown file to the frontend coding agent. Use its delivery checklist and inspect the named sources when writing types.
+- **Verification:** Compared routes, schema descriptors, message shapes and event envelopes directly with backend/frontend sources. GitHub fetch confirmed nine local commits ahead and no remote divergence. No frontend source, credentials or deployment configuration changed.
+- **Interview line:** “I handed off a verified API contract that separates proposals, execution results and unsupported interfaces.”
+
