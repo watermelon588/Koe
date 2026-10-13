@@ -478,5 +478,7 @@ Verified the original displacement before the fix, then long upward/downward dra
 - the business **LIMITED** (141010, not verified).
 
 Replies within 24 h of your own message are a different category. A correct app secret can be proven without revealing it: Graph accepts an `appsecret_proof` (an HMAC of the token) only when it was made with the right secret.
-**Measured:** 155 backend tests pass. A local send was accepted by Meta. A correctly signed empty event got 401 on Render before the secret was set and 200 after. Meta's POSTs arrived about 10 s apart: your message, then the receipt for the reply.
+**Measured:** 155 backend tests pass. A local send was accepted by Meta. A correctly signed empty event got 401 on Render before the secret was set and 200 after. Meta's POSTs arrived about 10 s apart: your message, then the receipt for the reply. **Live result (12:03):**
+- Koe's side works end to end: `model_done` 8098 ms and `reply_sent` 8927 ms after the webhook.
+- Meta then rejected delivery: `131031 Business Account locked`. Koe can't fix that; only Meta can unlock the account.
 **Interview line:** "I traced a 'no reply' bug across four silent hops: webhook verification, the account-to-app subscription, the signing secret's name, and asynchronous delivery receipts. Then I made the last hop log Meta's own error code."

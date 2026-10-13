@@ -46,6 +46,11 @@ The backend must be **always on**: GitHub webhooks time out after about 10 s and
 Development (Phases 1–6) runs on the laptop + cloudflared at ₹0. Azure is needed only for Phase 7.
 
 ## WhatsApp: verified blocked without a payment method (2026-10-12)
+**Re-checked 2026-10-13 with a new app and a permanent system-user token:**
+- Inbound messages reach Koe on Render, and Koe answers in about 9 s.
+- Meta still refuses to deliver the reply: `131031 Business Account locked`. The account health shows 141006 (payment method error) and 141010 (business not verified).
+- The Koe app (PWA with push) remains the working mobile channel.
+
 Measured on our own account, not taken from a blog:
 - Incoming messages (user → test number) ✅ arrive by webhook.
 - **Every outgoing message fails**, templates *and* free service replies inside the 24 h window: status `failed`, error **131031 "Business Account locked"**.
