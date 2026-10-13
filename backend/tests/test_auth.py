@@ -97,7 +97,7 @@ def test_next_only_ever_points_inside_koe(client, monkeypatch):
 
 def test_a_forged_host_cannot_steer_googles_redirect(client):
     r = client.get("/auth/google/start", headers={"x-forwarded-host": "evil.example", "x-forwarded-proto": "https"})
-    assert r.status_code == 400
+    assert parse_qs(urlparse(r.headers["location"]).query)["redirect_uri"] == [f"{SITE}/auth/google/callback"]
 
 
 def test_logout_revokes_the_session_and_needs_koes_own_origin(client, monkeypatch):
@@ -132,3 +132,28 @@ def test_a_replayed_id_token_with_another_nonce_is_refused(client, monkeypatch):
         respx.post(auth.TOKEN).mock(return_value=httpx.Response(200, json={"id_token": "old.jwt"}))
         assert client.get("/auth/google/callback", params={"code": "c", "state": state}).status_code == 400
     assert client.get("/api/me").status_code == 401
+
+
+
+def test_the_owner_trades_the_session_for_a_one_time_websocket_ticket(client, monkeypatch):
+    assert client.post("/api/ws-ticket").status_code == 401
+    sign_in(client, monkeypatch, ADMIN)
+    ticket = client.post("/api/ws-ticket").json()["ticket"]
+    assert auth.ws_owner(ticket) == settings.koe_owner_id
+    assert auth.ws_owner(ticket) is None  # used up
+    assert auth.ws_owner("session") is None and auth.ws_owner(None) is None
+
+
+def test_a_signed_in_friend_cannot_use_koe_until_their_own_connections_exist(client, monkeypatch):
+    # Every tool still uses the owner's GitHub/Calendar/Notion, so a friend is kept out of /api for now.
+    asyncio.run(sql("insert into koe_invites (email, invited_by, created) values (%s, %s, %s)", "friend@gmail.com", ADMIN, "x"))
+    sign_in(client, monkeypatch, "friend@gmail.com", sub="friend-sub")
+    assert client.get("/auth/status").json()["user"]["email"] == "friend@gmail.com"
+    assert client.post("/api/ws-ticket").status_code == 403
+
+
+def test_the_access_token_still_works_for_scripts(client, monkeypatch):
+    monkeypatch.setattr(settings, "koe_access_token", "tok")
+    assert client.post("/api/ws-ticket", headers={"Authorization": "Bearer nope"}).status_code == 401
+    assert client.post("/api/ws-ticket", headers={"Authorization": "Bearer tok"}).status_code == 200
+    assert auth.ws_owner("tok") == settings.koe_owner_id

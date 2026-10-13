@@ -1,14 +1,13 @@
 """Read-only dashboard WebSocket. Auth first; shared refreshes use existing read tools."""
 import asyncio
 import contextlib
-import hmac
 import time
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
-from koe import events, store
+from koe import auth, events, store
 from koe.config import settings
 from koe.tools import calendar, github
 
@@ -84,17 +83,16 @@ async def _periodic(ws: WebSocket):
 @router.websocket("/ws/events")
 async def dashboard(ws: WebSocket):
     await ws.accept()
-    if not settings.koe_access_token:
-        await ws.close(code=1008, reason="Set KOE_ACCESS_TOKEN in backend/.env to connect the dashboard.")
+    if not auth.ws_required():
+        await ws.close(code=1008, reason="Set up Google sign-in or KOE_ACCESS_TOKEN in backend/.env to connect the dashboard.")
         return
     try:
-        auth = await asyncio.wait_for(ws.receive_json(), timeout=10)
-        token = auth.get("token") if isinstance(auth, dict) and auth.get("type") == "auth" else None
-        if not isinstance(token, str) or not hmac.compare_digest(token.encode(), settings.koe_access_token.encode()):
+        first = await asyncio.wait_for(ws.receive_json(), timeout=10)
+        if not isinstance(first, dict) or first.get("type") != "auth" or not auth.ws_owner(first.get("token")):
             raise ValueError("Unauthorized")
     except (ValueError, TypeError, KeyError, asyncio.TimeoutError, WebSocketDisconnect):
         with contextlib.suppress(WebSocketDisconnect, RuntimeError):
-            await ws.close(code=1008, reason="Enter the Koe access token from backend/.env.")
+            await ws.close(code=1008, reason="Sign in to Koe again.")
         return
     queue = events.hub.subscribe()
     tasks = []

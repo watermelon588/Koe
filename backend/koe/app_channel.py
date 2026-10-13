@@ -15,7 +15,6 @@ Web Push: https://developer.mozilla.org/en-US/docs/Web/API/Push_API · pywebpush
 """
 import asyncio
 import contextlib
-import hmac
 import io
 import json
 import logging
@@ -26,14 +25,14 @@ from pathlib import Path
 from uuid import uuid4
 
 from cryptography.hazmat.primitives import serialization
-from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import Response
 from google.genai import errors
 from py_vapid import Vapid02, b64urlencode
 from pydantic import BaseModel
 from pywebpush import WebPushException, webpush_async
 
-from koe import agent, text_agent, voice_call, whatsapp
+from koe import agent, auth, text_agent, voice_call, whatsapp
 from koe.config import settings
 from koe.db import sql
 
@@ -46,10 +45,9 @@ SPEAK_PROMPT = "Read the user's message aloud exactly as written, in a warm, nat
 BUSY = "Gemini is busy right now. Please try again in a minute."
 
 
-def authorized(authorization: str = Header(default="")) -> None:
-    token = authorization.removeprefix("Bearer ").strip()
-    if not settings.koe_access_token or not hmac.compare_digest(token.encode(), settings.koe_access_token.encode()):
-        raise HTTPException(401, "Enter the Koe access token from backend/.env.")
+async def authorized(request: Request) -> None:
+    """Every /api/app (and /api/notion) endpoint: the signed-in owner, or KOE_ACCESS_TOKEN (auth.py)."""
+    await auth.http_owner(request)
 
 
 router = APIRouter(prefix="/api/app", dependencies=[Depends(authorized)])

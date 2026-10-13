@@ -8,6 +8,7 @@ import { SettingsPage } from './settings/SettingsPage'
 import { ChatPage } from './chat/ChatPage'
 import { InstallPage } from './install/InstallPage'
 import { savedToken } from './chat/api'
+import { SESSION } from './session'
 import { Dashboard } from './dashboard/Dashboard'
 import { useDashboard } from './dashboard/useDashboard'
 
@@ -62,6 +63,8 @@ export default function App() {
   }, [inCall])
 
   useEffect(() => { document.getElementById('main-content')?.focus({ preventScroll: true }) }, [page])
+  // Signed in with Google: the day loads by itself, no token to type.
+  useEffect(() => { if (accessToken === SESSION) dashboard.connect(SESSION) }, [accessToken]) // eslint-disable-line react-hooks/exhaustive-deps -- once per sign-in
 
   useEffect(() => {
     const mq = matchMedia(WIDE)
@@ -152,7 +155,7 @@ export default function App() {
         </section>
 
         {/* One quiet row until the dashboard is live; it disappears once connected. */}
-        {!dashboard.connected && <form className="connect" onSubmit={(e) => { e.preventDefault(); dashboard.connect(accessToken) }}>
+        {!dashboard.connected && accessToken !== SESSION && <form className="connect" onSubmit={(e) => { e.preventDefault(); dashboard.connect(accessToken) }}>
           <label className="connect-field">
             <Key aria-hidden="true" />
             <input type="password" value={accessToken} onChange={(e) => setAccessToken(e.target.value)}

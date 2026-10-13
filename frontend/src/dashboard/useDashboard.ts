@@ -1,3 +1,4 @@
+import { wsCredential } from '../session'
 import { useEffect, useReducer, useRef, useState } from 'react'
 import { emptyState, reduceEvent } from './state'
 import { wsUrl } from '../backend'
@@ -23,7 +24,9 @@ export function useDashboard(onAlert: () => void) {
       setStatus('Connecting dashboard…')
       ws = new WebSocket(wsUrl('/ws/events'))
       socket.current = ws
-      ws.onopen = () => ws.send(JSON.stringify({ type: 'auth', token }))
+      ws.onopen = () => wsCredential(token ?? '')
+        .then((credential) => ws.send(JSON.stringify({ type: 'auth', token: credential })))
+        .catch((e) => { setStatus(e instanceof Error ? e.message : String(e)); ws.close() })
       ws.onmessage = (message) => {
         try {
           const event = JSON.parse(message.data)

@@ -1,3 +1,4 @@
+import { wsCredential } from '../session'
 import { useEffect, useRef, useState } from 'react'
 import { startMic } from './mic'
 import { createPlayer } from './player'
@@ -129,7 +130,7 @@ export function useCall(mascot: { current: Mascot | null }) {
     ws.onopen = async () => {
       try {
         // The private app token is sent in a frame, never in the URL or a bundled environment variable.
-        ws.send(JSON.stringify({ type: 'auth', token: accessToken }))
+        ws.send(JSON.stringify({ type: 'auth', token: await wsCredential(accessToken) })) // signed in: a one-time ticket
         stopMic = await startMic((pcm) => ws.readyState === WebSocket.OPEN && !mutedRef.current && ws.send(pcm))
         if (live.current?.ws !== ws) return stopMic() // hung up while the mic prompt was open
         setState('listening')

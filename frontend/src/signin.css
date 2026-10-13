@@ -1,0 +1,12 @@
+/* Continue with Google: one calm centred column, the mascot as the logo. */
+.signin { min-height: 100dvh; display: grid; place-content: center; justify-items: center; gap: 14px; padding: 32px 20px; text-align: center; }
+.signin img { width: 96px; height: 96px; border-radius: 50%; object-fit: cover; box-shadow: 0 0 0 3px var(--bg), 0 0 0 4.5px var(--accent); margin-bottom: 6px; }
+.signin h1 { font-size: 30px; font-weight: 300; }
+.signin h1 span { color: var(--muted); }
+.signin > p { color: var(--muted); max-width: 34ch; }
+.signin .primary { margin-top: 10px; gap: 10px; }
+.signin-notice { padding: 10px 14px; border-radius: 12px; background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); color: var(--text) !important; }
+.signin nav { display: flex; gap: 18px; margin-top: 18px; font-size: 13px; }
+.signin nav a { color: var(--muted); text-decoration: none; }
+.signin nav a:hover { color: var(--text); }
+.signin-wait { min-height: 100dvh; display: grid; place-items: center; color: var(--muted); }

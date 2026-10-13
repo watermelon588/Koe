@@ -3,10 +3,11 @@ import { BellSimple, ChatCircleDots, CheckCircle, DeviceMobile, Key } from '@pho
 import { mascotProfile, type MascotId } from '../mascot/catalog'
 import { api, AuthError, savedToken, saveToken } from '../chat/api'
 import { enablePush, pushState, useInstall, type PushState } from '../pwa'
+import { SESSION } from '../session'
 import './install.css'
 
 // The phone setup portal (#install): scan the QR on the laptop, then on the phone install Koe, connect it with the
-// access token, turn on notifications and prove they arrive, then open the chat. Each step shows when it's done.
+// Google sign-in (or the access token), turn on notifications and prove they arrive, then open the chat. Each step shows when it's done.
 // The QR is a static file for https://koe-pi.vercel.app/#install. If the domain changes, regenerate it:
 //   uv run --no-project --with segno python -c "import segno; segno.make('<url>/#install', error='m').save('install-qr.svg', border=4, dark='#111', light='#fff', xmldecl=False)"
 // (then swap width/height for viewBox="0 0 37 37").
@@ -80,12 +81,12 @@ export function InstallPage({ model }: { model: MascotId }) {
         </Step>
 
         <Step n={2} done={ready} icon={<Key />} title="Connect to Koe">
-          <form className="token-row" onSubmit={(e: FormEvent) => { e.preventDefault(); void connect() }}>
+          {token === SESSION ? null : <form className="token-row" onSubmit={(e: FormEvent) => { e.preventDefault(); void connect() }}>
             <input type="password" value={token} onChange={(e) => { setToken(e.target.value); setConnected('idle') }}
               placeholder="KOE_ACCESS_TOKEN" aria-label="Koe access token" autoComplete="off" />
             <button className="soft" disabled={!token.trim() || connected === 'busy'}>{connected === 'busy' ? 'Connecting…' : 'Connect'}</button>
-          </form>
-          <p role="status">{connected === 'ok' ? 'Connected. The token stays on this device.'
+          </form>}
+          <p role="status">{connected === 'ok' ? (token === SESSION ? 'Signed in with Google.' : 'Connected. The token stays on this device.')
             : connected === 'busy' ? 'Waking Koe up. This can take up to a minute.'
             : connected === 'idle' ? 'The password from backend/.env.' : connected}</p>
         </Step>

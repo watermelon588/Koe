@@ -17,7 +17,7 @@ export function Privacy() {
       <Section id="collect" title="What Koe collects">
         <dl>
           <dt>Account</dt>
-          <dd>Today: an access token saved on your device. With Google sign-in (coming soon): your Google name, email address and account ID, used to recognise you and check that you are invited.</dd>
+          <dd>From Google sign-in: your Google name, email address and account ID, used to recognise you and check that you are invited. Signing in doesn’t give Koe access to your calendar or any other Google data.</dd>
           <dt>Conversations</dt>
           <dd>Messages you type, voice notes you record, their transcripts, and Koe’s replies, including Koe’s spoken replies as audio. Live calls are streamed to Gemini and are <b>not recorded</b> by Koe; the transcript is shown on screen during the call.</dd>
           <dt>Activity log</dt>
@@ -27,7 +27,7 @@ export function Privacy() {
           <dt>Notifications</dt>
           <dd>If you turn them on, a push address for your device from your browser’s push service (Google or Apple). Koe uses it only to notify you.</dd>
           <dt>On your device</dt>
-          <dd>Your theme, chosen mascot and access token are kept in your browser’s local storage. There are no cookies today. Google sign-in will add one sign-in cookie.</dd>
+          <dd>One sign-in cookie, which scripts on the page can’t read. It lasts 30 days and is deleted when you sign out; Koe’s server keeps only a scrambled copy. Your theme and chosen mascot are kept in your browser’s local storage. There are no tracking cookies.</dd>
         </dl>
       </Section>
 

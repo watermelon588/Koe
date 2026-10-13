@@ -4,8 +4,13 @@
   "installCommand": "npm ci",
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
-  "rewrites": [{ "source": "/(guide|privacy|terms)", "destination": "/index.html" }],
+  "rewrites": [
+    { "source": "/api/:path*", "destination": "https://koe-backend-dt5m.onrender.com/api/:path*" },
+    { "source": "/auth/:path*", "destination": "https://koe-backend-dt5m.onrender.com/auth/:path*" },
+    { "source": "/(guide|privacy|terms)", "destination": "/index.html" }
+  ],
   "headers": [
+    { "source": "/(api|auth)/(.*)", "headers": [{ "key": "x-vercel-enable-rewrite-caching", "value": "0" }] },
     { "source": "/sw.js", "headers": [{ "key": "Cache-Control", "value": "no-cache" }] },
     { "source": "/manifest.webmanifest", "headers": [{ "key": "Content-Type", "value": "application/manifest+json" }] },
     { "source": "/mascot/(.*)", "headers": [{ "key": "Cache-Control", "value": "public, max-age=86400" }] }

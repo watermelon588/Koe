@@ -15,7 +15,6 @@ Text frames from the browser: {"type": "text", "text": "..."} = a typed chat mes
 """
 import asyncio
 import contextlib
-import hmac
 import json
 import logging
 import math
@@ -27,7 +26,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from google import genai
 from google.genai import errors, types
 
-from koe import agent, events, store
+from koe import agent, auth, events, store
 from koe.config import settings
 
 router = APIRouter()
@@ -279,17 +278,16 @@ async def _relay_gemini(ws: WebSocket, mic: asyncio.Queue, state: CallState, cli
 @router.websocket("/ws/call")
 async def call(ws: WebSocket):
     await ws.accept()
-    if store.configured() and not settings.koe_access_token:
-        await ws.close(code=1008, reason="Set KOE_ACCESS_TOKEN in backend/.env before enabling browser writes.")
+    if store.configured() and not auth.ws_required():
+        await ws.close(code=1008, reason="Set up Google sign-in or KOE_ACCESS_TOKEN in backend/.env before enabling browser writes.")
         return
-    if settings.koe_access_token:
+    if auth.ws_required():
         try:
-            auth = await asyncio.wait_for(ws.receive_json(), timeout=10)
-            supplied = auth.get("token") if isinstance(auth, dict) and auth.get("type") == "auth" else None
-            if not isinstance(supplied, str) or not hmac.compare_digest(supplied.encode(), settings.koe_access_token.encode()):
+            first = await asyncio.wait_for(ws.receive_json(), timeout=10)
+            if not isinstance(first, dict) or first.get("type") != "auth" or not auth.ws_owner(first.get("token")):
                 raise ValueError("Unauthorized")
         except (ValueError, asyncio.TimeoutError, WebSocketDisconnect):
-            await ws.close(code=1008, reason="Enter the Koe access token from backend/.env.")
+            await ws.close(code=1008, reason="Sign in to Koe again.")
             return
     client = genai.Client(api_key=settings.gemini_api_key)
     state = CallState()

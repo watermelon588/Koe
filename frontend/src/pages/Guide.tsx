@@ -45,8 +45,8 @@ export function Guide() {
       </Section>
 
       <Section id="sign-in" title="Sign in">
-        <p><b>Today:</b> the person who invited you gives you an <b>access token</b>. Paste it once on the Install page (step 2) or in Settings. It stays on that device.</p>
-        <p className="doc-note"><b>Coming soon:</b> <b>Continue with Google</b>. You sign in with your Google account and no token is needed. Only invited email addresses can sign in.</p>
+        <p>Open Koe and tap <b>Continue with Google</b>. Only invited Google accounts can sign in; anyone else sees “not invited”. You stay signed in on that device for 30 days, and <b>Settings → Sign out</b> ends it.</p>
+        <p className="doc-note">Signing in only tells Koe who you are. It does not give Koe your calendar or anything else: each service is connected separately, with its own consent screen.</p>
       </Section>
 
       <Section id="connect" title="Connect your tools">
@@ -99,7 +99,7 @@ export function Guide() {
 
       <Section id="later" title="Coming later">
         <ul>
-          <li>Continue with Google, and a Connections screen for Calendar, Sheets, GitHub and Notion.</li>
+          <li>A Connections screen for Calendar, Sheets, GitHub and Notion, so invited friends can use Koe with their own accounts.</li>
           <li>Using your own Gemini key, so you have no daily limit.</li>
           <li>A weekly check-up: a summary of what you shipped, your meetings and logged hours.</li>
           <li>WhatsApp, once Meta approves the business account.</li>

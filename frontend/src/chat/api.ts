@@ -33,7 +33,10 @@ export class AuthError extends Error {}
 
 async function request(path: string, init: RequestInit = {}): Promise<Response> {
   const r = await fetch(httpUrl(`/api/app${path}`), { ...init, headers: { ...init.headers, Authorization: `Bearer ${savedToken()}` } })
-  if (r.status === 401) throw new AuthError('Enter your Koe access token.')
+  if (r.status === 401) {
+    if (savedToken() === 'session') location.replace('/') // the Google session ended: back to Continue with Google
+    throw new AuthError('Enter your Koe access token.')
+  }
   if (!r.ok) throw new Error((await r.json().catch(() => null))?.detail ?? `Koe answered ${r.status}. Is the backend running?`)
   return r
 }

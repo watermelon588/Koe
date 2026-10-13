@@ -6,6 +6,11 @@ https://developers.google.com/identity/openid-connect/openid-connect
   GET  /auth/google/callback       → code → tokens → verified ID token → invited? → session cookie → back to `next`
   GET  /auth/status                → {"google": sign-in available?, "user": {...} | null}
   POST /auth/logout                → session revoked, cookie cleared (same-origin requests only)
+  POST /api/ws-ticket              → a one-time, 60-second ticket for /ws/call and /ws/events
+
+WebSockets go straight to the backend's own address (Vercel's proxy doesn't carry them), where the sign-in cookie
+isn't sent, so the page trades its session for a ticket first. KOE_ACCESS_TOKEN still works everywhere, for local
+development and scripts.
 
 The session cookie is HttpOnly (no script can read it) and only its SHA-256 is stored. Signing in proves identity
 only: Calendar, Sheets, GitHub and Notion are separate connections with their own consent.
@@ -16,6 +21,7 @@ import hashlib
 import hmac
 import json
 import secrets
+import time
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlencode
 from uuid import uuid4
@@ -58,14 +64,14 @@ def _b64(raw: bytes) -> str:
 
 
 def site(request: Request) -> str:
-    """The address the person is on. Vercel's proxy sends x-forwarded-host/proto; Vite keeps Host. Only known sites
-    pass: Google's redirect must match a registered URI exactly, and a forged Host header must not steer it."""
-    host = request.headers.get("x-forwarded-host") or request.headers.get("host", "")
-    proto = request.headers.get("x-forwarded-proto") or request.url.scheme
-    origin = f"{proto}://{host}"
-    if origin not in {settings.koe_public_url.rstrip("/"), LOCAL_SITE} - {""}:
-        raise HTTPException(400, "Open Koe from its own address to sign in.")
-    return origin
+    """The address the person is on: the Vite dev server locally, otherwise always KOE_PUBLIC_URL. It never comes
+    from a header alone, so a forged Host can't steer Google's redirect (which must match a registered URI exactly),
+    and it doesn't depend on how Vercel's and Render's proxies rewrite forwarding headers."""
+    if (request.headers.get("x-forwarded-host") or request.headers.get("host", "")) == LOCAL_SITE.removeprefix("http://"):
+        return LOCAL_SITE
+    if not settings.koe_public_url:
+        raise HTTPException(400, "Set KOE_PUBLIC_URL on the server to sign in from the web.")
+    return settings.koe_public_url.rstrip("/")
 
 
 def same_origin(request: Request) -> None:
@@ -217,3 +223,57 @@ async def logout(request: Request):
     response = Response(status_code=204, headers=NO_STORE)
     response.delete_cookie(SESSION_COOKIE, path="/")
     return response
+
+
+# ── Access for /api/* and the WebSockets ───────────────────────────────────────────────────────────────
+
+def _access_token_ok(supplied: str) -> bool:
+    return bool(settings.koe_access_token) and hmac.compare_digest(supplied.encode(), settings.koe_access_token.encode())
+
+
+def _owner_only(user: dict) -> str:
+    # ponytail: until per-person connections exist (ACCOUNTS_SPEC.md tasks 6-9), every tool uses the owner's GitHub,
+    # Calendar, Sheets and Notion. An invited friend must not reach them, so only the owner gets in for now.
+    if not user["is_admin"]:
+        raise HTTPException(403, "Koe isn't ready for friends yet. The owner will tell you when it is.")
+    return user["id"]
+
+
+async def http_owner(request: Request) -> str:
+    """Who is calling an /api endpoint: the signed-in owner (cookie), or anyone holding KOE_ACCESS_TOKEN."""
+    user = await signed_in_user(request)
+    if user:
+        return _owner_only(user)
+    if _access_token_ok(request.headers.get("authorization", "").removeprefix("Bearer ").strip()):
+        return settings.koe_owner_id
+    raise HTTPException(401, "Sign in to Koe.")
+
+
+TICKET_SECONDS = 60
+_tickets: dict[str, tuple[str, float]] = {}  # ponytail: in memory, one backend instance; a restart only voids tickets
+
+
+@router.post("/api/ws-ticket")
+async def ws_ticket(request: Request, response: Response):
+    response.headers.update(NO_STORE)
+    owner = await http_owner(request)
+    now = time.monotonic()
+    for old in [t for t, (_, expires) in _tickets.items() if expires < now]:
+        del _tickets[old]
+    ticket = secrets.token_urlsafe(32)
+    _tickets[ticket] = (owner, now + TICKET_SECONDS)
+    return {"ticket": ticket}
+
+
+def ws_required() -> bool:
+    return bool(settings.koe_access_token) or enabled()
+
+
+def ws_owner(credential) -> str | None:
+    """The `token` in a WebSocket's first frame: a one-time ticket (used up here) or KOE_ACCESS_TOKEN."""
+    if not isinstance(credential, str) or not credential:
+        return None
+    ticket = _tickets.pop(credential, None)
+    if ticket and ticket[1] >= time.monotonic():
+        return ticket[0]
+    return settings.koe_owner_id if _access_token_ok(credential) else None

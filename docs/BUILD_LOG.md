@@ -586,3 +586,31 @@ A QR code is just a URL drawn as squares. Since the URL is fixed, the image is g
 - While the Google app is in **Testing**, every friend must also be a test user in Google Cloud.
 **Measured:** Two deliberate breaks were caught: removing the invite check failed a test, and removing the nonce check failed the new replay test. With a real request, Google returned its normal "Sign in … to continue" page with no `redirect_uri_mismatch` or `invalid_client`. Migration 003 is applied to Neon. 220 backend tests pass.
 **Interview line:** "I implemented Google sign-in as an OIDC code flow with PKCE, state and nonce, an invite allow-list, and hashed server-side sessions in HttpOnly cookies. Every rejection path is tested, and the tests are proven to fail when a check is removed."
+
+## Step 42: no more access token: Continue with Google everywhere  (Phase 5c, tasks 3+4 · 2026-10-13)
+**Files:** frontend/src/{session.ts,signin.tsx,signin.css} (new) · frontend/src/{main.tsx,backend.ts,App.tsx,chat/api.ts,call/useCall.ts,dashboard/useDashboard.ts,settings/SettingsPage.tsx,install/InstallPage.tsx,pages/Guide.tsx,pages/Privacy.tsx} · frontend/{vercel.json,vite.config.ts} · backend/koe/{auth.py,app_channel.py,dashboard.py,voice_call.py} · backend/tests/{test_auth.py,conftest.py}
+**What it does:**
+- Opening Koe shows **Continue with Google**. Once signed in, Home, Chat, calls, the dashboard, Install and Settings all work with no token to type.
+- Settings shows the account and a **Sign out** button.
+- `KOE_ACCESS_TOKEN` still works, for local development and scripts.
+- Only the owner gets past sign-in for now. Every tool still uses the owner's GitHub, Calendar and Notion, so an invited friend sees "not ready yet" until per-person connections exist (task 6).
+**Core concept:**
+- *First-party cookies through a proxy.* Vercel rewrites `/api/*` and `/auth/*` to Render (with caching off), so the browser only ever talks to `koe-pi.vercel.app`. The sign-in cookie therefore belongs to that site and works on phones, where third-party cookies are blocked.
+- *Tickets for WebSockets.* Vercel's proxy doesn't carry WebSockets, so calls and the dashboard connect to Render directly, where that cookie isn't sent. The page first `POST`s `/api/ws-ticket` (through the proxy, with the cookie) and gets back a random 60-second ticket that works once. It then sends that ticket as the socket's first frame.
+- *A marker instead of a token.* After sign-in, the place that used to store the token holds `"session"`. Every existing code path keeps working: HTTP sends the cookie, and WebSockets swap the marker for a ticket.
+**How it connects:** `main.tsx` → `SignInGate` → `GET /auth/status`.
+- Signed out: the sign-in screen → `/auth/google/start` → Google → `/auth/google/callback` → cookie.
+- Signed in: `App`. The dashboard and call run `wsCredential("session")` → `/api/ws-ticket` → `wss://…onrender.com/ws/*` → `auth.ws_owner(ticket)`.
+- `/api/*` → `auth.http_owner` checks the cookie, or else `KOE_ACCESS_TOKEN`.
+**Try it yourself:** Open https://koe-pi.vercel.app, then Continue with Google, then Call Koe. Settings → Sign out returns you to the sign-in screen.
+**Gotchas:**
+- Locally, Vite's proxy must send `X-Forwarded-Host` (`xfwd: true`), or the backend can't tell the page is on `localhost:5173`. `KOE_BACKEND=http://localhost:8001 npx vite` points it at another backend.
+- Render needs `GOOGLE_WEB_CLIENT_ID`, `GOOGLE_WEB_CLIENT_SECRET`, `KOE_ADMIN_EMAIL` and `KOE_PUBLIC_URL`.
+- The tests blank the Google client ID, just as they blank the access token, so `.env` can't leak into them.
+**Measured:** 223 backend tests and 18 frontend tests pass. In the browser, using a temporary test session (deleted afterwards):
+- the sign-in screen appears signed out;
+- "Continue with Google" reaches Google's page with the registered `localhost:5173` callback;
+- signed in, Home shows no token form and the dashboard goes Live over a ticket (`POST /api/ws-ticket` 200);
+- Chat loads with no token card;
+- Sign out returns to the sign-in screen, and the server reports `user: null`.
+**Interview line:** "I removed the shared password by putting the API behind the frontend's own origin, so the session cookie is first-party, and by trading that session for one-time tickets on the WebSockets the proxy can't carry."

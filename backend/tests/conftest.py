@@ -14,6 +14,7 @@ def isolate_live_storage(monkeypatch, tmp_path):
     monkeypatch.setattr(events, "hub", events.Hub())
     monkeypatch.setattr(settings, "database_url", "")
     monkeypatch.setattr(settings, "koe_access_token", "")
+    monkeypatch.setattr(settings, "google_web_client_id", "")  # sign-in off unless a test turns it on
     # With DATABASE_URL cleared above, the Koe app's chat falls back to SQLite: point it at a temp file.
     data = tmp_path / "data"
     monkeypatch.setattr(app_channel, "DATA", data)

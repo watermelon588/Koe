@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { ArrowsClockwise, BellSimple, DeviceMobile, HandWaving, Key, Person, UserFocus } from '@phosphor-icons/react'
 import { savedToken, saveToken } from '../chat/api'
+import { SESSION, signOut } from '../session'
 import { disablePush, enablePush, pushState, useInstall, type PushState } from '../pwa'
 import { MASCOTS, mascotProfile, type MascotId } from '../mascot/catalog'
 import { MascotView, type LoadState, type MascotController } from '../mascot/MascotView'
@@ -127,6 +128,10 @@ function DeviceSection() {
         {(push === 'on' || push === 'off' || push === 'busy') &&
           <button className={push === 'on' ? 'ghost' : 'soft'} disabled={push === 'busy'} onClick={() => void togglePush()}>{push === 'on' ? 'Turn off' : 'Turn on'}</button>}
       </div>
+      {token === SESSION ? <div className="device-row">
+        <span><span><Key size={16} /> Account</span><small>Signed in with Google.</small></span>
+        <button className="ghost" onClick={() => void signOut()}>Sign out</button>
+      </div> : <>
       <form className="device-row" onSubmit={(e) => { e.preventDefault(); setTokenSaved(saveToken(token)) }}>
         <span><span><Key size={16} /> Access token</span><small>{tokenSaved ? 'Saved on this device.' : 'KOE_ACCESS_TOKEN from backend/.env.'}</small></span>
       </form>
@@ -134,6 +139,7 @@ function DeviceSection() {
         <input type="password" value={token} onChange={(e) => { setToken(e.target.value); setTokenSaved(false) }} aria-label="Koe access token" autoComplete="off" />
         <button className="soft" disabled={!token.trim()}>Save</button>
       </form>
+      </>}
     </section>
   )
 }
