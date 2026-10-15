@@ -5,12 +5,16 @@ import { defineConfig } from 'vite'
 // :8000). xfwd adds X-Forwarded-Host, so the backend knows the page is on localhost:5173: Google's sign-in
 // redirect must go back there (koe/auth.py `site`). https://vite.dev/config/server-options#server-proxy
 const backend = process.env.KOE_BACKEND ?? 'http://localhost:8000'
+const simulatedSpotify = process.env.KOE_SPOTIFY_E2E === 'true'
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), ...(simulatedSpotify ? [{ name: 'koe-local-spotify-fixture', apply: 'serve' as const,
+    transformIndexHtml: () => [{ tag: 'script', attrs: { src: '/__e2e/player.js' }, injectTo: 'head' as const }],
+  }] : [])],
   server: {
     proxy: {
+      ...(simulatedSpotify ? { '/__e2e': { target: backend } } : {}),
       '/ws': { target: backend.replace(/^http/, 'ws'), ws: true },
       '/api': { target: backend, xfwd: true },
       '/auth': { target: backend, xfwd: true },

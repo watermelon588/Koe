@@ -12,27 +12,26 @@ from koe.config import settings
 from koe.tools import calendar, github
 
 router = APIRouter()
-_refresh_lock = asyncio.Lock()
-_refreshed_at = float("-inf")
 
 
 async def refresh():
-    global _refreshed_at
-    async with _refresh_lock:
-        if time.monotonic() - _refreshed_at < 30 and not events.hub.calendar_dirty:
+    """Re-read this person's panels (their calendar, their GitHub) into their own hub."""
+    hub = events.hub_for()
+    async with hub.refresh_lock:
+        if time.monotonic() - hub.refreshed_at < 30 and not hub.calendar_dirty:
             return
-        _refreshed_at = time.monotonic()
-        events.hub.calendar_dirty = False
+        hub.refreshed_at = time.monotonic()
+        hub.calendar_dirty = False
         day = datetime.now(ZoneInfo(settings.timezone)).date().isoformat()
 
         async def panel(name, fn):
-            previous = events.hub.panels.get(name)
+            previous = hub.panels.get(name)
             try:
                 result = await asyncio.wait_for(fn(), timeout=20)
             except Exception:
                 result = {"error": {"message": "Could not refresh this panel. Check service setup and try again."}}
             # A conversational read may finish while this slower background refresh is in flight.
-            if events.hub.panels.get(name) is previous:
+            if hub.panels.get(name) is previous:
                 events.publish("panel", name=name, result=result, date=day, timezone=settings.timezone)
 
         async def github_read(fn):
@@ -43,13 +42,13 @@ async def refresh():
         async def history():
             try:
                 rows = await store.dashboard_read()
-                events.hub.history = rows["activity"]
+                hub.history = rows["activity"]
                 for pending in rows["pending"]:
-                    if pending["id"] not in events.hub.resolved:
-                        events.hub.pending.setdefault(pending["id"], pending)
-                events.hub.storage = "Saved activity connected." if store.configured() else "Not connected: configure Neon to save activity."
+                    if pending["id"] not in hub.resolved:
+                        hub.pending.setdefault(pending["id"], pending)
+                hub.storage = "Saved activity connected." if store.configured() else "Not connected: configure Neon to save activity."
             except store.StoreError:
-                events.hub.storage = "Saved activity unavailable. Check Neon settings and migration."
+                hub.storage = "Saved activity unavailable. Check Neon settings and migration."
 
         await asyncio.gather(panel("calendar", lambda: calendar.calendar_list(day)),
                              panel("reviews", lambda: github_read(github.github_review_queue)),
@@ -64,7 +63,7 @@ async def _receive(ws: WebSocket):
             continue
         if isinstance(message, dict) and message.get("type") == "refresh":
             await refresh()
-            await ws.send_json(events.hub.snapshot())
+            await ws.send_json(events.hub_for().snapshot())
         # No approval, chat, or tool execution is accepted on this read-only socket.
 
 
@@ -76,7 +75,7 @@ async def _send(ws: WebSocket, queue: asyncio.Queue):
 async def _periodic(ws: WebSocket):
     while True:
         await refresh()
-        await ws.send_json(events.hub.snapshot())
+        await ws.send_json(events.hub_for().snapshot())
         await asyncio.sleep(60)
 
 
@@ -96,10 +95,11 @@ async def dashboard(ws: WebSocket):
         with contextlib.suppress(WebSocketDisconnect, RuntimeError):
             await ws.close(code=1008, reason="Sign in to Koe again.")
         return
-    queue = events.hub.subscribe()
+    hub = events.hub_for()  # only this person's events reach this socket
+    queue = hub.subscribe()
     tasks = []
     try:
-        await ws.send_json(events.hub.snapshot())
+        await ws.send_json(hub.snapshot())
         tasks = [asyncio.create_task(_receive(ws)), asyncio.create_task(_send(ws, queue)),
                  asyncio.create_task(_periodic(ws))]
         done, _ = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
@@ -108,7 +108,7 @@ async def dashboard(ws: WebSocket):
     except (WebSocketDisconnect, RuntimeError, OSError):
         pass
     finally:
-        events.hub.clients.discard(queue)
+        hub.clients.discard(queue)
         for task in tasks:
             task.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)

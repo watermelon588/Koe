@@ -23,7 +23,7 @@ from datetime import datetime, timezone
 
 import httpx
 from cryptography.fernet import Fernet, InvalidToken
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from google.auth.transport.requests import Request as GoogleRequest
 from google.oauth2.credentials import Credentials
 from pydantic import BaseModel
@@ -32,7 +32,7 @@ from koe import auth, identity
 from koe.config import settings
 from koe.db import _run, sql
 
-PROVIDERS = ("google", "github", "notion", "gemini")
+PROVIDERS = ("google", "github", "notion", "gemini", "spotify")
 GOOGLE_TOKEN = "https://oauth2.googleapis.com/token"
 GOOGLE_REVOKE = "https://oauth2.googleapis.com/revoke"
 CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar.events"
@@ -170,7 +170,10 @@ async def create_timesheet():
 
 
 @api.delete("/{provider}", status_code=204)
-async def disconnect(provider: str):
+async def disconnect(provider: str, request: Request):
+    if provider == "spotify":
+        from koe.spotify_auth import disconnect_response
+        return await disconnect_response(request)
     if provider not in PROVIDERS:
         raise HTTPException(404, "No such connection.")
     owner = identity.owner_id()

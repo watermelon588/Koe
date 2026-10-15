@@ -255,8 +255,8 @@ def test_transcripts_and_turn_end_reach_the_browser(monkeypatch):
     config = connections[0][0]
     assert config["input_audio_transcription"] == {} and config["output_audio_transcription"] == {}
     from koe import events
-    assert len(events.hub.latencies) == 1
-    assert events.hub.latencies[0]["ms"] >= 0
+    assert len(events.hub_for().latencies) == 1
+    assert events.hub_for().latencies[0]["ms"] >= 0
 
 
 def test_typed_text_goes_to_gemini_and_bad_frames_are_ignored(monkeypatch):

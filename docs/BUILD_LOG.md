@@ -1071,6 +1071,27 @@ Next phase: approved schema creation and safe Sheets row editing is tracked in [
 **Gaps reported (backend contract):** no `/api/sheets`, `/api/calendar` or `/api/github` HTTP routes, so there's no standalone Sheets or GitHub screen. Sheets row/schema tools and GitHub stats have no `work` projection, so the call/chat panel shows only the activity line for them. GitHub stats live only in the in-memory activity feed and disappear when Render restarts.
 **Interview line:** "I built the UI from the API's own truth: schema-driven forms, verbatim approval text, and null rendered as unknown rather than zero."
 
+
+## 2026-10-15 — Spotify music architecture (planning only)
+
+**Files touched:** `docs/SPOTIFY_MUSIC_ARCHITECTURE.md`, `docs/DECISIONS.md`, this log.
+**What it does:** Records a proposed personal Premium player, one private playlist, encrypted account linking, HTTP/SDK contracts, database migrations, audio coordination, failure handling, and phased verification.
+**Core concept:** A music player and a voice call need exclusive access to audio. Before microphone capture or Koe speech begins, outstanding Spotify start commands must settle and music must be confirmed paused. Durable write intents prevent uncertain playlist requests being blindly retried after restart.
+**How it connects:** Maps the existing App/useCall, chat recorder/reply player, authenticated connection storage, Neon/SQLite schemas, and same-origin proxies. It adds no Spotify agent tools.
+**Try it yourself:** Read [SPOTIFY_MUSIC_ARCHITECTURE.md](SPOTIFY_MUSIC_ARCHITECTURE.md), especially sections 1, 9, and 12.
+**Verification:** Official Spotify references and current repository integration points reviewed; Markdown fences and local document links checked. No runtime tests, account access, playlist edits, migrations, or deployment performed.
+**Gaps:** Spotify prohibits standard third-party voice control; policy treatment of a manual player within Koe remains unresolved. Real-account/browser acceptance belongs to implementation.
+**Interview line:** "I designed music and voice as separate audio owners, with verified handoffs and durable tracking of uncertain provider writes."
+
+
+## 2026-10-15 — Spotify two-session setup
+
+**Files touched:** `docs/spotify/` session briefs/current statuses, architecture coordination link, decisions and this log.
+**What it does:** Splits backend routing/storage/API work for Codex from frontend player/UI/audio coordination for Plotcode. Each agent writes only its own status; CURRENT_STATUS.md links both. Backend owns the future API contract. Frontend includes a dedicated Spotify surface plus official app/web fallback.
+**Core concept:** Exclusive file ownership and a versioned interface let both agents progress without overwriting each other.
+**Verification:** Session-document links checked; no implementation, real-account calls or runtime tests.
+**Interview line:** "I split parallel work at the backend/frontend boundary and made progress and interface requests persistent in owner-written status files."
+
 ## Step 61: Settings → People: the owner invites and removes friends (2026-10-15)
 **Files:** backend/koe/people.py (new) · backend/koe/main.py · backend/tests/test_people.py (new) · frontend/src/settings/People.tsx (new) · frontend/src/settings/SettingsPage.tsx · frontend/src/pages/Guide.tsx · docs/PLAN.md
 **What it does:** A **People** section in Settings, visible only to the owner. It lists every invited email (with "Has signed in" or "hasn't signed in yet"), invites a new address, and removes one. Removing deletes the invite and revokes every session that account has, so the person is signed out on all devices at once, and the next Google sign-in says "not invited". Before this, inviting meant typing SQL into Neon.
@@ -1093,3 +1114,19 @@ Next phase: approved schema creation and safe Sheets row editing is tracked in [
 
 Backend 435 passed; frontend 26 tests, tsc, lint (no new warnings) and build pass. Browser check used a throwaway harness with a fake `/api/people` (no real invites): list, invite (lowercased), remove.
 **Interview line:** "Admin routes check authorization, not just authentication, guard state changes against CSRF with an Origin check, and revoke server-side sessions so removing someone takes effect immediately."
+
+## Spotify music: backend, frontend takeover and integration (2026-10-15)
+
+**Files:** backend Spotify auth/service/store/music modules, configuration/schema/router/provider edits, migration 007 and replay-compatible 006; frontend Music page/SDK/intents, audio coordinator/cross-tab/evidence, call and chat audio entry points; isolated auth/API/PostgreSQL/browser fixtures; Spotify API contract, setup guide, Guide and Privacy.
+
+**What it does:** The owner can manually connect Spotify, select or create a private playlist, play through a registered browser device and preview-confirm playlist edits. Calls, voice notes and stored replies wait for a verified music pause; ending voice never resumes music. Official Spotify app/web links explain their external-playback limitation. Codex finished the remaining frontend after Rohit confirmed the other agent stopped.
+
+**Core concept:** A timeout does not undo a provider write. Store the intent before sending, claim it atomically, and inspect uncertainty without sending it twice. A released browser lock also does not prove music stopped; persist uncertainty across reloads, settle sent starts, then verify a later pause. Web Locks enforce ownership and BroadcastChannel requests a verified handoff. Music and OAuth never enter AI/tool/transcript paths.
+
+**Try it yourself:** See [local setup and simulated preview](../backend/SPOTIFY_LOCAL_SETUP.md). While the isolated servers run, open `http://127.0.0.1:5174/__e2e/demo`. Select the TEST playlist, use playback controls, search Test track 4, preview/confirm edits, and try a call or recording. No real Spotify audio, account changes or Gemini calls occur.
+
+**Measured:** 479 backend tests passed with no skips, including disposable PostgreSQL full migration replay and real journal/OAuth claims. 49 frontend tests passed; TypeScript/Vite build and lint passed with four existing warnings and the existing large-bundle advisory. Fifteen Edge checks covered real Vite/auth/music/SQLite routes against simulated Spotify, two-tab handoff, failed pause, reload recovery, actual browser microphone/silent stored reply gates, uncertain write inspection without duplication, private creation/disconnect and 375px layout. No uncaught browser errors. The user preview also passed without SDK/OAuth response interception, with real Spotify requests blocked.
+
+**Gotchas:** Live Spotify defaults off. Developer credentials/allowlist, exact callbacks, hosted migration, combined-app policy interpretation and physical-device/live-streaming acceptance are outstanding. Existing .env, encryption key and hosted Neon data were not changed. Unresolved generations deliberately keep voice blocked. Voice AudioContext is created silently on the click; capture/output begins only after the pause barrier.
+
+**Interview line:** “Before Koe opens the microphone, music must be proven paused. A timeout is uncertainty, a reload cannot erase it, and neither writes nor playback resume automatically.”

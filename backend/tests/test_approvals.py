@@ -102,11 +102,11 @@ def test_dashboard_observes_proposal_claim_and_authoritative_result(fake_store):
         proposal = await agent.run_tool("calendar_upsert_event", ARGS, context=ctx)
         ctx.approval_ready = True
         await agent.confirm(ctx, True)
-        ordered = list(reversed(events.hub.activity))
+        ordered = list(reversed(events.hub_for().activity))
         steps = [event["type"] for event in ordered if event["type"].startswith("approval_")]
         assert steps == ["approval_pending", "approval_progress", "approval_result"]
         assert ordered[-1]["result"]["status"] == "executed"
-        assert proposal["pending_action"]["id"] not in events.hub.pending
+        assert proposal["pending_action"]["id"] not in events.hub_for().pending
     asyncio.run(scenario())
 
 

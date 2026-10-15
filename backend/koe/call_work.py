@@ -4,6 +4,7 @@ import re
 from urllib.parse import urlparse
 
 from koe.config import settings
+from koe.tools import sheets
 
 TOOLS = {'calendar_list': 'calendar', 'calendar_find_free': 'calendar',
          'calendar_upsert_event': 'calendar', 'calendar_get_event': 'calendar',
@@ -87,7 +88,7 @@ def project(name, args, result=None, action_id=None):
             data['date'] = fields(result['date'], ('start', 'end')).get('start', '')
         data['url'] = link(result.get('url'), service)
     elif service == 'sheets':
-        sheet = args.get('spreadsheet_id', settings.google_sheets_id)
+        sheet = args.get('spreadsheet_id') or sheets.timesheet_id()  # the caller's own sheet, never the owner's for a friend
         details.setdefault('sheet_name', settings.google_sheets_tab)
         data['url'] = f'https://docs.google.com/spreadsheets/d/{sheet}/edit' if isinstance(sheet, str) and re.fullmatch(r'[A-Za-z0-9_-]+', sheet) else ''
     else:

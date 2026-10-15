@@ -1,0 +1,212 @@
+// Real browser + Vite proxy + Koe HTTP/auth/storage; Spotify itself is simulated.
+// Run with KOE_E2E_NODE_MODULES pointing to an existing Playwright installation.
+import assert from 'node:assert/strict'
+import fs from 'node:fs/promises'
+import path from 'node:path'
+import { fileURLToPath, pathToFileURL } from 'node:url'
+
+const modules = process.env.KOE_E2E_NODE_MODULES
+if (!modules) throw new Error('Set KOE_E2E_NODE_MODULES to an existing Node package directory containing playwright')
+const { chromium } = await import(pathToFileURL(path.join(modules, 'playwright/index.mjs')).href)
+const origin = process.env.KOE_E2E_ORIGIN ?? 'http://127.0.0.1:5174'
+const fixture = process.env.KOE_E2E_FIXTURE ?? 'http://127.0.0.1:8001'
+const output = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../data/spotify-e2e-browser')
+await fs.mkdir(output, { recursive: true })
+const checks = []
+const errors = []
+const browser = await chromium.launch({ channel: 'msedge', headless: true,
+  args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'] })
+const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, permissions: ['microphone'] })
+const page = await context.newPage()
+page.on('pageerror', e => errors.push(e.message))
+await context.route(origin + '/__e2e/**', async route => {
+  const response = await route.fetch({url: fixture + new URL(route.request().url()).pathname})
+  await route.fulfill({response})
+})
+await context.route('https://sdk.scdn.co/spotify-player.js', route => route.fulfill({
+  contentType: 'application/javascript', path: path.join(path.dirname(fileURLToPath(import.meta.url)), 'spotify_e2e_sdk.js'),
+}))
+const state = async () => (await context.request.get(fixture + '/__e2e/state')).json()
+const control = data => context.request.post(fixture + '/__e2e/control', {data})
+async function until(test, message) {
+  for (let n = 0; n < 100; n++) { if (await test()) return; await new Promise(r => setTimeout(r,100)) }
+  throw Error(message)
+}
+await context.route('https://accounts.spotify.com/authorize**', async route => {
+  const url = new URL(route.request().url())
+  assert.equal(url.searchParams.get('redirect_uri'), origin + '/auth/spotify/callback')
+  await route.fulfill({ status: 302, headers: { location: origin + '/auth/spotify/callback?code=simulated-code&state=' + encodeURIComponent(url.searchParams.get('state')) }, body: '' })
+})
+
+try {
+  assert.equal((await state()).mode, 'simulated-spotify-no-sound')
+  await control({reset:true})
+  const signedOut = await context.request.get(origin + '/api/music/status')
+  assert.equal(signedOut.status(), 401)
+  assert.equal((await signedOut.json()).error.code, 'spotify_sign_in_required')
+  checks.push('Real HTTP signed-out music request returns the contract 401')
+
+  await page.goto(fixture + '/__e2e/login', { waitUntil: 'domcontentloaded' })
+  assert.equal((await context.request.delete(origin + '/api/connections/spotify', {headers:{Origin:origin}})).status(),204)
+  await page.reload()
+  await page.getByRole('heading', { name: 'Connect Spotify', exact: true }).waitFor()
+  await page.getByRole('button', { name: 'Connect Spotify', exact: true }).click()
+  await page.getByRole('heading', { name: 'Choose your playlist', exact: true }).waitFor()
+  assert.equal(new URL(page.url()).searchParams.has('code'), false)
+  assert.equal(new URL(page.url()).searchParams.has('state'), false)
+  checks.push('Actual OAuth start/callback, owner cookie binding, token storage and safe return URL')
+
+  await page.getByRole('button', { name: 'Choose', exact: true }).click()
+  await page.getByRole('heading', { name: 'TEST — simulated Spotify (no sound)', exact: true }).waitFor()
+  await page.getByText('Test track 1', { exact: true }).waitFor()
+  await page.getByText('Test track 2', { exact: true }).waitFor()
+  checks.push('Playlist selection and current items wrapper work through Vite without fetch stubs')
+  const status = await context.request.get(origin + '/api/music/status')
+  assert.equal(status.headers()['cache-control'], 'no-store')
+  assert.equal(status.headers()['x-koe-music-contract'], '1.0.0')
+  assert.equal((await status.json()).selected_playlist_id, 'p'.repeat(22))
+  checks.push('Server-selected playlist, contract version and no-store headers verified')
+
+  await page.getByRole('button', {name:'Play',exact:true}).click()
+  await until(async () => (await state()).playing, 'Explicit playback never started')
+  await page.getByRole('button', {name:'Next track',exact:true}).click()
+  await until(async () => (await state()).index === 1, 'Next track failed')
+  await page.getByRole('button', {name:'Previous track',exact:true}).click()
+  await until(async () => (await state()).index === 0, 'Previous track failed')
+  await page.getByRole('slider', {name:'Seek',exact:true}).focus()
+  await page.keyboard.press('ArrowRight')
+  await until(async () => (await state()).position > 0, 'Seek failed')
+  await page.getByRole('slider', {name:'Volume',exact:true}).fill('0.3')
+  await until(async () => (await state()).volume === .3, 'Volume failed')
+  await page.getByRole('button', {name:'Shuffle off',exact:true}).click()
+  await page.getByRole('button', {name:'Shuffle on',exact:true}).waitFor()
+  await page.getByRole('button', {name:'Repeat: off',exact:true}).click()
+  await page.getByRole('button', {name:'Repeat: context',exact:true}).waitFor()
+  checks.push('Explicit SDK playback, device registration, transfer, skip, seek, volume, shuffle and repeat')
+
+  await page.getByRole('searchbox', {name:'Search Spotify tracks'}).fill('Test track 4')
+  await page.getByRole('button', {name:'Search',exact:true}).click()
+  await page.getByRole('button', {name:'Add Test track 4',exact:true}).click()
+  assert.equal((await state()).order.length,3)
+  await page.getByRole('button', {name:'Confirm change',exact:true}).click()
+  await until(async () => (await state()).order.length === 4, 'Add failed')
+  await page.getByRole('button', {name:'Move Test track 4 up',exact:true}).click()
+  await page.getByRole('button', {name:'Confirm change',exact:true}).click()
+  await until(async () => (await state()).order[2] === 'w'.repeat(22), 'Reorder failed')
+  await page.getByRole('button', {name:'Remove all copies of Test track 4',exact:true}).click()
+  await page.getByRole('button', {name:'Confirm change',exact:true}).click()
+  await until(async () => (await state()).order.length === 3, 'Remove failed')
+  checks.push('Typed search and preview-confirm add, move and explicit remove-all update the real route/store')
+
+  const other = await context.newPage(); other.on('pageerror', e => errors.push(e.message))
+  await other.goto(origin + '/#music')
+  await other.getByRole('button', {name:'Play',exact:true}).click()
+  await other.getByText('Another Koe tab owns audio.', {exact:false}).waitFor()
+  await other.getByRole('link', {name:'Home',exact:true}).click()
+  const beforeVoice = (await state()).voice_connections
+  await other.getByRole('button', {name:'Call Koe',exact:true}).click()
+  await until(async () => (await state()).voice_connections === beforeVoice + 1, 'Cross-tab voice handoff failed')
+  assert.equal((await state()).playing,false)
+  await other.getByRole('button', {name:'End call',exact:true}).click()
+  await new Promise(r => setTimeout(r,500))
+  assert.equal((await state()).playing,false)
+  checks.push('Real two-tab Web Lock: competing music refused; confirmed pause precedes call; ending call does not resume')
+  await other.close()
+
+  await page.getByRole('button', {name:'Play',exact:true}).click()
+  await until(async () => (await state()).playing, 'Explicit resume failed')
+  await control({pause_unknown:true})
+  await page.getByRole('link', {name:'Home',exact:true}).click()
+  const blockedVoice = (await state()).voice_connections
+  await page.getByRole('button', {name:'Call Koe',exact:true}).click()
+  await page.getByText('Couldn’t confirm the music stopped, so Koe didn’t start. Pause it and try again.', {exact:true}).waitFor()
+  assert.equal((await state()).voice_connections,blockedVoice)
+  await control({pause_unknown:false})
+  await page.getByRole('link', {name:'Music',exact:true}).click()
+  await page.getByRole('button', {name:'Pause',exact:true}).click()
+  await until(async () => !(await state()).playing, 'Pause recovery failed')
+  checks.push('Unconfirmed pause blocks voice before its WebSocket connects; explicit pause recovers')
+
+  await page.getByRole('button', {name:'Play',exact:true}).click()
+  await until(async () => (await state()).playing, 'Playback before reload failed')
+  await page.reload()
+  await page.getByRole('link', {name:'Home',exact:true}).click()
+  const reloadVoice = (await state()).voice_connections
+  await page.getByRole('button', {name:'Call Koe',exact:true}).click()
+  await page.getByText('Music from a previous or another Koe tab is unverified.', {exact:false}).waitFor()
+  assert.equal((await state()).voice_connections,reloadVoice)
+  await page.getByRole('link', {name:'Music',exact:true}).click()
+  await page.getByRole('button', {name:'Play',exact:true}).click()
+  await until(async () => (await state()).playing, 'Playback recovery after reload failed')
+  await page.getByRole('button', {name:'Pause',exact:true}).click()
+  await until(async () => !(await state()).playing, 'Verified pause recovery after reload failed')
+  checks.push('Reload releases Web Lock but persisted audio evidence still blocks voice until explicit playback and verified pause')
+
+  await page.getByRole('button', {name:'Play',exact:true}).click()
+  await until(async () => (await state()).playing, 'Playback before recording failed')
+  await page.getByRole('link', {name:'Chat',exact:true}).click()
+  await page.getByRole('button', {name:'Record a voice note',exact:true}).click()
+  await page.getByText('Recording', {exact:true}).waitFor()
+  assert.equal((await state()).playing,false)
+  await page.getByRole('button', {name:'Discard voice note',exact:true}).click()
+  assert.equal((await state()).playing,false)
+  await page.getByRole('button', {name:'Play',exact:true}).click()
+  await until(async () => (await state()).playing, 'Playback before reply failed')
+  await page.getByRole('button', {name:'Play voice note',exact:true}).click()
+  await page.getByRole('button', {name:'Pause voice note',exact:true}).waitFor()
+  assert.equal((await state()).playing,false)
+  await page.getByRole('button', {name:'Pause voice note',exact:true}).click()
+  assert.equal((await state()).playing,false)
+  await page.getByRole('link', {name:'Music',exact:true}).click()
+  checks.push('Actual fake-microphone recording and silent HTMLAudio reply both wait for verified music pause and never auto-resume')
+
+  const writesBefore = (await state()).calls.filter(c => c.method==='POST' && c.path.endsWith('/items')).length
+  await page.getByRole('searchbox', {name:'Search Spotify tracks'}).fill('Test track 4')
+  await page.getByRole('button', {name:'Search',exact:true}).click()
+  await control({unknown_next_write:true})
+  await page.getByRole('button', {name:'Add Test track 4',exact:true}).click()
+  await page.getByRole('button', {name:'Confirm change',exact:true}).click()
+  await page.getByRole('button', {name:'Check action status',exact:true}).waitFor()
+  await page.reload()
+  await page.getByRole('button', {name:'Check action status',exact:true}).click()
+  await until(async () => (await state()).order.length === 4, 'Unknown write not accepted by fixture')
+  assert.equal((await state()).calls.filter(c => c.method==='POST' && c.path.endsWith('/items')).length,writesBefore+1)
+  checks.push('Accepted write with lost response survives reload and status inspection without being sent twice')
+
+  await page.screenshot({ path: path.join(output, 'playlist-desktop.png'), fullPage: true })
+  await page.setViewportSize({ width: 375, height: 812 })
+  assert.ok((await page.getByRole('heading', {name:'TEST — simulated Spotify (no sound)',exact:true}).boundingBox()).width >= 150)
+  await page.screenshot({ path: path.join(output, 'playlist-phone.png'), fullPage: true })
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth), false)
+  checks.push('375px layout has no horizontal overflow')
+
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  const disconnect = page.getByRole('button', { name: /Disconnect/ }).first()
+  await disconnect.click()
+  await page.getByRole('heading', { name: 'Connect Spotify', exact: true }).waitFor()
+  checks.push('UI disconnect deletes the actual test connection and returns to connect state')
+  await page.getByRole('button', {name:'Connect Spotify',exact:true}).click()
+  await page.getByRole('heading', {name:'Choose your playlist',exact:true}).waitFor()
+  await page.getByRole('textbox', {name:'New playlist name',exact:true}).fill('TEST — new private playlist (no sound)')
+  const creates = (await state()).calls.filter(c => c.method==='POST' && c.path.endsWith('/me/playlists')).length
+  await page.getByRole('button', {name:'Create private playlist',exact:true}).click()
+  assert.equal((await state()).calls.filter(c => c.method==='POST' && c.path.endsWith('/me/playlists')).length,creates)
+  await page.getByRole('button', {name:'Confirm change',exact:true}).click()
+  await page.getByRole('heading', {name:'TEST — new private playlist (no sound)',exact:true}).waitFor()
+  assert.equal((await state()).order.length,0)
+  await page.getByRole('button', {name:'Disconnect Spotify',exact:true}).click()
+  await page.getByRole('heading', {name:'Connect Spotify',exact:true}).waitFor()
+  checks.push('Creating a private playlist requires preview confirmation and selects the resulting empty playlist')
+  assert.deepEqual(errors, [])
+  checks.push('No uncaught browser errors')
+  const result = { mode: 'simulated-spotify-no-sound', checks, errors,
+    coverage: 'Real browser, Vite, auth, routes and SQLite; simulated Spotify SDK/provider and voice transport, no real audio/account changes.', output }
+  await fs.writeFile(path.join(output, 'report.json'), JSON.stringify(result, null, 2))
+  console.log(JSON.stringify(result, null, 2))
+} catch (error) {
+  await page.screenshot({ path: path.join(output, 'failure.png'), fullPage: true }).catch(() => {})
+  console.error(JSON.stringify({ checks, errors, error: String(error), state:await state(), screenshot: path.join(output, 'failure.png') }, null, 2))
+  process.exitCode = 1
+} finally {
+  await browser.close()
+}

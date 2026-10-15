@@ -37,6 +37,12 @@ export function Privacy() {
         <p>Calendar and Sheets data are used only to answer your requests and carry out actions you approve. They are not used for advertising, not sold, and not used to train AI models. People can’t read them, except where you ask for help or the law requires it.</p>
       </Section>
 
+      <Section id="spotify" title="Optional Spotify music">
+        <p>If enabled by the owner, Spotify provides account identifiers, playlist metadata and playback state for the manual Music page. Spotify music and metadata are not sent to Gemini, OpenRouter, chat, transcripts, activity logs or notifications. Spotify streams audio directly to its browser player.</p>
+        <p>Koe encrypts Spotify credentials and the intent and result of playlist changes on the server. It remembers your selected playlist and request IDs to prevent duplicate writes. A short-lived playback token reaches the browser in memory; the client secret and refresh token stay on the server. Your browser stores pending action IDs and unverified playback markers so reloading cannot silently repeat a change or bypass a voice safety check. An optional pasted playlist link stays on your device.</p>
+        <p><b>Disconnect Spotify</b> removes Koe’s stored credentials and selected playlist. It retains action records to explain uncertain changes; ask the owner to delete those records and other retained data. You can also remove Koe from <a href="https://www.spotify.com/account/apps/" rel="noopener">Spotify app access</a>. Disconnecting Koe does not delete or undo playlists in Spotify.</p>
+      </Section>
+
       <Section id="processors" title="Who processes your data">
         <ul>
           <li><b>Google (Gemini API):</b> understands and answers your messages, voice notes and calls. Free-tier content may be used by Google to improve its products.</li>
@@ -55,7 +61,7 @@ export function Privacy() {
       </Section>
 
       <Section id="security" title="Security">
-        <p>Hosted traffic travels over HTTPS. Service tokens stay on the server and never reach your browser. Private API requests require the device access token today; Google sign-in is planned. Koe is a small personal project, not a company, so please don’t use it for sensitive work data.</p>
+        <p>Hosted traffic travels over HTTPS. Service refresh tokens stay on the server; Spotify’s browser player receives a short-lived access token as described above. Spotify routes require the signed-in owner’s session. Koe is a small personal project, not a company, so please don’t use it for sensitive work data.</p>
       </Section>
 
       <Section id="children" title="Children">

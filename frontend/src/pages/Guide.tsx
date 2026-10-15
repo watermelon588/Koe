@@ -107,6 +107,12 @@ export function Guide() {
         <p>A meeting record stores notes and a date range. To reserve a slot or invite people, ask Koe to book it in <b>Google Calendar</b>. Saving a Notion record does not book time. Nested and non-text blocks are labeled in the preview; Notion pages can’t be shown inside Koe, so use <b>Open in Notion</b> for the full page.</p>
       </Section>
 
+      <Section id="music" title="Music">
+        <p>Open <a href="/#music">Music</a> for your private Spotify playlist. When the owner has enabled Spotify, connect your account, choose a playlist you own or create a private one, then press Play. Search by typing; adding, moving and removing tracks show a preview before confirmation. Removing a track removes every copy of it from that playlist.</p>
+        <p>Koe pauses in-app music before a call, voice note or stored reply. If the pause cannot be verified, voice stays blocked. Ending voice never resumes music; press Play yourself. Another Koe tab can hand over music only after it confirms the pause. After a reload during playback, play in this browser and pause to verify its state.</p>
+        <p>An unconfirmed action is never automatically repeated. Use <b>Check action status</b> and inspect Spotify before making another change. If in-app playback is unavailable, use the official Spotify app or web player. Koe cannot see or pause music played there; pause it yourself before using voice. Music has no spoken commands and is never sent to Koe’s AI.</p>
+      </Section>
+
       <Section id="notifications" title="Notifications">
         <ol>
           <li>Install the app first. On iPhone this is required.</li>

@@ -11,7 +11,7 @@ from koe import agent, app_channel, connections, db, events, gemini, store, usag
 
 @pytest.fixture(autouse=True)
 def isolate_live_storage(monkeypatch, tmp_path):
-    monkeypatch.setattr(events, "hub", events.Hub())
+    monkeypatch.setattr(events, "_hubs", {})  # every person's live hub starts empty
     monkeypatch.setattr(settings, "database_url", "")
     monkeypatch.setattr(settings, "openrouter_api_key", "")
     monkeypatch.setattr(settings, "koe_access_token", "")

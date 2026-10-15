@@ -13,6 +13,6 @@ revoke all on public.koe_usage from public;
 -- Widen the provider list; the transaction keeps every existing row.
 alter table public.koe_connections drop constraint if exists koe_connections_provider_check;
 alter table public.koe_connections add constraint koe_connections_provider_check
-  check (provider in ('google','github','notion','gemini'));
+  check (provider in ('google','github','notion','gemini','spotify'));
 
 commit;

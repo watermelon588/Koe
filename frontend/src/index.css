@@ -82,7 +82,7 @@ button:disabled { opacity: 0.4; cursor: default; }
 .workspace-call { position: fixed; z-index: 5; bottom: 18px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 10px; width: max-content; max-width: calc(100% - 24px); padding: 12px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); box-shadow: 0 8px 32px rgb(0 0 0 / .2); font-size: 13px; }
 .workspace-call a { text-decoration: none; }
 .app:not([data-page='home']) .panel { visibility: hidden; pointer-events: none; }
-@media (max-width: 600px) { .nav-link { padding: 8px; } .nav-link span { display: none; } .workspace-call { flex-wrap: wrap; justify-content: center; } .workspace-call > span:not(.dot) { flex-basis: calc(100% - 40px); } }
+@media (max-width: 600px) { .brand { white-space: nowrap; } .controls { gap: 2px; } .nav-link { padding: 7px; } .nav-link span { display: none; } .bar-divider { display: none; } .workspace-call { flex-wrap: wrap; justify-content: center; } .workspace-call > span:not(.dot) { flex-basis: calc(100% - 40px); } }
 .bar-divider { width: 1px; height: 18px; background: var(--line); margin: 0 4px; }
 
 /* Pages with a footer: a column at least one screen tall, so the footer sits at the bottom of short pages.

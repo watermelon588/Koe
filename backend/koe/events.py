@@ -1,4 +1,8 @@
-"""Single-owner, single-process dashboard fan-out. Never await a slow browser in a tool/audio path.
+"""Per-person, single-process dashboard fan-out. Never await a slow browser in a tool/audio path.
+
+Each signed-in person has their own Hub (panels, activity, approvals, open dashboard sockets), chosen by
+identity.owner_id(): the same context variable every request and socket already sets. A friend's dashboard must never
+show the owner's calendar or approvals, and a friend's refresh must never overwrite the owner's panels.
 
 Queue bounds: https://docs.python.org/3/library/asyncio-queue.html
 WebSocket lifetime: https://fastapi.tiangolo.com/advanced/websockets/
@@ -7,6 +11,8 @@ import asyncio
 from collections import deque
 from datetime import datetime, timezone
 from uuid import uuid4
+
+from koe import identity
 
 
 def now() -> str:
@@ -24,6 +30,8 @@ class Hub:
         self.latencies: deque[dict] = deque(maxlen=100)
         self.storage = "Not connected: configure Neon to save activity."
         self.calendar_dirty = False
+        self.refreshed_at = float("-inf")  # dashboard.refresh(): at most one provider read per person every 30 s
+        self.refresh_lock = asyncio.Lock()
 
     def subscribe(self) -> asyncio.Queue:
         queue = asyncio.Queue(maxsize=32)
@@ -77,8 +85,16 @@ class Hub:
                 "storage": self.storage}
 
 
-hub = Hub()
+_hubs: dict[str, Hub] = {}  # ponytail: one per person in memory, fine for an invite-only list; lost on restart like before
+
+
+def hub_for(owner: str | None = None) -> Hub:
+    """The current person's hub (or `owner`'s). Webhooks and the CLI have no signed-in person: that's the owner."""
+    owner = owner or identity.owner_id()
+    if owner not in _hubs:
+        _hubs[owner] = Hub()
+    return _hubs[owner]
 
 
 def publish(event_type: str, **data):
-    return hub.publish(event_type, **data)
+    return hub_for().publish(event_type, **data)

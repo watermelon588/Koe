@@ -225,3 +225,13 @@ The dedicated `#settings` page owns mascot selection: Kami, Miku, Aoi and Kobash
 **Superseded 2026-10-13:** Koe is becoming invite-only multi-user. The contract for sign-in, per-user data, connections, quota and the public Guide/Privacy/Terms pages is [ACCOUNTS_SPEC.md](ACCOUNTS_SPEC.md). The paragraph below is kept for history.
 
 Manual `KOE_ACCESS_TOKEN` entry is a development mechanism. Before public hosting, replace it with provider login restricted to the owner and an expiring, revocable, HttpOnly session cookie across the dashboard, calls, chat and voice-note endpoints. This is not multi-user signup, does not expose database credentials, and does not replace tool-specific consent or explicit write approvals. The flow and acceptance requirements are in [AUTH_FLOW.md](AUTH_FLOW.md); this storage migration does not implement OAuth login.
+
+## 15. Optional manual Spotify music — 2026-10-15
+
+The owner-only Music page (`#music`) connects Spotify with a real cookie session, selects an owned private playlist, and offers manual SDK playback, typed search and preview-confirm private playlist creation/add/remove-all/reorder. Playback targets the session's registered **Koe Web Player** device. Short-lived SDK tokens stay in browser memory; credentials and mutation evidence are encrypted on the server. API contract: [spotify/API_CONTRACT.md](spotify/API_CONTRACT.md), version 1.0.0.
+
+Calls, voice-note recording and stored replies share an audio coordinator. It drains sent playback commands and requires a verified pause before capture or speech, then disposes the SDK device. Web Locks and BroadcastChannel coordinate tabs. Persisted unverified-audio markers survive reload/crash; a released lock alone is insufficient. Unknown results block voice, and nothing automatically resumes music. Mutation request IDs survive reload and are inspected without retrying uncertain writes.
+
+No Spotify metadata, tokens or audio enters the agent, transcripts, tools, activity or AI providers. There are no spoken Spotify commands. The official Spotify app/web fallback always explains that Koe cannot see or pause external playback.
+
+Implemented and isolated-tested; **SPOTIFY_ENABLED defaults false**. Live acceptance still needs developer credentials/allowlist, exact callback origin, hosted migration and resolution of the combined manual-player/voice-app policy interpretation. See [setup and simulated preview](../backend/SPOTIFY_LOCAL_SETUP.md). Passing simulated browser tests does not claim real streaming or mobile-background acceptance.

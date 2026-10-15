@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from 'react'
 import { CalendarBlank, ChatCircle, ChatCircleDots, GearSix, HandWaving, House, Key, Microphone, MicrophoneSlash, Moon, PaperPlaneRight,
-  Phone, PhoneDisconnect, Sun, IconContext, Notebook, SquaresFour, Question, SidebarSimple } from '@phosphor-icons/react'
+  Phone, PhoneDisconnect, Sun, IconContext, Notebook, SquaresFour, Question, SidebarSimple, MusicNotes } from '@phosphor-icons/react'
 import { LiveWorkspace } from './workspace/LiveWorkspace'
 import { moodOf, useCall, type Line } from './call/useCall'
 import { MascotView, type MascotController } from './mascot/MascotView'
@@ -15,6 +15,9 @@ import { Dashboard } from './dashboard/Dashboard'
 import { useDashboard } from './dashboard/useDashboard'
 import { DashboardPage, TodaySummary } from './dashboard/DashboardPage'
 import { AppFooter } from './AppFooter'
+import { useMusic } from './music/useMusic'
+import { MusicPage } from './music/MusicPage'
+import { MiniPlayer } from './music/MiniPlayer'
 
 // Layout (Engawa, "veranda"): she stands on the left; your day sits on the right; a call raises a sheet
 // over it while she shows her full figure.
@@ -33,8 +36,8 @@ function savedTheme(): Theme {
     return 'dark' // storage can be blocked (private mode); dark is the default anyway
   }
 }
-type Page = 'home' | 'dashboard' | 'chat' | 'settings' | 'install' | 'notion'
-const PAGES: Page[] = ['dashboard', 'chat', 'settings', 'install', 'notion']
+type Page = 'home' | 'dashboard' | 'chat' | 'settings' | 'install' | 'notion' | 'music'
+const PAGES: Page[] = ['dashboard', 'chat', 'settings', 'install', 'notion', 'music']
 const pageOf = (hash: string): Page => PAGES.find((p) => hash === `#${p}`) ?? 'home'
 
 function greeting() {
@@ -51,6 +54,8 @@ export default function App() {
   const mascot = useRef<MascotController | null>(null)
   const call = useCall(mascot)
   const inCall = call.state !== 'idle'
+  const music = useMusic() // app-level: the mini player follows you, and a call pauses it first
+  const miniHidden = page === 'music' || inCall
   const dashboard = useDashboard(() => { if (!inCall) mascot.current?.react('sad', 3) })
   const x = wide ? PLACE[inCall ? 'call' : 'home'] : 0.5
   useEffect(() => {
@@ -113,7 +118,7 @@ export default function App() {
 
   return (
     <IconContext.Provider value={{ size: 18, weight: 'light' }}>
-    <div className="app" data-page={page} data-model={model} data-call={inCall ? 'on' : 'off'} data-state={call.state}>
+    <div className="app" data-page={page} data-model={model} data-call={inCall ? 'on' : 'off'} data-state={call.state} data-music={!miniHidden && music.track ? 'on' : undefined}>
       {page === 'home' && <div className="stage" style={{ '--x': x } as CSSProperties}>
         <MascotView model={model} controller={mascot} shot={inCall ? 'full' : 'bust'} x={x} onReady={(m) => {
           m.listen(call.analyser.current)
@@ -148,6 +153,9 @@ export default function App() {
           <a className="nav-link" href="#notion" aria-label="Notion" title="Notion" aria-current={page === 'notion' ? 'page' : undefined}>
             <Notebook weight={page === 'notion' ? 'fill' : 'light'} /><span>Notion</span>
           </a>
+          <a className="nav-link" href="#music" aria-label="Music" title="Music" aria-current={page === 'music' ? 'page' : undefined}>
+            <MusicNotes weight={page === 'music' ? 'fill' : 'light'} /><span>Music</span>
+          </a>
           <a className="nav-link" href="#settings" aria-label="Settings" aria-current={page === 'settings' ? 'page' : undefined} title="Settings">
             <GearSix weight={page === 'settings' ? 'fill' : 'light'} /><span>Settings</span>
           </a>
@@ -165,7 +173,7 @@ export default function App() {
         return saveMascot(id)
       }} /> : page === 'chat' ? <ChatPage model={model} /> : page === 'notion' ? <NotionPage token={accessToken} onToken={value => {
         setAccessToken(value); saveToken(value)
-      }} /> : page === 'install' ? <InstallPage model={model} /> : page === 'dashboard' ? <DashboardPage data={dashboard.data}
+      }} /> : page === 'music' ? <MusicPage music={music} /> : page === 'install' ? <InstallPage model={model} /> : page === 'dashboard' ? <DashboardPage data={dashboard.data}
         connected={dashboard.connected} status={dashboard.status} refresh={dashboard.refresh} currentApproval={call.approval} decide={call.decide}>
         {connectRow}
       </DashboardPage> : <>
@@ -188,6 +196,7 @@ export default function App() {
 
       </>}
       {page !== 'chat' && page !== 'install' && !(page === 'home' && inCall) && <AppFooter />}
+      <MiniPlayer music={music} hidden={miniHidden} />
       <CallPanel open={inCall && page === 'home'} call={call} dashboard={dashboard} />
       {inCall && page !== 'home' && <aside className="workspace-call" aria-label="Active Koe call">
         <span className="dot" aria-hidden="true" /><span>{call.approval ? 'Your call has a pending approval' : `Koe · ${STATUS[call.state]}`}</span>

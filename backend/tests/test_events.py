@@ -72,7 +72,7 @@ def test_unauthorized_socket_never_reads_or_leaks_dashboard(monkeypatch, configu
         await dashboard.dashboard(browser)
         assert browser.closed == 1008
         assert browser.outgoing.empty()
-        assert not events.hub.clients
+        assert not events.hub_for().clients
     asyncio.run(scenario())
 
 
@@ -100,13 +100,11 @@ def test_authenticated_stream_receives_live_events_and_cleans_up(monkeypatch):
         assert (await asyncio.wait_for(browser.outgoing.get(), 1))["type"] == "snapshot"
         browser.incoming.put_nowait(None)
         await asyncio.wait_for(task, 1)
-        assert not events.hub.clients
+        assert not events.hub_for().clients
     asyncio.run(scenario())
 
 
 def test_refresh_coalesces_clients_and_reports_missing_credentials(monkeypatch):
-    monkeypatch.setattr(dashboard, "_refreshed_at", float("-inf"))
-    monkeypatch.setattr(dashboard, "_refresh_lock", asyncio.Lock())
     monkeypatch.setattr(settings, "github_token", "")
     calls = []
     async def calendar(day):
@@ -116,7 +114,7 @@ def test_refresh_coalesces_clients_and_reports_missing_credentials(monkeypatch):
     async def scenario():
         await asyncio.gather(dashboard.refresh(), dashboard.refresh(), dashboard.refresh())
         assert len(calls) == 1
-        snapshot = events.hub.snapshot()
+        snapshot = events.hub_for().snapshot()
         assert "not connected" in snapshot["panels"]["calendar"]["result"]["error"]["message"]
         assert "Settings → Connections → GitHub" in snapshot["panels"]["prs"]["result"]["error"]["message"]
         assert "Not connected" in snapshot["storage"]
@@ -130,24 +128,22 @@ def test_tool_result_updates_only_the_matching_dashboard_scope(monkeypatch):
     async def scenario():
         context = agent.Conversation("cli")
         await agent.run_tool("github_my_prs", {"state": "closed"}, context=context)
-        assert "prs" not in events.hub.panels
+        assert "prs" not in events.hub_for().panels
         await agent.run_tool("github_my_prs", {}, context=context)
-        assert events.hub.panels["prs"]["result"]["count"] == 1
-        assert events.hub.activity[0]["phase"] == "end"
-        assert events.hub.activity[0]["session_id"] == context.session_id
+        assert events.hub_for().panels["prs"]["result"]["count"] == 1
+        assert events.hub_for().activity[0]["phase"] == "end"
+        assert events.hub_for().activity[0]["session_id"] == context.session_id
     asyncio.run(scenario())
 
 
 def test_background_refresh_does_not_overwrite_a_newer_conversational_result(monkeypatch):
-    monkeypatch.setattr(dashboard, "_refreshed_at", float("-inf"))
-    monkeypatch.setattr(dashboard, "_refresh_lock", asyncio.Lock())
     monkeypatch.setattr(settings, "github_token", "")
     async def calendar(day):
         events.publish("panel", name="calendar", result={"events": [{"id": "new"}]})
         return {"events": [{"id": "old"}]}
     monkeypatch.setattr(dashboard.calendar, "calendar_list", calendar)
     asyncio.run(dashboard.refresh())
-    assert events.hub.panels["calendar"]["result"]["events"][0]["id"] == "new"
+    assert events.hub_for().panels["calendar"]["result"]["events"][0]["id"] == "new"
 
 
 def test_cancelled_tool_emits_an_end_event_and_propagates_cancellation(monkeypatch):
@@ -157,8 +153,8 @@ def test_cancelled_tool_emits_an_end_event_and_propagates_cancellation(monkeypat
     async def scenario():
         with pytest.raises(asyncio.CancelledError):
             await agent.run_tool("github_my_prs", {}, context=agent.Conversation("web"))
-        assert events.hub.activity[0]["phase"] == "end"
-        assert events.hub.activity[0]["ok"] is False
+        assert events.hub_for().activity[0]["phase"] == "end"
+        assert events.hub_for().activity[0]["ok"] is False
     asyncio.run(scenario())
 def test_non_calendar_approval_does_not_dirty_calendar_panel():
     from koe.events import Hub
@@ -170,3 +166,34 @@ def test_non_calendar_approval_does_not_dirty_calendar_panel():
                 result={'status': 'executed', 'tool': 'calendar_upsert_event'})
     assert hub.calendar_dirty
 
+
+
+def test_each_person_has_their_own_live_hub(monkeypatch):
+    """A friend's dashboard never shows the owner's calendar, activity or approvals, and vice versa."""
+    from koe import identity
+    events.publish("panel", name="calendar", result={"events": [{"id": "owner-meeting"}]})  # no one signed in: the owner
+    token = identity.OWNER.set("friend-id")
+    try:
+        assert events.hub_for().panels == {} and events.hub_for().snapshot()["activity"] == []
+        events.publish("tool", name="calendar_list", phase="end", result={"events": [{"id": "friend-meeting"}]})
+        events.publish("approval_pending", action={"id": "friend-ask", "summary": "s", "expires_ts": "2999-01-01T00:00:00Z"})
+        assert [p["id"] for p in events.hub_for().snapshot()["pending"]] == ["friend-ask"]
+    finally:
+        identity.OWNER.reset(token)
+    owner = events.hub_for().snapshot()
+    assert owner["panels"]["calendar"]["result"]["events"][0]["id"] == "owner-meeting"
+    assert owner["pending"] == [] and all(e.get("name") != "calendar_list" for e in owner["activity"])
+
+
+def test_a_friends_dashboard_refresh_reads_their_accounts_into_their_hub(monkeypatch):
+    from koe import identity
+    monkeypatch.setattr(settings, "github_token", "")
+    async def calendar(day):
+        return {"events": [{"id": identity.owner_id()}]}
+    monkeypatch.setattr(dashboard.calendar, "calendar_list", calendar)
+    async def as_friend():
+        identity.OWNER.set("friend-id")
+        await dashboard.refresh()
+    asyncio.run(as_friend())
+    assert events.hub_for("friend-id").panels["calendar"]["result"]["events"][0]["id"] == "friend-id"
+    assert "calendar" not in events.hub_for().panels  # the owner's panels were not overwritten

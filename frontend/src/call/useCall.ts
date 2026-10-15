@@ -5,6 +5,7 @@ import { createPlayer } from './player'
 import type { createMascot, Mood } from '../mascot/mascot'
 import { wsUrl } from '../backend'
 import { emptyWork, reduceWork } from '../workspace/workState'
+import { acquire, AudioBusy } from '../audio/coordinator'
 
 // One live call over /ws/call: mic up, Koe's voice down, plus the chat transcript, typed messages,
 // mute, and the mascot's moods. Wire format: SPEC §2 "/ws/call wire format".
@@ -62,6 +63,7 @@ export function useCall(mascot: { current: Mascot | null }) {
   const mutedRef = useRef(false)
   const analyser = useRef<AnalyserNode | null>(null) // Koe's voice, for the mascot's mouth
   const live = useRef<{ ws: WebSocket; stop: () => void } | null>(null)
+  const starting = useRef(0) // id of a start still waiting for audio (music pausing); 0 = none
 
   function setState(s: CallState) {
     stateRef.current = s
@@ -69,18 +71,32 @@ export function useCall(mascot: { current: Mascot | null }) {
     mascot.current?.mood(moodOf(s))
   }
 
-  function start(accessToken = '') {
-    if (live.current) return
+  async function start(accessToken = '') {
+    if (live.current || starting.current) return
+    const id = Date.now()
+    starting.current = id
     setError('')
     setLines([])
     setLatency(null)
     setApproval(null)
     setDeciding(false)
     setWorkspace(old => ({ ...emptyWork, revision: old.revision + 1 }))
-    const player = createPlayer() // created on the click: browsers only allow audio after a user gesture
+    // Created on the click: browsers only allow audio after a user gesture. It stays silent until the socket opens.
+    const player = createPlayer()
+    setState('connecting')
+    let release: () => void
+    try {
+      release = await acquire('call', () => { starting.current = 0; live.current?.stop(); setError('Music resumed unexpectedly. Koe stopped audio for safety.') })
+    } catch (err) {
+      player.ctx.close()
+      if (starting.current === id) { starting.current = 0; setState('idle') }
+      setError(err instanceof AudioBusy ? err.message : String(err))
+      return
+    }
+    if (starting.current !== id) { release(); player.ctx.close(); return } // ended while the music was pausing
+    starting.current = 0
     analyser.current = player.analyser
     mascot.current?.listen(player.analyser)
-    setState('connecting')
     const ws = new WebSocket(wsUrl('/ws/call'))
     ws.binaryType = 'arraybuffer'
     let stopMic = () => {}
@@ -105,7 +121,7 @@ export function useCall(mascot: { current: Mascot | null }) {
       clearInterval(tick)
       stopMic()
       ws.close()
-      player.ctx.close()
+      void player.ctx.close().finally(release) // audio is free only once Koe's voice is gone; music stays paused
       analyser.current = null
       mascot.current?.listen(null)
       setLines(closeAll)
@@ -117,6 +133,7 @@ export function useCall(mascot: { current: Mascot | null }) {
 
     // Binary frames = Koe's voice; text frames = control events.
     ws.onmessage = (e) => {
+      if (live.current?.ws !== ws) return // a late frame after hang-up must not play
       if (typeof e.data !== 'string') return player.play(e.data)
       const msg = JSON.parse(e.data)
       setWorkspace(old => reduceWork(old, msg))
@@ -191,7 +208,11 @@ export function useCall(mascot: { current: Mascot | null }) {
     ws.send(JSON.stringify({ type: 'approval', action_id: approval.id, approve }))
   }
 
-  useEffect(() => () => live.current?.stop(), []) // leaving the page ends the call
+  function stop() {
+    if (live.current) return live.current.stop()
+    if (starting.current) { starting.current = 0; setState('idle') } // still waiting for the music to pause
+  }
+  useEffect(() => stop, []) // eslint-disable-line react-hooks/exhaustive-deps -- leaving the page ends the call
 
-  return { state, lines, error, latency, muted, approval, deciding, workspace, analyser, start, stop: () => live.current?.stop(), send, toggleMute, decide }
+  return { state, lines, error, latency, muted, approval, deciding, workspace, analyser, start, stop, send, toggleMute, decide }
 }

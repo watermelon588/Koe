@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useState, type ReactNode } from 'react'
-import { CalendarBlank, GithubLogo, NotePencil, Sparkle, Table, type Icon } from '@phosphor-icons/react'
+import { CalendarBlank, GithubLogo, NotePencil, Sparkle, SpotifyLogo, Table, type Icon } from '@phosphor-icons/react'
 import { httpUrl } from '../backend'
 import { savedToken } from '../chat/api'
 import { SESSION } from '../session'
@@ -7,9 +7,9 @@ import { SESSION } from '../session'
 // Settings → Connections (ACCOUNTS_SPEC.md): link your own Google Calendar + Sheets, GitHub (Notion next).
 // Connect is a full-page trip to the provider's consent screen and back (/auth/<provider>/connect, backend auth.py);
 // tokens stay on the server, encrypted (connections.py). The page only ever sees provider + account email.
-type Connection = { provider: 'google' | 'github' | 'notion' | 'gemini'; connected: boolean; account: string }
-const NAMES = { google: 'Google Calendar & Sheets', github: 'GitHub', notion: 'Notion', gemini: 'Your Gemini key' }
-const ICONS = { google: CalendarBlank, github: GithubLogo, notion: NotePencil, gemini: Sparkle }
+type Connection = { provider: 'google' | 'github' | 'notion' | 'gemini' | 'spotify'; connected: boolean; account: string }
+const NAMES = { google: 'Google Calendar & Sheets', github: 'GitHub', notion: 'Notion', gemini: 'Your Gemini key', spotify: 'Spotify' }
+const ICONS = { google: CalendarBlank, github: GithubLogo, notion: NotePencil, gemini: Sparkle, spotify: SpotifyLogo }
 const NOTICES: Record<string, string> = {
   'connected=google': 'Google connected. Koe now uses your calendar and timesheet.',
   'connect=missing-scopes': 'Koe needs both Calendar and Sheets. Connect again and leave both boxes ticked.',
@@ -137,7 +137,10 @@ export function ConnectionsSection() {
       {!signedIn ? <p className="set-empty">Sign in with Google to connect your own accounts.</p>
         : !ready ? <p className="set-empty">The server needs KOE_SECRET_KEY before it can store connections.</p>
         : list === null ? <p className="set-empty">Loading your connections…</p>
-        : list.filter((c) => c.provider !== 'gemini').map(({ provider, connected, account }) => {
+        : list.filter((c) => c.provider !== 'gemini' && NAMES[c.provider]).map(({ provider, connected, account }) => {
+          if (provider === 'spotify') return <SettingRow key={provider} icon={SpotifyLogo} title="Spotify" on={connected}
+            status={connected ? 'Connected. Music only: Koe never hears or sees it.' : 'Optional. For your playlist on the Music page.'}
+            action={<a className="soft" href="#music">{connected ? 'Manage' : 'Set up'}</a>} />
           const canConnect = CONNECT[provider] && (provider !== 'github' || githubReady || connected)
           return <Fragment key={provider}>
             <SettingRow icon={ICONS[provider]} title={NAMES[provider]} on={connected}

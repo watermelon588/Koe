@@ -70,8 +70,9 @@ def site(request: Request) -> str:
     """The address the person is on: the Vite dev server locally, otherwise always KOE_PUBLIC_URL. It never comes
     from a header alone, so a forged Host can't steer Google's redirect (which must match a registered URI exactly),
     and it doesn't depend on how Vercel's and Render's proxies rewrite forwarding headers."""
-    if (request.headers.get("x-forwarded-host") or request.headers.get("host", "")) == LOCAL_SITE.removeprefix("http://"):
-        return LOCAL_SITE
+    local_site = settings.koe_local_url.rstrip("/")
+    if (request.headers.get("x-forwarded-host") or request.headers.get("host", "")) == local_site.removeprefix("http://").removeprefix("https://"):
+        return local_site
     if not settings.koe_public_url:
         raise HTTPException(400, "Set KOE_PUBLIC_URL on the server to sign in from the web.")
     return settings.koe_public_url.rstrip("/")
@@ -280,8 +281,7 @@ def _access_token_ok(supplied: str) -> bool:
 
 
 def _owner_only(user: dict) -> str:
-    # ponytail: until per-person connections exist (ACCOUNTS_SPEC.md tasks 6-9), every tool uses the owner's GitHub,
-    # Calendar, Sheets and Notion. An invited friend must not reach them, so only the owner gets in for now.
+    # Connecting Google/GitHub is still owner-only, pending the owner's decision to let friends connect their own.
     if not user["is_admin"]:
         raise HTTPException(403, "Koe isn't ready for friends yet. The owner will tell you when it is.")
     return user["id"]
@@ -290,8 +290,8 @@ def _owner_only(user: dict) -> str:
 async def http_owner(request: Request) -> str:
     """Who is calling an /api endpoint: the signed-in owner (cookie), or anyone holding KOE_ACCESS_TOKEN."""
     user = await signed_in_user(request)
-    if user:
-        identity.OWNER.set(_owner_only(user))
+    if user:  # an invited friend acts as themselves: their own chat, approvals, hub and connected accounts
+        identity.OWNER.set(user["id"])
         return user["id"]
     if _access_token_ok(request.headers.get("authorization", "").removeprefix("Bearer ").strip()):
         identity.OWNER.set(settings.koe_owner_id)

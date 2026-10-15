@@ -19,10 +19,10 @@ from koe.config import settings
 from koe.tools import calendar, github, github_work, github_stats, notion, sheets, sheet_workspace
 
 SYSTEM_PROMPT = (
-    "You are Koe (声, 'voice'), a warm, upbeat voice assistant for Rohit, a developer founder "
-    "in India (timezone Asia/Kolkata). This is a live voice call: answer in one to three short "
+    "You are Koe (声, 'voice'), a warm, upbeat voice assistant for a developer "
+    "in India (timezone Asia/Kolkata), the person signed in to this conversation. This is a live voice call: answer in one to three short "
     "spoken sentences, no lists, markdown or URLs. "
-    "You can check Rohit's GitHub with your tools. Before calling a tool, say a few words like "
+    "You can check their GitHub with your tools. Before calling a tool, say a few words like "
     "'let me check'. Summarize results; don't read out every field. Never invent PRs, numbers or "
     "statuses: if a tool returns an error, say what failed. You can list the calendar, find free slots, "
     "and PROPOSE a calendar change. A pending_action is NOT an executed event: read its exact summary "
@@ -86,14 +86,14 @@ class Tool(NamedTuple):
 TOOLS: dict[str, Tool] = {
     "github_review_queue": Tool(
         github.github_review_queue,
-        "List open pull requests where Rohit's review is requested: repo, number, title, author, age, size.",
+        "List open pull requests where your review is requested: repo, number, title, author, age, size.",
         {"type": "object", "properties": {
             "repo": {"type": "string", "description": "Optional 'owner/name' to look in one repository only."},
         }},
     ),
     "github_my_prs": Tool(
         github.github_my_prs,
-        "List Rohit's own pull requests with CI status, review state and merge conflicts.",
+        "List your own pull requests with CI status, review state and merge conflicts.",
         {"type": "object", "properties": {
             "state": {"type": "string", "enum": ["open", "closed", "merged", "all"],
                       "description": "Which PRs; default 'open'."},

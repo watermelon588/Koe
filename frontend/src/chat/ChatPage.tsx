@@ -3,6 +3,7 @@ import { BellRinging, GearSix, Microphone, PaperPlaneRight, Pause, Phone, Play, 
 import { mascotProfile, type MascotId } from '../mascot/catalog'
 import { api, AuthError, saveToken, type Message, type Reply } from './api'
 import { record } from './recorder'
+import { acquire, AudioBusy } from '../audio/coordinator'
 import { resendPush } from '../pwa'
 import { LiveWorkspace } from '../workspace/LiveWorkspace'
 import { emptyWork, reduceWork, SERVICES, type WorkEvent } from '../workspace/workState'
@@ -129,14 +130,16 @@ export function ChatPage({ model }: { model: MascotId }) {
       setRecording(active)
       setNow(Date.now())
     } catch (e) {
-      setError(`Microphone: ${e instanceof Error ? e.message : e}`)
+      setError(e instanceof AudioBusy ? e.message : `Microphone: ${e instanceof Error ? e.message : e}`)
     }
   }
   const sendRecording = useCallback(() => {
     if (!recording) return
-    const wav = recording.finish()
-    setRecording(null)
-    void deliver(localMessage('Voice note', 'local'), () => api.sendVoice(wav))
+    try {
+      const wav = recording.finish()
+      void deliver(localMessage('Voice note', 'local'), () => api.sendVoice(wav))
+    } catch (error) { fail(error) }
+    finally { setRecording(null); activeRecording.current = null }
   }, [recording]) // eslint-disable-line react-hooks/exhaustive-deps -- deliver is stable enough per render
   useEffect(() => { sendLatest.current = sendRecording }, [sendRecording])
 
@@ -229,18 +232,20 @@ function Bubble({ m, busy, onDecide }: { m: Message; busy: boolean; onDecide: (a
   )
 }
 
-// One voice note plays at a time, like WhatsApp: starting one pauses the other.
-let nowPlaying: HTMLAudioElement | null = null
-
+// One voice note plays at a time, like WhatsApp: starting one pauses the other. The audio coordinator does that,
+// and also pauses in-app music first (or refuses during a call or recording).
 function VoiceNote({ name }: { name: string }) {
   const audio = useRef<HTMLAudioElement | null>(null)
+  const release = useRef<() => void>(() => {})
   const [state, setState] = useState<'idle' | 'loading' | 'playing'>('idle')
   const [progress, setProgress] = useState(0)
   const [length, setLength] = useState<number | null>(null)
+  const [blocked, setBlocked] = useState('')
 
   async function toggle() {
     if (state === 'loading') return // a second tap while downloading used to start a second copy: an echo
     if (state === 'playing') return audio.current?.pause()
+    setBlocked('')
     if (!audio.current) {
       setState('loading')
       try {
@@ -248,16 +253,21 @@ function VoiceNote({ name }: { name: string }) {
         a.ontimeupdate = () => setProgress(a.duration ? a.currentTime / a.duration : 0)
         a.onloadedmetadata = () => setLength(a.duration)
         a.onplay = () => setState('playing')
-        a.onpause = () => setState('idle')
-        a.onended = () => { setState('idle'); setProgress(0) }
+        a.onpause = () => { setState('idle'); release.current() }
+        a.onended = () => { setState('idle'); setProgress(0); release.current() }
         audio.current = a
       } catch {
         return setState('idle')
       }
     }
-    if (nowPlaying && nowPlaying !== audio.current) nowPlaying.pause()
-    nowPlaying = audio.current
-    void audio.current.play()
+    const a = audio.current
+    try {
+      release.current = await acquire('reply', () => a.pause())
+    } catch (e) {
+      setState('idle')
+      return setBlocked(e instanceof Error ? e.message : String(e))
+    }
+    a.play().catch(() => { setState('idle'); release.current() })
   }
   useEffect(() => () => audio.current?.pause(), [])
 
@@ -269,6 +279,7 @@ function VoiceNote({ name }: { name: string }) {
       </button>
       <span className="voice-track"><span style={{ transform: `scaleX(${progress})` }} /></span>
       <time>{state === 'loading' ? 'Loading…' : length ? `${Math.floor(length / 60)}:${String(Math.round(length % 60)).padStart(2, '0')}` : 'Voice'}</time>
+      {blocked && <small className="voice-blocked" role="status">{blocked}</small>}
     </div>
   )
 }

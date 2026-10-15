@@ -212,7 +212,7 @@ def test_cancellation_call_projection_and_dashboard_refresh_follow_executed_acti
         await voice_call._approval_result(SimpleNamespace(send_json=send_json), state, True)
         assert [e['type'] for e in sent] == ['approval_progress', 'approval_result']
         assert sent[-1]['work']['cancelled'] and sent[-1]['work']['details']['title'] == 'Exact review'
-        assert events.hub.calendar_dirty
+        assert events.hub_for().calendar_dirty
     asyncio.run(scenario())
 
 

@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from koe import app_channel, auth, backend_status, connections, dashboard, github_hooks, voice_call, whatsapp, notion_api, people, store
 from koe.config import settings  # import = fail fast on missing config
+from koe import music_api, spotify_auth
 
 # Show Koe's own INFO lines (latency stages, delivery failures) next to uvicorn's in the host logs.
 logging.basicConfig(level=logging.INFO, format="%(levelname)s:     %(name)s: %(message)s")
@@ -31,6 +32,8 @@ app.include_router(github_hooks.router)
 app.include_router(app_channel.router)
 app.include_router(notion_api.router)
 app.include_router(auth.router)
+app.include_router(spotify_auth.router)
+app.include_router(music_api.router)
 app.include_router(connections.api)
 app.include_router(backend_status.router)
 app.include_router(people.router)

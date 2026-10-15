@@ -1,17 +1,30 @@
 import { startMic } from '../call/mic'
+import { acquire } from '../audio/coordinator'
 
 // A voice note: the same 16 kHz mono PCM16 stream the call uses (AudioWorklet), wrapped in a 44-byte WAV
 // header. Gemini accepts WAV, and every browser can make it, so no encoder or server conversion is needed.
 // WAV format: http://soundfile.sapp.org/doc/WaveFormat/
+// The mic opens only after in-app music is confirmed paused (audio/coordinator.ts); otherwise this throws.
 export async function record() {
+  let interrupted = false
+  let stopMic: () => void = () => {}
+  const release = await acquire('record', () => { interrupted = true; stopMic(); release() })
   const chunks: ArrayBuffer[] = []
-  const stop = await startMic((pcm) => chunks.push(pcm))
+  try {
+    stopMic = await startMic((pcm) => chunks.push(pcm))
+    if (interrupted) { stopMic(); release(); throw Error('Recording stopped because music resumed.') }
+  } catch (e) {
+    release()
+    throw e
+  }
+  const stop = () => { stopMic(); release() }
   return {
     finish: (): Blob => {
       stop()
+      if (interrupted) throw Error('Recording was interrupted; no voice note was sent.')
       return toWav(chunks)
     },
-    cancel: () => stop(),
+    cancel: stop,
   }
 }
 

@@ -55,3 +55,5 @@
 @media (prefers-reduced-motion: reduce) {
   .msg, .typing i, .rec-dot { animation: none; }
 }
+.voice { flex-wrap: wrap; }
+.voice-blocked { flex-basis: 100%; font-size: 11px; color: var(--muted); }

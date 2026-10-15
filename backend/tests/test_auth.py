@@ -144,12 +144,13 @@ def test_the_owner_trades_the_session_for_a_one_time_websocket_ticket(client, mo
     assert auth.ws_owner("session") is None and auth.ws_owner(None) is None
 
 
-def test_a_signed_in_friend_cannot_use_koe_until_their_own_connections_exist(client, monkeypatch):
-    # Every tool still uses the owner's GitHub/Calendar/Notion, so a friend is kept out of /api for now.
+def test_a_signed_in_friend_uses_koe_as_themselves_never_as_the_owner(client, monkeypatch):
     asyncio.run(sql("insert into koe_invites (email, invited_by, created) values (%s, %s, %s)", "friend@gmail.com", ADMIN, "x"))
     sign_in(client, monkeypatch, "friend@gmail.com", sub="friend-sub")
-    assert client.get("/auth/status").json()["user"]["email"] == "friend@gmail.com"
-    assert client.post("/api/ws-ticket").status_code == 403
+    me = client.get("/auth/status").json()["user"]
+    assert me["email"] == "friend@gmail.com" and me["is_admin"] is False
+    ticket = client.post("/api/ws-ticket").json()["ticket"]
+    assert auth.ws_owner(ticket) == me["id"] != settings.koe_owner_id  # their calls and dashboard are theirs
 
 
 def test_the_access_token_still_works_for_scripts(client, monkeypatch):

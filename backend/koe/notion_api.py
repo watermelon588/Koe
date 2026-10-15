@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, StrictBool
 
-from koe import agent, events, notion_service, store
+from koe import agent, events, identity, notion_service, store
 from koe.app_channel import authorized
 from koe.config import settings
 
@@ -37,7 +37,7 @@ async def checked(operation):
 
 async def context():
     # Stable owner-scoped UI conversation survives server restart; no other call/chat can approve it.
-    session = str(uuid5(NAMESPACE_URL, 'koe:notion-workspace:' + settings.koe_owner_id))
+    session = str(uuid5(NAMESPACE_URL, 'koe:notion-workspace:' + identity.owner_id()))
     ctx = agent.Conversation('app', session_id=session)
     ctx.pending = await store.pending_for_session(session)
     ctx.approval_ready = bool(ctx.pending)
@@ -81,7 +81,7 @@ async def setup(body: Setup):
     if isinstance(result, JSONResponse):
         return result
     events.publish('tool', name='notion_setup', phase='end', result=result, ok=True, channel='app')
-    session = str(uuid5(NAMESPACE_URL, 'koe:notion-workspace:' + settings.koe_owner_id))
+    session = str(uuid5(NAMESPACE_URL, 'koe:notion-workspace:' + identity.owner_id()))
     await store.record_best_effort('app', session, 'tool', 'notion_setup', {'result': result})
     return result
 

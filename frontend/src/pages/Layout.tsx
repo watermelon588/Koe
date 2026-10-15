@@ -4,7 +4,7 @@ import './pages.css'
 // Public pages (/guide, /privacy, /terms): readable signed-out, no mascot, no backend calls. Real paths, not
 // hash routes, so Google, Meta and Notion can link to the privacy policy and terms. Vercel serves index.html
 // for these paths (frontend/vercel.json rewrites).
-export const UPDATED = '13 October 2026'
+export const UPDATED = '15 October 2026'
 export const CONTACT_URL = 'https://github.com/watermelon588/Koe/issues' // ponytail: a contact email once Koe has its own domain
 
 export function Layout({ title, intro, children }: { title: string; intro: ReactNode; children: ReactNode }) {

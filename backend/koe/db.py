@@ -35,6 +35,14 @@ create table if not exists koe_prefs (owner_id text not null, name text not null
   updated text not null, primary key (owner_id, name));
 create table if not exists koe_usage (owner_id text not null, day text not null, turns integer not null default 0,
   primary key (owner_id, day));
+create table if not exists koe_spotify_flows (state_hash text primary key, owner_id text not null,
+  session_hash text not null, cookie_hash text not null, redirect_uri text not null,
+  expires text not null, consumed text);
+create table if not exists koe_music_mutations (owner_id text not null, connection_id text not null,
+  request_id text not null, body_hash text not null, operation text not null,
+  state text not null check (state in ('prepared','sent','outcome_unknown','confirmed')),
+  evidence_enc text not null, result_enc text, created text not null, updated text not null,
+  primary key (owner_id, connection_id, request_id));
 """
 
 # One reused Neon connection. Measured from the laptop: a new connection ~950 ms (TLS + auth to Singapore), a query
