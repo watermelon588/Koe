@@ -1070,3 +1070,26 @@ Next phase: approved schema creation and safe Sheets row editing is tracked in [
 - Signed-in pages weren't driven live, because sign-in needs the owner's Google account.
 **Gaps reported (backend contract):** no `/api/sheets`, `/api/calendar` or `/api/github` HTTP routes, so there's no standalone Sheets or GitHub screen. Sheets row/schema tools and GitHub stats have no `work` projection, so the call/chat panel shows only the activity line for them. GitHub stats live only in the in-memory activity feed and disappear when Render restarts.
 **Interview line:** "I built the UI from the API's own truth: schema-driven forms, verbatim approval text, and null rendered as unknown rather than zero."
+
+## Step 61: Settings → People: the owner invites and removes friends (2026-10-15)
+**Files:** backend/koe/people.py (new) · backend/koe/main.py · backend/tests/test_people.py (new) · frontend/src/settings/People.tsx (new) · frontend/src/settings/SettingsPage.tsx · frontend/src/pages/Guide.tsx · docs/PLAN.md
+**What it does:** A **People** section in Settings, visible only to the owner. It lists every invited email (with "Has signed in" or "hasn't signed in yet"), invites a new address, and removes one. Removing deletes the invite and revokes every session that account has, so the person is signed out on all devices at once, and the next Google sign-in says "not invited". Before this, inviting meant typing SQL into Neon.
+**Core concept:**
+- *Authorization is not authentication.* A signed-in friend is authenticated, but these routes also check that the caller *is the owner* (`http_owner(...) == KOE_OWNER_ID`), so they stay owner-only even after friends are let into the rest of Koe.
+- *CSRF guard.* Invite and remove change state, so they require the browser's `Origin` header to be Koe's own site (`auth.same_origin`). Another site can't make your browser invite someone with your cookie.
+- *Revoking server-side sessions.* Sessions live in `koe_sessions`, so signing someone out is one `UPDATE … SET revoked`. A cookie-only (stateless) session couldn't be taken back before it expired.
+- *Validate at the boundary.* Emails are trimmed, lowercased (Google returns lowercase) and checked for shape and length (≤ 254). The owner's own address is refused, since it always has access.
+**How it connects:** Settings → `PeopleSection` → `GET/POST /api/people`, `DELETE /api/people/{email}` → `koe_invites` / `koe_sessions` (Neon, migration 003) → `auth.invited()` on the next Google callback. If the GET is refused (a friend, or signed out), the section renders nothing.
+**Try it yourself:** sign in as the owner → Settings → People → invite a friend's Gmail → they sign in → the row says "Has signed in" → Remove → their next page load is signed out. `uv run pytest -q tests/test_people.py`.
+**Gotchas:**
+- A call that's already open keeps running after removal: WebSocket tickets are checked only when a call starts.
+- Removing someone doesn't delete their stored chat or connections yet (no "delete their data" button).
+- Friends still get "Koe isn't ready for friends yet" on `/api` (`auth._owner_only`). Opening that gate is a separate, deliberate step.
+**Measured:** 7 new tests:
+- invite → sign-in → shows as joined → remove → signed out and refused;
+- a friend gets 403 on all three routes;
+- a foreign or missing `Origin` gets 403;
+- bad addresses and the owner's own get 422.
+
+Backend 435 passed; frontend 26 tests, tsc, lint (no new warnings) and build pass. Browser check used a throwaway harness with a fake `/api/people` (no real invites): list, invite (lowercased), remove.
+**Interview line:** "Admin routes check authorization, not just authentication, guard state changes against CSRF with an Origin check, and revoke server-side sessions so removing someone takes effect immediately."

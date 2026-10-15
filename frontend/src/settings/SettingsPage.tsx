@@ -3,6 +3,7 @@ import { ArrowsClockwise, BellSimple, DeviceMobile, HandWaving, Key, Person, Use
 import { savedToken, saveToken } from '../chat/api'
 import { SESSION, signOut } from '../session'
 import { ConnectionsSection, SettingRow, SettingSection } from './Connections'
+import { PeopleSection } from './People'
 import { disablePush, enablePush, pushState, useInstall, type PushState } from '../pwa'
 import { MASCOTS, mascotProfile, type MascotId } from '../mascot/catalog'
 import { MascotView, type LoadState, type MascotController } from '../mascot/MascotView'
@@ -13,7 +14,7 @@ type Props = { selected: MascotId; onSelect: (id: MascotId) => boolean }
 
 // Settings: the companion studio on top (a quiet list on the left, the model standing in a flat viewer on the
 // right; browsing previews a mascot, only "Use …" changes the one on Home), then calm sections below it:
-// Account, Connections, Your Gemini key, This device.
+// Account, Connections, Your Gemini key, People (owner only), This device.
 export function SettingsPage({ selected, onSelect }: Props) {
   const [preview, setPreview] = useState(selected)
   const [shot, setShot] = useState<Shot>('bust')
@@ -91,6 +92,7 @@ export function SettingsPage({ selected, onSelect }: Props) {
       <div className="settings-sections">
         <AccountSection />
         <ConnectionsSection />
+        <PeopleSection />
         <DeviceSection />
       </div>
     </main>

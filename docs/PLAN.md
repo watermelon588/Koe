@@ -121,7 +121,7 @@ Goal: an invited friend goes from link to working assistant without touching cod
 
 **Group 5: quota and admin**
 - [x] 10. *(done 2026-10-13)* Daily turn cap on the shared Gemini key + optional own key (encrypted). *Accept:* the cap message appears at the limit; an own key removes it.
-- [ ] 11. Owner's Settings → People: invite/remove emails. *Accept:* an invited email can sign in, a removed one is signed out.
+- [x] 11. *(done 2026-10-15: `people.py`, Settings → People, 7 tests)* Owner's Settings → People: invite/remove emails. *Accept:* an invited email can sign in, a removed one is signed out.
 
 ## Phase 6: shared memory
 - [ ] Context builder: today's activity summary + last WhatsApp turns, injected into every new Live session and WhatsApp turn.

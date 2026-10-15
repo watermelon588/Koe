@@ -59,7 +59,7 @@ export function Guide() {
           <li><b>Dashboard:</b> your whole day in panels: Today’s calendar, Approvals, pull requests waiting for your review, your own pull requests with their CI, GitHub stats (the numbers from the last time you asked Koe about your activity or streak), and Activity (what Koe did, and how fast it answered). It updates live.</li>
           <li><b>Chat:</b> text and voice notes with Koe.</li>
           <li><b>Notion:</b> your Notion workspace (see below).</li>
-          <li><b>Settings:</b> choose your companion at the top. Below it: <b>Account</b> (sign out), <b>Connections</b> (Google, GitHub, Notion, plus your timesheet and repositories), <b>Your Gemini key</b>, and <b>This device</b> (install the app, notifications).</li>
+          <li><b>Settings:</b> choose your companion at the top. Below it: <b>Account</b> (sign out), <b>Connections</b> (Google, GitHub, Notion, plus your timesheet and repositories), <b>Your Gemini key</b>, <b>People</b> (only the owner sees it: who may sign in), and <b>This device</b> (install the app, notifications).</li>
         </ul>
         <p>The footer at the bottom of Home, Dashboard, Notion and Settings links to this guide, the Install page, the privacy policy and the terms.</p>
       </Section>
