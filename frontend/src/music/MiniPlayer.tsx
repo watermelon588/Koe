@@ -1,4 +1,5 @@
 import { Art, Controls } from './Controls'
+import { SpotifyIcon } from '../components/BrandIcon'
 import { positionAt } from './model'
 import { useNow, type Music } from './useMusic'
 
@@ -13,7 +14,7 @@ export function MiniPlayer({ music, hidden }: { music: Music; hidden: boolean })
     <aside className="mini-player" aria-label="Music">
       <Art src={track.art} size="sm" />
       <a className="mini-meta" href="#music">
-        <span>{track.name}</span>
+        <span><SpotifyIcon size={14} /> {track.name}</span>
         <small>{music.heldByVoice ? 'Paused while Koe uses audio' : play.status === 'unknown' ? 'Playback unknown' : track.artists}</small>
       </a>
       <Controls music={music} />

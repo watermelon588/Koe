@@ -1130,3 +1130,263 @@ Backend 435 passed; frontend 26 tests, tsc, lint (no new warnings) and build pas
 **Gotchas:** Live Spotify defaults off. Developer credentials/allowlist, exact callbacks, hosted migration, combined-app policy interpretation and physical-device/live-streaming acceptance are outstanding. Existing .env, encryption key and hosted Neon data were not changed. Unresolved generations deliberately keep voice blocked. Voice AudioContext is created silently on the click; capture/output begins only after the pause barrier.
 
 **Interview line:** “Before Koe opens the microphone, music must be proven paused. A timeout is uncertainty, a reload cannot erase it, and neither writes nor playback resume automatically.”
+
+## Findings S1: natural voice confirmation, bound to the displayed action (2026-10-16)
+
+**Files:** `backend/koe/agent.py` (shared phrase parser and model guidance), `backend/koe/voice_call.py` (presentation timing and transcript/action binding), `backend/tests/test_approvals.py` (regressions), `docs/SPEC.md`, `docs/DECISIONS.md`, `docs/PLAN.md`, `docs/RESEARCH_SOURCES.md`.
+
+**What it does:** Recognizes complete replies such as “Yeah”, “Okay”, “Yes, do it”, “Haan” and “Nahi”, including normal punctuation and whitespace. A call can resolve a proposal once the full card has been sent, while Koe is still speaking. Unclear replies leave it pending and send guidance to the model to ask for a clear yes or the Confirm button.
+
+**Core concept:** Tie consent to what the user could see when their response began. Record that action ID on the first input transcript chunk, wait for the full utterance, and resolve only that same action. A partial “yes” can still become “yes, but change the time”; a response that began before the card cannot approve it retroactively.
+
+**How it connects:** Gemini input transcript → `CallState.user_action_id` → `agent.confirmation` → `_approval_result` → existing conversation/action-ID gate → atomic `store.claim` → writer → authoritative result back to the model and browser. The parser also serves typed chat and WhatsApp. Tools, credentials, schema and hosting are unchanged.
+
+**Try it yourself:** From `backend`, run `.\.venv\Scripts\python.exe -m pytest -q tests/test_approvals.py tests/test_voice_call.py`. After deploying separately, request a Sheets entry, wait for the card, and say “Yes, do it” while Koe is reading. It should save once. “Yes, but change the time” should leave it pending. A negative should cancel without writing.
+
+**Gotchas:** Windows sandbox networking prevented asyncio from creating its own internal loopback socket; the tests ran outside that sandbox. PostgreSQL `initdb` cannot handle `声` in this workspace's temporary path, so its isolated test was rerun with an ASCII-only temporary directory. No live Neon or provider mutation was used. Installed `google-genai` exposes `Transcription.finished`; the relay keeps its existing `turn_complete` fallback when that field is absent. Microphone recognition and the model's spoken wording still need real-call acceptance; synthetic transport tests do not measure them.
+
+**Measured:** Before the fix, the expanded approval file reproduced 29 failures (46 passed). Afterward, 537 tests passed in the full backend run; the remaining disposable PostgreSQL setup failed on the Unicode path and then passed in 12.23 s from the ASCII path: **538 tests verified**. Coverage includes allowlisted/conditional/mixed replies, fragmented transcripts and text-free completion markers, barge-in, missing `finished`, replies before presentation, replacement action IDs, duplicate/concurrent claims, expiry and conversation isolation. No frontend changes in this slice; `git diff --check` passed.
+
+**Interview line:** “I fixed voice approvals by binding a complete utterance to the displayed action, preserving atomic execution while allowing natural replies and barge-in.”
+
+## Findings S2: readable approvals and Activity (2026-10-16)
+
+**Files:** `backend/koe/action_display.py` (new), approval projections in `agent.py`, `voice_call.py`, `notion_api.py` and `app_channel.py`, saved preview reads in `store.py`; `frontend/src/approvals/` (new shared preview/disclosure), call/dashboard/chat/Notion consumers, dashboard Activity formatting and time CSS; backend/frontend regression tests and `frontend/tests/approval-browser.mjs` with its development-only fixture.
+
+**What it does:** Approval cards show a short title and up to four plain lines: event time, recurrence, guests, requested Meet link, or Sheets columns and tab. Full summaries stay behind Details. Activity shows the operation and authoritative outcome with an Open link, Today/Yesterday/date headings and nonwrapping 24-hour timestamps. Chat removes only the exact duplicated pending-summary suffix when it has the structured preview, retaining the original stored message.
+
+**Core concept:** An audit record and a readable UI serve different purposes. Keep the exact stored action as the source of truth, derive a small display object on the server, and reuse it wherever that action appears. The preview never becomes execution input. Native `details` provides keyboard interaction without adding a component dependency.
+
+**How it connects:** normalized stored action → `action_display.describe/pending` → existing approval events and responses → shared `ApprovalPreview`. Dashboard and chat reloads read owner-scoped action rows and strip private query columns before returning only the preview and audit text. Saved errors are projected as a message, never as raw provider payloads. No new schema, tool, account setup or external write.
+
+**Try it yourself:** Run `npm test` and `npm run build` from `frontend`. For repeatable browser acceptance, run Vite on `127.0.0.1:5181`, set `KOE_E2E_NODE_MODULES` to an existing package directory containing Playwright, and run `node tests/approval-browser.mjs`. It opens the development-only `/tests/fixtures/approvals.html`; requests are intercepted, external traffic is blocked, and every approval is synthetic. In the app, propose a Calendar/Sheets change, expand Details by keyboard, and check Dashboard Activity after resolving it.
+
+**Gotchas:** The old server can still return summary-only proposals; those retain the complete legacy preview. A failed saved-preview read also retains the original chat text. Meet is described as a request, never a ready link. All-day display subtracts the exclusive end date; cross-day meetings retain the end date. No real account acceptance or deployment is claimed. Concurrent homepage work appeared during this slice; its files were retained, and its initial unused-import build error was resolved by that ongoing work before the successful build.
+
+**Measured:** 546 tests passed in the full backend run using an ASCII temporary directory, followed by the new real local PostgreSQL preview-hydration test: **547 backend tests verified**. Final storage review reran 12 affected tests successfully, including real SQL and saved errors. **54 frontend tests**, TypeScript/Vite build and lint passed; four existing lint warnings and the mascot chunk advisory remain outside this slice. Synthetic Edge acceptance passed keyboard Details, hidden raw JSON, dated Activity, timestamp wrapping, Open links, 320/375/768/1024/1440px widths, chat confirmation/reload and Notion previews, with no page errors. The first browser pass timed out waiting for the reload load event; the test now waits for the document and explicit rendered states.
+
+**Interview line:** “I separated readable approval previews from exact audit records, projected only safe fields on the server, and verified the same approval across chat, calls, dashboard and reloads.”
+
+## Public homepage: three variations and original connection logos (2026-10-16)
+
+**Files:** `frontend/src/homepage/Homepage.tsx` and `homepage.css`; shared `components/BrandIcon.tsx` and `brands.css`; original brand artwork and Geist font files under `frontend/public/`; `Root.tsx`, `main.tsx`, the application Notion navigation, Connections, MusicPage, LiveWorkspace, SignIn and public-page navigation; frontend HTML, session return path, manifest and static route mapping; `scripts/verify-homepage.mjs`; `docs/HOMEPAGE.md` and the specification/decision/source logs.
+
+**What it does:** Adds a detailed public homepage at `/` with three shareable variations: Studio, After Hours and Field Notes. All use the existing Geist / Geist Mono typography and four existing companion assets. The layouts change composition, section treatment and palette. A fixed design picker supports browser Back. The page explains the real integrations, the three input modes, the four companions, user approval, privacy and invite-only availability. Interactive local examples demonstrate finding reviews, proposing a meeting and preparing a Notion task. Integration filters and native dialogs distinguish five implemented services from planned Docs and Drive. Original provider logos now also appear in connection settings, Google sign-in, the Notion navigation, Spotify UI and the Calendar/Sheets/Notion live workspace.
+
+**Core concept:** A public marketing page and the authenticated application can share components without sharing access. The root router loads the homepage at `/`, keeps the existing sign-in gate at `/app`, and recognizes earlier application hashes such as `/#settings`. Lazy imports keep the full workspace out of the initial homepage route. The 3D scene reuses the existing VRM renderer; the homepage owns and cleans up its controller, while the small examples only change local React state.
+
+**How it connects:** Original logo files → one BrandIcon component → both public and app surfaces. Homepage links → `/app` → existing SignInGate → existing Engawa application. Successful sign-in and PWA startup target `/app`; existing root hash bookmarks and push destinations still resolve. GSAP uses scoped `useGSAP`, MatchMedia cleanup and reduced-motion transitions. Connection filtering refreshes ScrollTrigger positions after the page height changes. Fonts are self-hosted with the original SIL Open Font License files.
+
+**Try it yourself:** In `frontend`, run `npm run dev`. Open `http://127.0.0.1:5173/?look=studio`, `?look=after-hours`, or `?look=field-notes`. Switch designs using the bottom selector, try each workflow and its simulated approval, filter the connections, open GitHub or planned Docs details, open an FAQ, wave at Kami and preview another companion. Open `/app` or `/#settings` to reach the existing application. The homepage does not access accounts or perform real changes.
+
+**Measured:** TypeScript/production build passed; all **54 existing frontend tests passed**. Lint completed with the four existing application warnings and no warnings in the new homepage/components/router. The existing large three.js/VRM bundle advisory remains. **13 isolated Edge browser checks passed**, covering all three designs at 1440px desktop and 375px mobile, decoded original logos, the live VRM mascot, no horizontal overflow, demo approval/reset, integration filters/dialogs/Escape, FAQ disclosure, URL/history restoration, greeting/Aoi selection, reduced-motion entrance behavior, and both app sign-in routes. No uncaught page errors. Viewport and full-page screenshots plus `verification.json` are saved in the current chat's visualization directory under `koe-homepage`. `git diff --check` passed.
+
+**Gotchas:** Windows sandboxing blocked network asset downloads, browser startup and loopback access. Approved network reads fetched public brand/font assets; local preview and an isolated temporary-profile headless Edge process ran outside the sandbox. No signed-in browser, provider API mutation, credentials, account change or deployment was used. Docs and Drive remain planned; Spotify remains optional/setup-dependent. The original mascot models are large and are loaded only by the companion scene. Unrelated concurrent backend and approval UI work was left in place.
+
+**Interview line:** “One identity can support three distinct visual directions: share typography, original logos and product truth, then vary composition and atmosphere while keeping the real app behind its existing sign-in gate.”
+
+## Homepage follow-up: use the supplied mascot PNGs (2026-10-16)
+
+**Files:** `frontend/src/homepage/artwork.ts`, `Homepage.tsx`, `homepage.css`, `scripts/verify-homepage.mjs`, and the homepage/specification/decision/build logs.
+
+**What it does:** Uses nine of Rohit's original transparent PNG exports from `frontend/assets/mascot`. Kami, Mint and Kobashi each have a different pose for Studio, After Hours and Field Notes. The selected artwork appears in the hero and the companion picker. Aoi keeps her existing portrait because the supplied PNG set does not contain Aoi. No pixels were edited, backgrounds regenerated or models replaced.
+
+**Core concept:** A PNG can carry an alpha channel even if an image viewer displays a grey background. Inspecting the actual alpha values distinguished transparent exports from the opaque screenshots. Referencing the transparent originals through Vite preserves the source and creates fingerprinted production asset URLs automatically.
+
+**How it connects:** `artwork.ts` maps companion and design variation to an imported source image. The homepage loads the image first; explicit Try in 3D mounts the existing MascotView and downloads its VRM. Back to artwork disposes the live renderer. Greeting feedback uses context-safe GSAP and skips motion under the operating-system reduced-motion preference. The app's real call mascot and saved companion settings are unchanged.
+
+**Try it yourself:** Open the local homepage and use the design selector to compare the Kami poses. Choose Mint or Kobashi in the companion section and return to the hero. Click Try in 3D, then Back to artwork. The image preview and greeting work without loading a 3D model.
+
+**Measured:** TypeScript/production build passed. Lint completed with the same four existing app warnings and no warnings in the changed homepage files. **15 isolated Edge browser checks passed**, including all three desktop/mobile designs, three distinct supplied Kami images, Mint/Kobashi artwork selection, zero automatic VRM requests, explicit 3D loading/disposal, greeting, reduced-motion behavior, workflow interactions and existing sign-in routes. No uncaught browser errors. Updated screenshots and verification.json are retained in the chat's `koe-homepage` visualization directory. The prior 54 frontend tests were not repeated for this visual follow-up.
+
+**Gotchas:** The four early numbered Kami screenshots are opaque; the later transparent exports were selected instead. The new homepage no longer downloads the 16.6 MB Kami model by default. PNGs are served as supplied, roughly 305–409 kB each; no image processing dependency was added.
+
+**Interview line:** “Use the supplied transparent artwork for the first impression, then load the heavier interactive model only when the visitor asks for it.”
+
+## Homepage selection: Studio only, three companions (2026-10-16)
+
+**Files:** `frontend/src/homepage/Homepage.tsx`, `artwork.ts`, `homepage.css`, the existing homepage browser verifier and documentation.
+
+**What it does:** Removes Aoi's image and preview selector from the homepage. Kami, Mint and Kobashi fill a three-column gallery; the displayed companion count and copy now say three. Studio is the sole homepage design. After Hours, Field Notes, their unused artwork imports/CSS and the floating variation selector were removed. Existing variation query links resolve to Studio and clean up the obsolete parameter.
+
+**Core concept:** Scope a homepage selection separately from the app's mascot catalog. Filtering the homepage choices and narrowing its artwork type prevents Aoi from appearing there without deleting the app's existing model or preference. A single design also no longer needs theme-selection state or history listeners.
+
+**Try it yourself:** Reload the local homepage, open Your companion and check that only Kami, Mint and Kobashi appear. There is no bottom design selector. Earlier `?look=after-hours` and `?look=field-notes` URLs show Studio.
+
+**Measured:** Production build passed. Lint completed with the four existing app warnings and no new homepage warnings. Ten isolated Edge checks passed, including desktop/mobile layouts, the exact three companion choices/count, absence of Aoi images and the picker, legacy URLs, supplied artwork, optional 3D, reduced motion, demo controls and sign-in gates. No uncaught browser errors. `git diff --check` passed.
+
+**Interview line:** “Keep the selected design as the only rendered experience, and keep marketing choices separate from application preferences.”
+
+## Studio throughout the app, original logos, Mei and larger type (2026-10-16)
+
+**Files:** `frontend/src/studio.css`; application layout/navigation and footer; Dashboard, Chat, Notion, Music/Controls/MiniPlayer, Settings and sign-in presentation; existing per-page CSS and homepage styles; mascot catalog and homepage artwork mapping; companion-preference regressions; `scripts/verify-studio-app.mjs` and the existing homepage verifier; `PRODUCT.md`, `docs/STUDIO_UI.md`, specification and decision logs.
+
+**What it does:** Carries Studio's typography, section spacing, constrained page widths, consistent panels and restrained navigation through the whole app. Home frames the interactive companion beside the greeting, live Today card, call action and original-logo tool links; calls retain the full viewport stage and conversation sheet. Dashboard, Notion, Music, Settings, Chat and Install have a shared visual hierarchy. The default body is 16px and smaller existing labels/captions/controls are roughly 1px larger, including the homepage and public docs. Original provider marks now cover service navigation, headings, dashboard panels, connection/account rows, workspace tabs, approval resource links, Spotify placeholders, playlist attribution and mini player.
+
+**Companions:** The displayed choices are Kami, Mei and Kobashi throughout the homepage and app. Miku/Mint is now displayed as Mei. Her internal model identifier and asset paths remain compatible with existing saved choices; no file copying or unnecessary model migration is required. Aoi is removed from the selectable catalog and old Aoi preferences fall back to Kami. User source/model files were retained.
+
+**Core concept:** Share visual rules through semantic CSS variables, not by copying the homepage's colors into the app. The new Studio stylesheet uses the existing background, surface, text, line and accent tokens, so both themes and each companion keep their original exact colors. Layout, typography and component hierarchy can evolve without changing the identity or the data/control logic underneath.
+
+**How it connects:** App owns the shared shell and page heading transitions; page modules keep their existing controls and state. Existing profile names feed Home, Settings, Chat, Install and the homepage. One local original-logo component supplies provider artwork. The normal companion scene is contained; a live call switches that same renderer to the existing full viewport/camera behavior. The chat composer reserves space for the music mini player. Scoped GSAP entry animations clean up on page changes and respect reduced motion.
+
+**Try it yourself:** Open `/app`. Visit Home, Dashboard, Chat, Notion, Music, Settings and Install. Toggle light/dark and select Mei or Kobashi in Settings. Check the original logos in service panels and connection rows. The detailed page map and preserved palette values are in [STUDIO_UI.md](STUDIO_UI.md).
+
+**Measured:** Production build passed. All **55 frontend tests passed**, including the new Mei compatibility/removed-Aoi regression. Final lint completed with the same four existing warnings and no new warnings. **22 isolated app browser checks plus 10 homepage checks passed**: every major app page at 1440px and 375px, 320px Home and 768/1024px dashboard layouts, original logo decoding, single accessible page headings, exact dark/light palette tokens and all three companion accents, Mei selection into Chat, Notion record/editor controls, live workspace controls, reduced-motion behavior, simulated call cancellation/mute/end and mobile framing, and a connected Spotify playlist at desktop/mobile widths without playback. No uncaught page errors or provider writes. `git diff --check` passed. Screenshots/reports are retained in the chat's visualization directory under `koe-studio-app` and `koe-homepage`.
+
+**Gotchas:** The browser verifier intercepts auth, APIs and event/call WebSockets using synthetic fixtures in a temporary Edge profile; microphone input is fake. This proves presentation and control behavior, not live provider acceptance or speech recognition. No backend, OAuth account, approval rule, dependency or hosting changes were made. The existing VRM bundle advisory remains. Unrelated concurrent backend/approval work was preserved.
+
+**Interview line:** “Studio's design principles are a layout and typography system; reusing existing semantic color tokens lets the whole app change while keeping every theme and companion palette intact.”
+
+
+## Restore the open mascot and audit interaction consistency (2026-10-16)
+
+**Files:** `frontend/src/App.tsx`, `studio.css`, `index.css`, new `interactions.css`, `main.tsx`, settings/music/homepage/dashboard CSS, new `scripts/verify-interactions.mjs`, both existing browser verifiers, `PRODUCT.md`, `docs/SPEC.md`, `docs/STUDIO_UI.md` and the decision log.
+
+**What it does:** Restores the original transparent viewport stage on Home with the companion at the original horizontal camera position, the existing desk below, and the greeting/Today/tools to the right. Removes the enclosing mascot card, scene label and redundant home composition wrappers. On phones the open companion precedes the content; calls retain their full-figure framing and conversation sheet. Settings also previews the companion on a transparent background. No new visual direction or palette was introduced.
+
+**Core concept:** A component needs a layout region, but that region does not need a visible card. The canvas keeps a transparent sizing region for its camera and pointer interaction, while unnecessary outer wrappers and framing are removed. Shared control rules now own feedback across lazy-loaded pages, preventing local styles from silently creating different interactions.
+
+**How it connects:** `main.tsx` loads one interaction contract for the signed-in app, homepage, sign-in and public docs. Action controls use 15px Geist; compact controls use 13px, navigation 14px, and body text stays 16px. State transitions use 160ms, enabled press feedback uses 0.97 scale, and keyboard focus uses a 2px accent outline with 3px offset. Filled controls dim slightly while neutral controls change surface/text colors. Disabled controls stay inert; reduced motion also disables press transforms. Buttons have no hover lifts or decorative elevation. Meaningful selection/approval rings remain. The existing floating mini player and active-call utility share one elevation token.
+
+**Try it yourself:** Reload `/app`: the companion stands freely beside the content. Compare action controls in Dashboard, Notion, Music and Settings; hover with a mouse and tab with a keyboard. Toggle themes and reduced motion. The colors, original service artwork and Kami/Mei/Kobashi choices are preserved.
+
+**Measured:** Production build and all **55 frontend tests passed**. Lint completed with the same **four existing warnings**, no new warnings. **32 app + 17 homepage/sign-in/public-page browser checks passed** with no uncaught errors or provider writes. The shared audit measures real computed font sizes/families, timing, hover transforms, disabled behavior, shadow treatment, press feedback and keyboard focus across all major routes, both themes and reduced motion. Existing responsive, palette, logo, editor, companion and simulated call checks also passed. The audit caught and fixed a filled-button hover cascade conflict and a reduced-motion press override conflict. Reports/screenshots are in the visualization directory under `koe-ui-consistency` and `koe-homepage-consistency`.
+
+**Limits:** Browser checks use synthetic account/API/socket fixtures and fake microphone input, without real provider operations. Existing VRM bundle size advisory remains. Unrelated backend/approval work is preserved.
+
+**Interview line:** “Keep layout regions transparent when the design calls for open composition, and give equivalent controls one shared interaction contract that is verified in the browser.”
+
+
+## Roll back the core app redesign; retain Studio landing page (2026-10-16)
+
+**User instruction:** Restore the entire core application to its design before this homepage/design task began. Keep the landing page and wait for specific future design changes. This supersedes the two preceding Studio application design entries.
+
+**What changed:** Restored the original Engawa app shell, home/stage/desk ordering, page composition, typography sizes, Phosphor service icons, button hover/press/disabled rules, shadows, settings viewer, sign-in presentation and original Kami/Miku/Aoi/Kobashi catalog. Removed the app-wide Studio and interaction stylesheets and added app heading animations. Twenty original presentation/catalog/test files match the repository's original source exactly. Mixed files retain only unrelated pre-existing approval/audit work and necessary landing-page routing. Backend, provider credentials and account state were not changed.
+
+**Landing page:** Retained Studio, supplied mascot artwork, original provider logos and the three marketing companions Kami/Mei/Kobashi. Its current fonts and control styles now load only with the homepage, use independently named font faces and selectors scoped to `.hp`, and cannot change the original app. The app uses its original Google Fonts loading. `/` remains the landing page and `/app` the original application; earlier root hash bookmarks work.
+
+**Core concept:** A rollback restores the established baseline rather than making another redesign. Shared files need selective restoration when they also contain unrelated work. The original app catalog and the selected homepage's marketing names are kept independent so retaining one does not force changes into the other.
+
+**Verification:** Production build and **54 frontend tests passed** (the redesign-only Mei/Aoi test was removed with its changes). Lint retains four existing warnings. **Nine original-app browser checks and fifteen retained-homepage/public-page checks passed**, including all app pages on desktop/mobile, original navigation/fonts/icons and companion list, exact palette tokens, simulated call cancellation/mute/end, homepage demo/filter/dialog/FAQ/optional-3D controls and sign-in gates. A homepage-to-app hash navigation explicitly proves that loaded landing-page styles do not leak into the app. No uncaught browser errors or provider writes. `git diff --check` passed.
+
+**Evidence:** Reports/screenshots are in the chat visualization directory under `koe-app-restored` and `koe-homepage-retained`. A recoverable copy of the superseded design source is retained outside the project under `before-app-rollback`. Browser checks use synthetic account/API/socket fixtures and fake microphone input.
+
+**Try it yourself:** Reload `/app` to see the original interface, or `/` for the retained landing page. The next app design change should follow the user's exact new instructions.
+
+**Interview line:** “Restore the original design from source, isolate the retained landing page, and preserve unrelated changes when rolling back a mixed working tree.”
+
+## Original service logos, approved Spotify voice transport and authorized local setup (2026-10-16)
+
+**Files:** Shared `BrandIcon`, URL/provider mapping and brand assets; App, Dashboard, Settings, sign-in, Notion, Music, workspace and approval links; `music/voice.ts`, `useMusicVoice.ts`, `useMusic.ts`, SDK volume options and voice PCM/call handoff; new backend `music_voice.py`, router/config/status additions, internal auth ticket cookie proof and live voice adapter; new voice backend/frontend tests, fixture extension and managed `scripts/test_music_pipeline.py`; setup guide, API contract, current review, specification and decision/source logs.
+
+**What it does:** Replaces service symbols with original provider marks throughout the restored core interface. It preserves Engawa composition, original typography, palette, mascot catalog and control rules; Studio remains the landing page. Spotify uses its original supplied white/black SVGs in app themes and green on the homepage, at least 21px. Google Meet links have the original Meet mark. Action icons remain unchanged.
+
+**Core concept:** A voice assistant can request a small transport operation without receiving Spotify content. The owner must explicitly allow the current playlist, and a separate signed-in player window executes only those bounded actions. A queued result means permission to finish a handoff, not proof that a song is playing. Owner-session checks, one-time tickets, replay histories and strict generic acknowledgement states keep that boundary enforceable.
+
+**How it connects:** User speech → Gemini Live → approved-only `music_control` adapter → independent transport service → dedicated Music socket → browser player. Play/next/previous queue while voice owns audio. When the response's real PCM nodes finish, the voice window closes its AudioContext, releases audio ownership and consumes one handoff ID over HTTP. The Music window then acquires audio and starts the SDK. Ordinary hang-up does not resume music. Pause cancels pending playback; inactive volume is deferred. Text/WhatsApp/general agent tools do not gain Spotify controls, and Spotify music/metadata/tokens never enter model responses.
+
+**Authorized live setup:** The user confirmed written Spotify approval, then explicitly approved applying migration 007 and enabling locally. Only 007 ran transactionally against Neon; 006 already existed. Two tables and the widened provider constraint are present, with both RLS checks true. Existing data and credentials were retained. Ignored local `.env` now enables Spotify and approved voice; example defaults remain disabled. Read-only credential grant returned HTTP 200, canonical callback/origin/encryption checks passed, and no owner Spotify connection exists yet. The normal local backend was stopped and has been restarted on 127.0.0.1:8000. No hosting change, commit, push or deployment was made.
+
+**Try it yourself:** Open `http://127.0.0.1:5173/app#music`, sign in as owner, Connect Spotify, choose your private owned playlist and press Play once. Allow voice controls, keep Music open and open the separate voice agent. Say “set volume to 30 percent” or “play my playlist.” Playback commands finish the response and end the call before music starts. [Detailed setup](../backend/SPOTIFY_LOCAL_SETUP.md) and [transport architecture](spotify/VOICE_CONTROL.md) explain the exact boundaries and acceptance steps.
+
+**Measured:** Full backend suite **564 passed** in **113.78 seconds**, including disposable PostgreSQL parity (one existing Starlette/httpx warning). Frontend suite **60 passed**. The managed browser pipeline passed **15 manual OAuth/playback/edit/audio scenarios + 9 separate voice/music scenarios**. These use real Vite, FastAPI, owner cookies, SQLite, the live voice tool adapter, PCM queue, AudioContext close and Web Locks with simulated Spotify/provider sound and Gemini function selection. They verify revocation, bounded playlist commands, preferred volume, lost acknowledgements, no duplicate writes/releases, pause-before-microphone, no automatic resume and mobile fit. **9 original-app + 15 retained-homepage/public-page checks passed**, with no uncaught browser errors or unintended provider writes. Production build passed; lint retains four existing warnings, no new warnings. Whitespace validation passed after removing one introduced Markdown trailing-space line.
+
+**Evidence:** Ignored reports/screenshots: `backend/data/spotify-e2e-browser`, `backend/data/spotify-voice-e2e-browser`; visualization folder `koe-original-logos` and `koe-homepage-retained`. Reproduce both pipeline suites with `.venv/Scripts/python.exe -m scripts.test_music_pipeline --node-modules 'PATH/TO/node_modules'` from backend. The runner manages only its disposable servers. A Windows Unicode-output issue and an asynchronous playlist-choice race were found and fixed in the runner/tests.
+
+**Review and limits:** Fixed revoked socket cleanup, bound voice commands to active caller/player sessions without adding call-auth latency, prevented uncertain command retries across reconnects, and kept permission controls within the existing mobile styles. Four pre-existing lint warnings and the large VRM bundle remain. Real user consent, audible playback, speech recognition and physical-device acceptance have not been performed. Production health now identifies baseline commit 30ae9c9 with Music/People routes, resolving that earlier stale-deployment finding; the new voice route is not deployed. [Current review](REVIEW_2026-10-16.md) lists remaining URL/scrolling/labels/Sheets/Owner/Notion and acceptance work without silently implementing another redesign.
+
+**Interview line:** “Separate the model's bounded intent from the music player's credentials/content, then verify a one-time audio handoff and reject replay or unconfirmed success.”
+
+## Fix oversized Google sign-in logo (2026-10-16)
+
+**Files:** `frontend/src/signin.css`, new `frontend/scripts/verify-signin.mjs`, existing homepage browser verifier, specification and decision log.
+
+**What it does:** Narrows `.signin img` to `.signin > img`. The old selector unintentionally applied the mascot's 96px dimensions, circular crop, ring and margin to the new Google image inside the sign-in button. The original mascot presentation is retained; Google now uses its requested 18px size without decoration. No layout/font/palette redesign.
+
+**Core concept:** CSS descendant selectors can silently style a newly introduced nested component. Target the element that owns the decoration rather than adding escalating overrides to its children.
+
+**How it connects:** SignIn renders its mascot as a direct image and Google as a nested BrandIcon. The focused browser verifier measures actual computed dimensions, radius, shadow and margin, checks button fit and keyboard focus, and captures desktop/mobile screenshots in dark/light. The existing homepage verifier also checks sign-in logo dimensions so its broad smoke run cannot miss this again.
+
+**Measured:** Reproduced the regression before fixing: Google computed to 96×96px, 50% radius, mascot ring and 6px bottom margin. Afterward all four theme/viewport cases passed with 18×18px, 0 radius, no shadow and 0 margin, with no uncaught errors or overflow. The original mascot remains 96×96px and keeps its ring. Both normal servers are running: frontend 127.0.0.1:5173 returns 200, backend 127.0.0.1:8000/health returns 200, frontend API proxy returns expected 401 when signed out. Existing processes were reused rather than launching duplicate servers. Production build and 15 retained-homepage/public-page regression checks passed; existing VRM bundle advisory remains.
+
+**Evidence / try it:** Refresh `http://127.0.0.1:5173/app#music`. Before/after screenshots are in the visualization directory under `koe-signin-before` and `koe-signin-fixed`; the broader report is under `koe-homepage-signin-fix`. Browser auth is a synthetic signed-out response; no account changes or backend code changes.
+
+**Interview line:** “A loaded image is not necessarily correctly styled; validate its rendered bounds and inherited decoration when replacing an icon with a real logo.”
+
+## Recover the Music settings error screen (2026-10-16)
+
+**Files:** Music status model, MusicPage error action, useMusic read guard/loading feedback, music unit tests, new `scripts/verify-music-recovery.mjs`, specification and decision log.
+
+**What it does:** Distinguishes a failed settings read from missing/disabled setup. Temporary failures now say “Couldn’t load music” and offer Retry using existing button styles. Retry reads only; it cannot repeat a playlist write, launch OAuth or start playback. Concurrent reads are deduplicated and checking feedback appears while retrying. Known server error codes remain readable and 401 remains sign-in.
+
+**Diagnosis:** The user screenshot showed the old generic error, but its original failed HTTP response was not retained. Current direct/backend-proxy health checks respond normally; signed-out Music returns the expected 401. The user's older application tab had stale development state and initially allowed the application shell with no token; navigating Music then showed “Sign in to use music.” Refreshing it against the healthy backend correctly displayed Continue with Google. No active owner cookie is present in that tab. No authentication bypass or account consent was performed.
+
+**Core concept:** A transient read failure needs an honest recoverable state, distinct from an unavailable feature or an unauthenticated user. Retry must operate only on safe reads.
+
+**Verification:** Two isolated real-frontend browser scenarios passed: 503 followed by available/configured service recovers to Connect Spotify; 503 followed by 401 recovers to Sign in. Each retry made one new Music read, with no Spotify mutations/consent/playback, no uncaught browser errors and no mobile overflow. Frontend suite passed 61 tests; production build passed and lint retains its same four existing warnings. Backend is unchanged and running on port 8000; frontend remains on 5173. Reports/screenshots are in `koe-music-recovery` under the chat visualization directory.
+
+**Try it:** Open `/app#music`, Continue with Google, then Connect Spotify. If the backend becomes temporarily unavailable, Retry after it returns. Real Spotify consent/playback remains separate acceptance.
+
+**Interview line:** “Separate authentication, configuration and transport failures, and make recovery repeat only reads rather than uncertain side effects.”
+
+## Fix connected Spotify with an ineligible saved playlist (2026-10-16)
+
+**Files:** `useMusic.ts`, MusicPage picker actions/empty state, Music status fallback copy/test, focused browser recovery verifier, SPEC, setup/status/review and decision logs.
+
+**Actual cause:** The follow-up screenshot included `spotify_playlist_ineligible`. A read-only service check confirmed the owner is already connected, Spotify GETs work, and the selected playlist has `public:true`, `collaborative:false`, and matching owner. All nine listed playlists were public (five owned). The preceding sign-in/transport guidance did not resolve this user's playlist problem. No credentials, titles or playlist IDs were printed, and no provider content/privacy was changed.
+
+**What changed:** `loadItems` now handles ineligible selection alongside missing selection: discard stale displayed playlist/tracks, read eligible choices and retain connected status rather than falling through to a generic network error. The picker explains the requirement, offers Open selected playlist in Spotify and Refresh playlists, and keeps existing preview-confirm private-playlist creation accessible when the list is empty. Generic retry text no longer tells the user to check an unspecified connection.
+
+**Core concept:** Account authorization and resource eligibility are separate states. A resource rejection must not hide the connected account or its recovery actions.
+
+**Verification:** Four focused real-frontend browser scenarios pass, including ineligible selection with populated and empty eligible lists, with correct connected/disconnect state, choose/create/open/refresh controls, no automatic writes or playback, no uncaught errors and no mobile overflow. Frontend suite remains 61 passing tests; production build passed. The two new cases would have remained on the generic error before this fix. Live metadata checks prove account authorization/eligibility only, not audible playback. Evidence: `koe-music-recovery` screenshots/report in the visualization directory.
+
+**Try it:** Refresh Music. If you want a new playlist, enter its name, Create private playlist, then Confirm change. Alternatively open the selected playlist, make it private yourself in Spotify, and Refresh playlists. Choose it and add tracks as needed; playback requires an explicit Play. No reconnection is needed for this eligibility error.
+
+**Interview line:** “Preserve a valid connection when one selected resource becomes invalid, and return the user to a concrete resource picker instead of a generic retry loop.”
+
+## Device registration 409 and false voice lock (2026-10-16)
+
+**Files:** Spotify SDK adapter and explicit retry controller, backend device registration, SDK/route tests, isolated provider/browser fixture, managed pipeline runner, API contract/specification/decision/source logs.
+
+**Cause and evidence:** The screenshot shows `/api/music/device` 409 followed by playback unknown and blocked Call Koe. A focused test reproduced the frontend bug: `played` was set before SDK connect/device registration, and every preparation failure became unknown even though no transfer/play request was sent. The test failed with unknown instead of idle before the fix. A read-only Spotify device snapshot listed an unrelated inactive Chrome web player, with no active playback returned; this snapshot does not establish the failing ready device's identity or explain all real SDK/DRM availability conditions.
+
+**What changed:** Playback uncertainty starts only when content is observed playing or a potentially audible command is sent. Clean connection/registration failures stay idle, so they do not falsely block calls. Existing persisted/observed playback and unresolved sent operations remain protected. A failed connect can retry, not_ready invalidates its device/readiness, explicit retry from idle repeats preparation, and local in-flight controls remain uncertain. Backend discovery retries only GETs, up to eight attempts/four seconds, before returning a specific failure; matching SDK ID, Koe name, Computer type and unrestricted checks remain intact. It never silently chooses another device or resends transfer/play.
+
+**Core concept:** Preparing an audio device is not evidence that sound may have started. Track uncertainty at the point a command can have effects, while retaining prior evidence and refusing to infer pause from a missing state.
+
+**Verification:** Production build and 65 frontend tests passed, including preparation rejection, reconnect retry, not_ready and genuinely prior playback. Targeted Music/voice backend suite passed 41 tests (existing Starlette/httpx warning). A full browser pipeline passes its manual/control and separate voice scenarios using real HTTP/auth/SQLite/SDK adapter/Web Locks with simulated Spotify/Gemini/audio. The manual suite now includes a real route 409, zero provider playback writes, followed by a successful call and later explicit retry. Four existing lint warnings remain. The first default-temp backend run failed fixture setup; the ASCII temp path rerun passed. An attempt-count assertion was corrected to honor either the deadline or cap, whichever wins.
+
+**Runner/server fix:** Successful browser checks exposed a Windows cleanup error from a child holding a temporary log. The runner now stops only its own process trees and prints PASS after cleanup; rerun exited cleanly. Normal backend has been restarted without automatic reload, so editing test/scripts cannot interrupt the user's call. Normal frontend 5173 and backend 8000 health both return 200. No account, credential, playlist or hosting changes.
+
+**Try it:** Refresh `/app#music` to replace the old in-memory SDK state, then press Play explicitly. If preparation fails before any music starts, Call Koe remains usable. If real music or a sent action remains unverified, the existing pause gate intentionally remains. Audible real playback/DRM and actual microphone acceptance still need the user's browser test; the simulation does not prove these.
+
+**Evidence:** `backend/data/spotify-e2e-browser/report.json` contains the new device-409/call regression; `spotify-voice-e2e-browser` contains separate-window transport checks. These outputs remain ignored. No dependency or UI design changes.
+
+**Interview line:** “Distinguish pre-send preparation failures from uncertain side effects, and test that distinction through the actual audio ownership path.”
+
+## Record Music UX feedback; no implementation (2026-10-16)
+
+**Files:** New `tasks/plan.md` and `tasks/todo.md`; planning reference in PLAN, future target in SPEC and decision entry.
+
+**What it records:** The user's three screenshots show separate-window prerequisites, an enabled-but-disconnected control session and a generic unsupported-control error. The requested future experience embeds a compact conversational assistant/Call on Music, supports artist and exact-song requests within the allowed playlist, suggests adding absent songs, shows search artwork and executes a deliberate Add click without a second confirmation panel. Music alone gets a professional player composition, consistent controls, improved scrolling and restrained GSAP motion. Existing whole-app/landing design remains outside this scope.
+
+**Core concept:** Record user outcomes and acceptance before changing architecture. The present tool supports only transport/volume, so artist/title selection is a new contract and lifecycle requirement rather than a missing button label.
+
+**Boundary:** The user explicitly says do not build and will give a later start instruction. Only Markdown planning documents changed. No frontend/backend implementation, build/test execution, provider/account action, service restart or deployment occurred. M1–M7 remain unchecked. Future implementation must review permitted metadata handling and audio lifecycle, retain other approval gates and uncertain-operation deduplication, and validate actual account/speech/audio behavior rather than relying solely on simulated tests.
+
+**Try it:** Read tasks/plan.md for the requested experience and tasks/todo.md for acceptance/dependencies. Wait for the user's instruction before implementation.
+
+**Interview line:** “Capture the intended interaction and its failure cases, then freeze implementation until the user authorizes the next build.”
+
+## Publish the working tree and same-page Music implementation (2026-10-16)
+
+**Authorization:** User instructed implementation, commit/push of everything and live compatibility. During implementation, they changed the immediate scope to “just push for now no test.” No new tests, browser checks or live acceptance runs are performed after that instruction. The compilation already in progress completed successfully; subsequent small source/style changes are not separately verified. Do not reuse earlier test totals as evidence for this implementation.
+
+**Files/behavior:** Music embeds a compact portrait, normal conversational Call/mute/end, typed conversation, approval and optional workspace controls; the rest of the app and landing design remain intact. Call prepares the same player and grants its selected playlist on an explicit click. Music voice reconnects with bounded backoff and does not replay uncertain commands. Artist/title requests are resolved deterministically in `music_selection.py` against the granted playlist, with random artist selection, ambiguity/unavailable/missing states and snapshot-bound playback. Provider metadata stays out of model replies. Missing matches prefill Music search; result artwork and links are rendered. Add executes directly with an in-flight guard, durable request IDs and inline Added state; other approvals remain.
+
+**Design:** Music-only refinements use the existing palette/fonts, one page scroll, compact assistant, artwork/track rows, a sticky current player on desktop, mobile stacking and scoped/reduced-motion-aware GSAP entrance transitions. No new dependency.
+
+**Publishing boundary:** Stage source, tests, docs and supplied assets, while excluding ignored credentials/runtime data and generated graph cache. Existing earlier approval/audit/logo/homepage changes are included because the user explicitly requests the complete working tree. GitHub main remains the configured deployment branch. Hosted management credentials are unavailable locally; production environment synchronization and post-deploy acceptance are deferred by the user's final instruction. A Git push is not evidence that either host finished deploying or that real Spotify playback works.
+
+**Interview line:** “Keep Spotify selection outside model context, bind a requested track to the playlist version, and state clearly when a published change has not completed acceptance testing.”

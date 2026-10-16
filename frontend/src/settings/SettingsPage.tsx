@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowsClockwise, BellSimple, DeviceMobile, HandWaving, Key, Person, UserCircle, UserFocus } from '@phosphor-icons/react'
+import { ArrowsClockwise, BellSimple, DeviceMobile, HandWaving, Key, Person, UserFocus } from '@phosphor-icons/react'
 import { savedToken, saveToken } from '../chat/api'
 import { SESSION, signOut } from '../session'
 import { ConnectionsSection, SettingRow, SettingSection } from './Connections'
@@ -9,6 +9,7 @@ import { MASCOTS, mascotProfile, type MascotId } from '../mascot/catalog'
 import { MascotView, type LoadState, type MascotController } from '../mascot/MascotView'
 import type { Shot } from '../mascot/mascot'
 import './settings.css'
+import { GoogleIcon } from '../components/BrandIcon'
 
 type Props = { selected: MascotId; onSelect: (id: MascotId) => boolean }
 
@@ -106,7 +107,7 @@ function AccountSection() {
   return (
     <SettingSection id="set-account" title="Account" intro="How this device signs in to Koe.">
       {token === SESSION
-        ? <SettingRow icon={UserCircle} title="Google account" status="Signed in with Google." on
+        ? <SettingRow icon={GoogleIcon} title="Google account" status="Signed in with Google." on
           action={<button className="ghost" onClick={() => void signOut()}>Sign out</button>} />
         : <SettingRow icon={Key} title="Access token" status={tokenSaved ? 'Saved on this device.' : 'KOE_ACCESS_TOKEN from backend/.env.'} on={tokenSaved}>
           <form className="token-row" onSubmit={(e) => { e.preventDefault(); setTokenSaved(saveToken(token)) }}>

@@ -162,6 +162,42 @@ def test_journal_capacity_and_sent_crash_records_prevent_new_or_duplicate_sends(
         assert full.json()["error"]["code"] == "spotify_journal_full"
 
 
+def test_device_registration_waits_for_discovery_without_sending_playback(client):
+    seed_connection()
+    with respx.mock:
+        discovery = respx.get(sp.API_URL + "/me/player/devices").mock(side_effect=[
+            httpx.Response(200, json={"devices": []}),
+            httpx.Response(200, json={"devices": [{"id": "browser", "name": "Koe Web Player", "type": "Computer", "is_restricted": False}]})])
+        result = client.post("/api/music/device", json={"connection_id": "generation-1", "device_id": "browser"})
+        assert result.status_code == 200, result.text
+        assert discovery.call_count == 2
+        assert all(call.request.method == "GET" for call in respx.calls)
+
+
+def test_device_registration_does_not_accept_restricted_or_renamed_device(client):
+    seed_connection()
+    for change in ({"is_restricted": True}, {"name": "Web Player (Chrome)"}, {"type": "Smartphone"}):
+        with respx.mock:
+            discovery = respx.get(sp.API_URL + "/me/player/devices").mock(return_value=httpx.Response(200, json={"devices": [
+                {"id": "browser", "name": "Koe Web Player", "type": "Computer", "is_restricted": False, **change}]}))
+            result = client.post("/api/music/device", json={"connection_id": "generation-1", "device_id": "browser"})
+            assert result.status_code == 409
+            assert "No playback was requested" in result.json()["error"]["message"]
+            assert discovery.call_count == 1
+
+
+def test_absent_sdk_device_exhausts_only_bounded_reads(client):
+    seed_connection()
+    with respx.mock:
+        discovery = respx.get(sp.API_URL + "/me/player/devices").mock(return_value=httpx.Response(200, json={"devices": []}))
+        result = client.post("/api/music/device", json={"connection_id": "generation-1", "device_id": "browser"})
+        assert result.status_code == 409
+        assert 1 <= discovery.call_count <= 8  # either the attempt cap or four-second deadline may win
+        assert "No playback was requested" in result.json()["error"]["message"]
+        assert not sp.devices
+        assert all(call.request.method == "GET" for call in respx.calls)
+
+
 def test_registered_local_device_transfer_sends_play_false_and_state_is_targeted(client):
     seed_connection()
     with respx.mock:

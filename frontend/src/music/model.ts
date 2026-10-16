@@ -6,7 +6,7 @@ export type Track = { id: string; uri: string; name: string; artists: string; ar
 export type Playlist = { id: string; name: string; url: string; uri: string; art: string | null; snapshot?: string; total?: number }
 export type MusicStatus =
   | { phase: 'loading' }
-  | { phase: 'unavailable'; message: string } // this Koe server has no music API (yet), it's off, or it failed
+  | { phase: 'unavailable'; message: string; retryable?: boolean } // unavailable setup is distinct from a temporary read failure
   | { phase: 'signed-out' }
   | { phase: 'disconnected'; canConnect: boolean; reconnect: boolean; message: string }
   | { phase: 'connected'; connectionId: string; playlistId: string | null; read: boolean; write: boolean; inApp: boolean; mock: boolean }
@@ -30,7 +30,8 @@ export interface Player {
   state(): PlayState
   subscribe(fn: () => void): () => void
   playing(): boolean | null // null = can't tell (counts as playing for the voice gate)
-  play(index: number): Promise<void>
+  play(index: number, snapshot?: string): Promise<void>
+  prepare?(): Promise<void>
   resume(): Promise<void>
   pause(): Promise<PauseResult> // settles commands already sent, then reports what it saw
   next(): Promise<void>
@@ -74,7 +75,8 @@ export function statusFrom(http: number, body?: unknown): MusicStatus {
   if (http === 404 || http === 405 || http === 501) return { phase: 'unavailable', message: say('spotify_not_configured') }
   if (http === 403) return { phase: 'unavailable', message: say(code ?? 'spotify_owner_required') }
   const s = body as ApiStatus | undefined
-  if (http < 200 || http >= 300 || !s) return { phase: 'unavailable', message: 'Couldn’t reach Koe’s music settings. Try again in a moment.' }
+  if (http < 200 || http >= 300 || !s) return { phase: 'unavailable', retryable: true,
+    message: say(code, 'Koe couldn’t finish loading music. Retry to request it again.') }
   if (s.contract_version?.split('.')[0] !== CONTRACT.split('.')[0])
     return { phase: 'unavailable', message: 'This version of the app can’t read the server’s music settings. Refresh the page.' }
   if (!s.configured || !s.enabled) return { phase: 'unavailable', message: say(s.unavailable_reason ?? (s.configured ? 'spotify_disabled' : 'spotify_not_configured')) }

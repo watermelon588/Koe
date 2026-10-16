@@ -216,3 +216,11 @@ button:disabled { opacity: 0.4; cursor: default; }
   .home, .panel { transition: opacity 200ms ease !important; }
   .dot, .dash-tabs svg { animation: none !important; }
 }
+
+/* Existing approval/activity presentation, separate from the reverted app redesign. */
+.feed time { white-space: nowrap; overflow-wrap: normal; font-variant-numeric: tabular-nums; }
+.feed-copy { min-width: 0; }
+.feed-group > h3 { color: var(--muted); font-size: 12px; font-weight: 400; margin: 14px 0 2px; }
+.feed .action-audit { margin-top: 3px; }
+.feed .action-audit summary { font-size: 11px; }
+.rows time, .msg > time { white-space: nowrap; overflow-wrap: normal; font-variant-numeric: tabular-nums; }

@@ -1,14 +1,15 @@
 import { useState } from 'react'
-import { MusicNotes, Pause, Play, SkipBack, SkipForward, SpeakerHigh, SpeakerLow, SpeakerX } from '@phosphor-icons/react'
+import { Pause, Play, SkipBack, SkipForward, SpeakerHigh, SpeakerLow, SpeakerX } from '@phosphor-icons/react'
 import { clock, positionAt } from './model'
 import type { Music } from './useMusic'
 import './music.css'
+import { SpotifyIcon } from '../components/BrandIcon'
 
 // Shared by the Music page and the mini player.
 
 export function Art({ src, size }: { src: string | null | undefined; size: 'sm' | 'md' | 'lg' }) {
   return src ? <img className={`music-art ${size}`} src={src} alt="" loading="lazy" />
-    : <span className={`music-art ${size} blank`} aria-hidden="true"><MusicNotes /></span>
+    : <span className={`music-art ${size} blank`} aria-hidden="true"><SpotifyIcon /></span>
 }
 
 export function Controls({ music, big }: { music: Music; big?: boolean }) {

@@ -1,8 +1,10 @@
-import { useState, type KeyboardEvent, type ReactNode } from 'react'
-import { ArrowClockwise, CalendarBlank, GitPullRequest, Pulse, SealCheck, type Icon } from '@phosphor-icons/react'
-import { activityText, clockTime, isBusy, latencyStats, latestResult, type Approval, type DashboardState, type GitHubActivity,
+import { useEffect, useState, type KeyboardEvent, type ReactNode, type ComponentType } from 'react'
+import { ArrowClockwise, Pulse, SealCheck } from '@phosphor-icons/react'
+import { activityAudit, activityDay, activityLink, activityText, clockTime, isBusy, latencyStats, latestResult, type Activity, type Approval, type DashboardState, type GitHubActivity,
   type GitHubContributions, type Panel, type PullRequest } from './state'
 import { usePending } from './useDashboard'
+import { CalendarIcon, GitHubIcon } from '../components/BrandIcon'
+import { ApprovalPreview, AuditDetails } from '../approvals/ApprovalPreview'
 
 // Your day. The pieces below (TodayList, PRList, ApprovalList, ActivityFeed) are shared by two layouts:
 // the compact four-tab card in the call's Day view (Dashboard) and the full Dashboard page (DashboardPage.tsx).
@@ -41,7 +43,7 @@ export function ApprovalList({ pending, currentApproval, decide }: { pending: Ap
   return <ul className="asks">{pending.map((action) => <li key={action.id}>
     <div>
       <small>{action.channel ?? 'Current call'} · expires {clockTime(action.expires_ts)}</small>
-      <p>{action.summary}</p>
+      <ApprovalPreview action={action} />
       {action.id !== currentApproval?.id && <small>Confirm or cancel in the conversation that asked.</small>}
     </div>
     {action.id === currentApproval?.id && decide && <div className="pair">
@@ -93,11 +95,29 @@ export function GitHubStats({ data }: { data: DashboardState }) {
 
 export function ActivityFeed({ data }: { data: DashboardState }) {
   const stats = latencyStats(data.latencies)
+  const [now, setNow] = useState(() => new Date())
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 60_000)
+    return () => clearInterval(timer)
+  }, [])
+  const groups = new Map<string, Activity[]>()
+  for (const item of [...data.activity].sort((a, b) => Date.parse(b.ts) - Date.parse(a.ts)).slice(0, 12)) {
+    const day = activityDay(item.ts, now)
+    groups.set(day, [...(groups.get(day) ?? []), item])
+  }
   return <>
     {!data.activity.length ? <p className="dash-empty">What Koe does (tool calls, approvals, alerts) shows up here.</p> :
-      <ol className="feed">{data.activity.slice(0, 12).map((item) => <li key={item.id}>
-        <time>{clockTime(item.ts)}</time><p>{activityText(item)}<small>{item.channel ?? 'Koe'}</small></p>
-      </li>)}</ol>}
+      [...groups].map(([day, items]) => <section className="feed-group" key={day} aria-label={day}>
+        <h3>{day}</h3><ol className="feed">{items.map((item) => {
+          const url = activityLink(item), audit = activityAudit(item), label = activityText(item)
+          return <li key={item.id}>
+            <time dateTime={item.ts}>{clockTime(item.ts)}</time><div className="feed-copy">
+              <p>{label}</p><small>{item.channel ?? 'Koe'}{url && <> · <a href={url} target="_blank" rel="noreferrer">Open ↗</a></>}</small>
+              {audit && audit !== label && <AuditDetails summary={audit} />}
+            </div>
+          </li>
+        })}</ol>
+      </section>)}
     <p className="dash-meta foot">{stats
       ? <>Response time: p50 <b>{Math.round(stats.p50)} ms</b> · p95 <b>{Math.round(stats.p95)} ms</b> · {stats.count} turns</>
       : 'Response time appears after Koe answers.'}</p>
@@ -113,9 +133,9 @@ export function Dashboard({ data, connected, currentApproval, decide, refresh }:
   const busy = (name: string) => isBusy(data, name)
   const events = calendar?.result.events ?? []
 
-  const tabs: { id: Tab; label: string; icon: Icon; count?: number; busy?: boolean }[] = [
-    { id: 'today', label: 'Today', icon: CalendarBlank, count: events.length, busy: busy('calendar_list') },
-    { id: 'github', label: 'GitHub', icon: GitPullRequest, count: (reviews?.result.prs?.length ?? 0) + (prs?.result.prs?.length ?? 0),
+  const tabs: { id: Tab; label: string; icon: ComponentType<{ size?: number }>; count?: number; busy?: boolean }[] = [
+    { id: 'today', label: 'Today', icon: CalendarIcon, count: events.length, busy: busy('calendar_list') },
+    { id: 'github', label: 'GitHub', icon: GitHubIcon, count: (reviews?.result.prs?.length ?? 0) + (prs?.result.prs?.length ?? 0),
       busy: busy('github_review_queue') || busy('github_my_prs') },
     { id: 'approvals', label: 'Approvals', icon: SealCheck, count: pending.length },
     { id: 'activity', label: 'Activity', icon: Pulse },

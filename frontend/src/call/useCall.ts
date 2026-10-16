@@ -6,6 +6,7 @@ import type { createMascot, Mood } from '../mascot/mascot'
 import { wsUrl } from '../backend'
 import { emptyWork, reduceWork } from '../workspace/workState'
 import { acquire, AudioBusy } from '../audio/coordinator'
+import { music as musicRequest } from '../music/api'
 
 // One live call over /ws/call: mic up, Koe's voice down, plus the chat transcript, typed messages,
 // mute, and the mascot's moods. Wire format: SPEC §2 "/ws/call wire format".
@@ -13,7 +14,7 @@ type Mascot = ReturnType<typeof createMascot>
 export type CallState = 'idle' | 'connecting' | 'listening' | 'thinking' | 'speaking'
 // A chat line. `open` = still growing (transcripts arrive in pieces).
 export type Line = { id: number; who: 'you' | 'koe' | 'tool'; text: string; open: boolean }
-export type Approval = { id: string; summary: string; expires_ts: string }
+export type Approval = import('../dashboard/state').Approval
 
 const TOOL_LABEL: Record<string, string> = {
   github_my_prs: 'Checking your pull requests',
@@ -71,7 +72,7 @@ export function useCall(mascot: { current: Mascot | null }) {
     mascot.current?.mood(moodOf(s))
   }
 
-  async function start(accessToken = '') {
+  async function start(accessToken = '', prepare?: () => Promise<void>) {
     if (live.current || starting.current) return
     const id = Date.now()
     starting.current = id
@@ -86,6 +87,8 @@ export function useCall(mascot: { current: Mascot | null }) {
     setState('connecting')
     let release: () => void
     try {
+      await prepare?.()
+      if (starting.current !== id) { await player.ctx.close(); return }
       release = await acquire('call', () => { starting.current = 0; live.current?.stop(); setError('Music resumed unexpectedly. Koe stopped audio for safety.') })
     } catch (err) {
       player.ctx.close()
@@ -103,6 +106,8 @@ export function useCall(mascot: { current: Mascot | null }) {
     let failed = ''
     let tools = 0 // tools running right now
     let decisionRunning = false
+    let musicHandoff: string | null = null
+    let completedTurn = 0
     let loudAt = 0
     const buf = new Float32Array(2048)
     // Speaking = Koe's audio is loud right now (held 0.4 s so pauses between words don't flicker).
@@ -116,18 +121,19 @@ export function useCall(mascot: { current: Mascot | null }) {
       if (next !== stateRef.current) setState(next)
     }, 100)
     const stop = () => {
-      if (live.current?.ws !== ws) return
+      if (live.current?.ws !== ws) return Promise.resolve()
       live.current = null
       clearInterval(tick)
       stopMic()
       ws.close()
-      void player.ctx.close().finally(release) // audio is free only once Koe's voice is gone; music stays paused
+      const silent = player.ctx.close().finally(release) // only a specific requested handoff may start music later
       analyser.current = null
       mascot.current?.listen(null)
       setLines(closeAll)
       setState('idle')
       setApproval(null)
       setDeciding(false)
+      return silent
     }
     live.current = { ws, stop }
 
@@ -138,13 +144,26 @@ export function useCall(mascot: { current: Mascot | null }) {
       const msg = JSON.parse(e.data)
       setWorkspace(old => reduceWork(old, msg))
       if (msg.type === 'interrupted') {
+        completedTurn++
+        musicHandoff = null // barge-in cancels queued playback; never resume on a later unrelated turn
         player.flush()
         setLines(closeAll)
       }
       if (msg.type === 'latency') setLatency(msg.ms)
       if (msg.type === 'transcript') setLines((ls) => add(ls, msg.role === 'user' ? 'you' : 'koe', msg.text, true))
-      if (msg.type === 'turn_complete') setLines(closeAll)
-      if (msg.type === 'approval_pending') setApproval({ id: msg.id, summary: msg.summary, expires_ts: msg.expires_ts })
+      if (msg.type === 'music_handoff' && /^[a-f0-9]{64}$/.test(msg.id)) musicHandoff = msg.id
+      if (msg.type === 'turn_complete') {
+        setLines(closeAll)
+        const handoff = musicHandoff, turn = ++completedTurn
+        if (handoff) void player.drained().then(async () => {
+          if (live.current?.ws !== ws || turn !== completedTurn || musicHandoff !== handoff) return
+          musicHandoff = null
+          await stop() // microphone, voice output and cross-tab audio ownership are released first
+          const reply = await musicRequest('/api/music/voice-release', 'POST', { id: handoff })
+          if (reply.http !== 200 || (reply.body as { state?: string })?.state !== 'applied') setError('Music playback was not confirmed. Check the music window before retrying.')
+        }).catch(() => setError('Music handoff was not confirmed. Check the music window.'))
+      }
+      if (msg.type === 'approval_pending') setApproval({ id: msg.id, summary: msg.summary, display: msg.display, expires_ts: msg.expires_ts })
       if (msg.type === 'approval_result') {
         decisionRunning = false
         setDeciding(false)

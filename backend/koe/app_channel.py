@@ -35,7 +35,7 @@ from py_vapid import Vapid02, b64urlencode
 from pydantic import BaseModel
 from pywebpush import WebPushException, webpush_async
 
-from koe import agent, auth, call_work, gemini, identity, text_agent, usage, voice_call, whatsapp
+from koe import action_display, agent, auth, call_work, gemini, identity, store, text_agent, usage, voice_call, whatsapp
 from koe.config import settings
 from koe.db import sql
 
@@ -76,7 +76,14 @@ async def add_message(role: str, text: str, voice: str | None = None, action_id:
 async def list_messages(after: int = 0, limit: int = 200) -> list[dict]:
     rows = await sql("select * from (select * from koe_app_messages where owner_id = %s and id > %s "
                      "order by id desc limit %s) newest order by id", owner(), after, limit)
-    return [_public(r) for r in rows]
+    try:
+        previews = await store.action_previews([r['action_id'] for r in rows if r.get('action_id')])
+    except store.StoreError:
+        log.warning('Saved approval previews unavailable; full message text retained')
+        previews = {}
+    pending = chat().context.pending
+    if pending: previews[pending['id']] = action_display.pending(pending)
+    return [{**_public(r), **({'approval': previews[r['action_id']]} if r.get('action_id') in previews else {})} for r in rows]
 
 
 async def set_action_status(action_id: str, status: str) -> None:
@@ -137,6 +144,7 @@ async def reply(text: str, spoken: bool) -> tuple[dict, list[dict]]:
             log.warning("spoken reply failed; sending text only", exc_info=True)
     pending = result.get("pending_action")
     message = await add_message("koe", result["text"], voice=voice, action_id=pending["id"] if pending else None)
+    if pending: message['approval'] = action_display.pending(pending)
     later(notify(message["text"], tag="koe-reply"))  # the app skips it if the chat is already on screen
     return message, work
 

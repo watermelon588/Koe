@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type RefObject } from 'react'
 import gsap from 'gsap'
 import { useGSAP } from '@gsap/react'
-import { ArrowSquareOut, CalendarBlank, CheckCircle, Notebook, Table, X } from '@phosphor-icons/react'
+import { ArrowSquareOut, CheckCircle, X } from '@phosphor-icons/react'
+import { CalendarIcon, NotionIcon, SheetsIcon } from '../components/BrandIcon'
 import { httpUrl } from '../backend'
 import { savedToken } from '../chat/api'
 import { CalendarWork, NotionWork, SheetsWork } from './WorkViews'
@@ -15,7 +16,7 @@ import './workspace.css'
 gsap.registerPlugin(useGSAP)
 const REDUCE = '(prefers-reduced-motion: reduce)'
 const WIDE = '(min-width: 900px)'
-const ICON = { calendar: CalendarBlank, sheets: Table, notion: Notebook }
+const ICON = { calendar: CalendarIcon, sheets: SheetsIcon, notion: NotionIcon }
 const PHASE: Record<Phase, string> = { working: 'Checking', preparing: 'Preparing preview', ready: 'Checked',
   waiting: 'Waiting for your confirmation', saving: 'Confirming and saving', saved: 'Saved', cancelled: 'Cancelled', error: 'Needs attention' }
 const EMPTY: Record<Service, string> = {
@@ -196,7 +197,7 @@ function Receipt({ card, service, url }: { card: WorkCard; service: Service; url
 }
 
 function LiveView({ service, frame, loading, url, revision }: { service: Service; frame: string; loading: boolean; url: string; revision: number }) {
-  if (service === 'notion') return <div className="lw-empty"><Notebook size={30} />
+  if (service === 'notion') return <div className="lw-empty"><NotionIcon size={30} />
     <p>Notion doesn’t allow its pages inside other sites (it sends X-Frame-Options: SAMEORIGIN), so there’s no live view. Koe’s view shows the record as Notion returned it.</p>
     {url && <a className="soft" href={url} target="_blank" rel="noreferrer"><ArrowSquareOut size={16} />Open in Notion</a>}</div>
   if (loading) return <div className="lw-empty"><p>Finding your {LABEL[service]}…</p></div>

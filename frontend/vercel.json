@@ -7,7 +7,7 @@
   "rewrites": [
     { "source": "/api/:path*", "destination": "https://koe-backend-dt5m.onrender.com/api/:path*" },
     { "source": "/auth/:path*", "destination": "https://koe-backend-dt5m.onrender.com/auth/:path*" },
-    { "source": "/(guide|privacy|terms)", "destination": "/index.html" }
+    { "source": "/(app|guide|privacy|terms)", "destination": "/index.html" }
   ],
   "headers": [
     { "source": "/(api|auth)/(.*)", "headers": [{ "key": "x-vercel-enable-rewrite-caching", "value": "0" }] },

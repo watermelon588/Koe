@@ -1,0 +1,9 @@
+.brand-icon { display: inline-block; flex-shrink: 0; width: var(--brand-size, 24px); height: var(--brand-size, 24px); object-fit: contain; vertical-align: middle; }
+.brand-icon--github, .brand-icon--notion { border-radius: 4px; background: #fff; }
+.app .brand-icon--spotify { content: url('/brands/spotify-white.svg'); }
+:root[data-theme='light'] .app .brand-icon--spotify { content: url('/brands/spotify-black.svg'); }
+.music-art.lg.blank .brand-icon { width: 44px; height: 44px; }
+.dash-tabs button[data-busy] .brand-icon, .dash-tile header .brand-icon[data-busy] { animation: pulse .7s ease-in-out infinite alternate; }
+@media (prefers-reduced-motion: reduce) {
+  .dash-tabs button[data-busy] .brand-icon, .dash-tile header .brand-icon[data-busy] { animation: none; }
+}

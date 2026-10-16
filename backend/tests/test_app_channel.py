@@ -70,7 +70,7 @@ def test_an_empty_message_is_refused(client):
 
 
 def test_a_proposal_is_resolved_by_its_confirm_button(client, monkeypatch):
-    fake_agent(monkeypatch, {"text": "Book 7 to 7:30 with Rahul?", "pending_action": {"id": "act-1", "summary": "x"}})
+    fake_agent(monkeypatch, {"text": "Book 7 to 7:30 with Rahul?", "pending_action": {"id": "act-1", "summary": "x", "expires_ts": "2099-01-01T00:00:00Z"}})
     koe = client.post("/api/app/messages", json={"text": "book rahul at 7"}, headers=AUTH).json()["messages"][1]
     assert koe["action_id"] == "act-1" and koe["action_status"] is None
     decided = []
@@ -209,7 +209,7 @@ def proposing_agent(monkeypatch):
         seen.append(("calendar_list", {"date": "2026-10-13"}, {"date": "2026-10-13", "timezone": "Asia/Kolkata", "events": []}))
         seen.append(("github_my_prs", {}, {"prs": []}))  # not a workspace tool: never shown
         seen.append(("sheets_log_hours", ROW, {"pending_action": {"id": "act-9"}}))
-        context.pending = {"id": "act-9", "tool": "sheets_log_hours", "args_json": ROW, "summary": "Log 2.5 hours"}
+        context.pending = {"id": "act-9", "tool": "sheets_log_hours", "args_json": ROW, "summary": "Log 2.5 hours", "expires_ts": "2099-01-01T00:00:00Z"}
         return {"text": "Log 2.5 hours for Client A?", "pending_action": context.pending}
     monkeypatch.setattr(app_channel.text_agent, "chat", chat)
 
@@ -227,6 +227,7 @@ def test_a_turn_returns_workspace_events_with_the_exact_pending_row_and_no_secre
     assert pending["details"] == {"date": "2026-10-13", "client": "Client A", "hours": 2.5, "note": "Pairing", "sheet_name": "Hours"}
     assert pending["url"] == "https://docs.google.com/spreadsheets/d/sheet-1/edit"
     assert "private-token" not in str(body)
+    assert body['messages'][1]['approval']['display']['title'] == 'Log 2.5 hours · Client A'
     # Reopening the app shows the open proposal again; a follow-up poll does not re-open the panel.
     assert client.get("/api/app/messages", headers=AUTH).json()["workspace"][0]["type"] == "approval_pending"
     assert client.get("/api/app/messages?after=1", headers=AUTH).json()["workspace"] == []

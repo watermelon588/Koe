@@ -2,7 +2,7 @@
   "name": "Koe",
   "short_name": "Koe",
   "description": "Your voice assistant, with Kami.",
-  "start_url": "/",
+  "start_url": "/app",
   "scope": "/",
   "display": "standalone",
   "background_color": "#0e0f11",

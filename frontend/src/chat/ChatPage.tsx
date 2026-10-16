@@ -8,6 +8,9 @@ import { resendPush } from '../pwa'
 import { LiveWorkspace } from '../workspace/LiveWorkspace'
 import { emptyWork, reduceWork, SERVICES, type WorkEvent } from '../workspace/workState'
 import './chat.css'
+import { ApprovalPreview } from '../approvals/ApprovalPreview'
+import { approvalMessageText } from '../approvals/presentation'
+import { clockTime } from '../dashboard/state'
 
 // The Koe app's home on the phone (SPEC §14): a WhatsApp-style chat with Koe. Text or voice notes; Koe answers a
 // voice note with a voice note; proposals come with Confirm / Cancel; GitHub alerts land here too.
@@ -212,7 +215,8 @@ export function ChatPage({ model }: { model: MascotId }) {
 }
 
 function Bubble({ m, busy, onDecide }: { m: Message; busy: boolean; onDecide: (approve: boolean) => void }) {
-  const time = new Date(m.ts).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
+  const time = clockTime(m.ts)
+  const text = approvalMessageText(m.text, m.approval)
   if (m.role === 'alert') {
     return <li className="msg alert"><BellRinging /><p>{m.text}</p><time>{time}</time></li>
   }
@@ -220,7 +224,8 @@ function Bubble({ m, busy, onDecide }: { m: Message; busy: boolean; onDecide: (a
   return (
     <li className={`msg ${m.role}`} data-sending={m.sending || undefined}>
       {m.voice && m.voice !== 'local' && <VoiceNote name={m.voice} />}
-      {m.text && <p className={m.voice ? 'transcript' : undefined}>{m.text}</p>}
+      {text && <p className={m.voice ? 'transcript' : undefined}>{text}</p>}
+      {m.action_id && m.approval && <ApprovalPreview action={m.approval} />}
       {m.action_id && (m.action_status
         ? <p className="decided">{decided}</p>
         : <div className="pair">

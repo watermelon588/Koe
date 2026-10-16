@@ -36,3 +36,4 @@ frontend/assets/mascot/*.vrm
 # Koe app runtime data: chat history, voice notes, VAPID keys
 backend/data/
 .claude/worktrees/
+graphify-out/cache/

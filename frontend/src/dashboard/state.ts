@@ -1,9 +1,11 @@
-export type Approval = { id: string; summary: string; expires_ts: string; session_id?: string; channel?: string }
+import { providerLink, type ActionDisplay } from '../approvals/presentation.ts'
+export type Approval = { id: string; summary: string; display?: ActionDisplay; expires_ts: string; session_id?: string; channel?: string }
 export type CalendarEvent = { id: string; title: string; start: { dateTime?: string; date?: string }; end: { dateTime?: string; date?: string }; url?: string }
 export type PullRequest = { repo: string; number: number; title: string; url?: string; ci?: string; review?: string; conflicts?: string; draft?: boolean }
 export type Panel = { ts: string; date: string; timezone: string; result: { error?: { message: string }; events?: CalendarEvent[]; prs?: PullRequest[] } }
 export type Activity = { id: string; ts: string; type?: string; kind?: string; summary?: string; channel?: string; session_id?: string;
-  name?: string; phase?: string; ok?: boolean; ms?: number; action?: Approval; result?: { status?: string; error?: { message: string } } & Record<string, unknown> }
+  name?: string; phase?: string; ok?: boolean; ms?: number; action?: Approval; display?: ActionDisplay; audit_summary?: string; url?: string;
+  result?: { status?: string; summary?: string; display?: ActionDisplay; url?: string; error?: { message: string } } & Record<string, unknown> }
 export type Metric = { id: string; ts: string; ms: number }
 export type DashboardState = { panels: Record<string, Panel>; activity: Activity[]; pending: Approval[]; latencies: Metric[]; storage: string }
 export const emptyState: DashboardState = { panels: {}, activity: [], pending: [], latencies: [], storage: '' }
@@ -33,7 +35,17 @@ export function latencyStats(metrics: Metric[]) {
 }
 
 export function activityText(item: Activity): string {
-  if (item.summary) return item.summary
+  const display = item.display ?? item.result?.display ?? item.action?.display
+  const error = item.result?.error?.message
+  if (error) return error
+  if (display) {
+    const status = item.type === 'approval_pending' ? 'proposed' : item.type === 'approval_progress' ? 'approved'
+      : item.result?.status ?? (item.kind === 'approval' ? item.summary : '')
+    const label = ({ proposed: 'Proposed', approved: 'Approved', executed: 'Executed', rejected: 'Cancelled',
+      expired: 'Expired', failed: 'Failed' } as Record<string, string>)[status ?? ''] ?? 'Review'
+    return `${label} · ${display.title}`
+  }
+  if (item.summary) return item.summary.replace(/https:\/\/[^\s]+/g, '').replaceAll('_', ' ').replace(/\s+/g, ' ').trim().slice(0, 160)
   if (item.type === 'approval_pending') return `Proposed: ${item.action?.summary ?? 'Requested change'}`
   if (item.type === 'approval_result') return item.result?.error?.message ?? `Action ${item.result?.status ?? 'resolved'}`
   const name = item.name?.replaceAll('_', ' ') ?? 'Tool'
@@ -41,7 +53,29 @@ export function activityText(item: Activity): string {
 }
 
 export const clockTime = (value: string, timezone?: string) =>
-  new Date(value).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', timeZone: timezone })
+  new Date(value).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: timezone ?? 'Asia/Kolkata' })
+
+export function activityLink(item: Activity): string {
+  const direct = item.url ?? item.result?.url ?? item.display?.url ?? item.result?.display?.url ?? item.action?.display?.url
+  const legacy = (item.summary ?? item.action?.summary ?? '').match(/https:\/\/[^\s]+/)?.[0]?.replace(/[.,;)]+$/, '')
+  return providerLink(direct) || providerLink(legacy)
+}
+
+export function activityAudit(item: Activity): string {
+  return item.audit_summary ?? item.action?.summary ?? item.result?.summary ?? item.summary ?? ''
+}
+
+export function activityDay(value: string, now = new Date()): string {
+  const date = new Date(value)
+  if (!Number.isFinite(date.getTime())) return 'Earlier'
+  const key = (d: Date) => d.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' })
+  const today = key(now)
+  const yesterday = new Date(`${today}T12:00:00Z`)
+  yesterday.setUTCDate(yesterday.getUTCDate() - 1)
+  if (key(date) === today) return 'Today'
+  if (key(date) === yesterday.toISOString().slice(0, 10)) return 'Yesterday'
+  return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' })
+}
 
 // A tool is running right now (its start arrived without an end yet).
 export const isBusy = (data: DashboardState, name: string) => data.activity.find((item) => item.name === name)?.phase === 'start'

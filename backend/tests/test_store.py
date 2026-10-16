@@ -94,8 +94,33 @@ def test_dashboard_reads_are_owner_scoped_and_omit_private_execution_payloads(mo
     assert rows == {"activity": [{"id": "activity", "ts": "2026-10-13T00:00:00Z"}], "pending": []}
     for query, params in calls:
         assert params["owner"] == settings.koe_owner_id
-        assert "args_json" not in query and "payload_json" not in query
         assert "LIMIT 50" in query
+    assert 'p.owner_id=a.owner_id' in calls[0][0]
+
+
+def test_dashboard_hydrates_previews_without_returning_private_columns(monkeypatch):
+    row = {'id': 'a', 'summary': 'executed', '__tool': 'sheets_add_columns',
+           '__args': {'columns': ['Billable'], 'spreadsheet_id': 'sheet', 'secret': 'private'},
+           '__summary': 'Full authoritative audit', '__url': 'https://docs.google.com/spreadsheets/d/sheet/edit',
+           '__error': 'Sheet changed after the preview'}
+    fake_database(monkeypatch, [[row], []])
+    public = asyncio.run(store.dashboard_read())['activity'][0]
+    assert public['display']['title'] == 'Add column Billable'
+    assert public['audit_summary'] == 'Full authoritative audit'
+    assert public['url'].startswith('https://docs.google.com/')
+    assert public['result']['error']['message'] == 'Sheet changed after the preview'
+    assert 'private' not in str(public) and not any(k.startswith('__') for k in public)
+
+
+def test_chat_preview_lookup_is_owner_scoped_bounded_and_display_only(monkeypatch):
+    calls = fake_database(monkeypatch, [[{'id': 'a', 'summary': 'Exact audit', 'expires_ts': '2099',
+        '__tool': 'github_comment', '__args': {'repo': 'me/app', 'number': 42, 'body': 'Test', 'token': 'private'}}]])
+    previews = asyncio.run(store.action_previews(['a', 'a']))
+    assert previews['a']['display']['title'] == 'Comment on me/app #42'
+    assert 'private' not in str(previews)
+    query, params = calls[0]
+    assert 'owner_id=%(owner)s' in query and 'LIMIT 200' in query
+    assert params['owner'] == settings.koe_owner_id and params['ids'] == ['a']
 
 
 def test_proposal_json_is_bound_and_unrecognized_function_is_refused(monkeypatch):

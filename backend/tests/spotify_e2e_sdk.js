@@ -11,7 +11,7 @@
     }
     async connect() {
       await new Promise(resolve => this.options.getOAuthToken(resolve))
-      await this.action('connect'); this.listeners.ready?.({device_id:this.id})
+      await this.action('connect'); await this.action('volume', this.options.volume); this.listeners.ready?.({device_id:this.id})
       this.timer = setInterval(async () => this.listeners.player_state_changed?.(await this.getCurrentState()), 200)
       return true
     }

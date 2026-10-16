@@ -59,11 +59,12 @@ class Settings(BaseSettings):
     # GitHub connection (connections.py): an OAuth App with callback <site>/auth/github/callback. Empty = off.
     github_client_id: str = ""
     github_client_secret: str = Field(default="", repr=False)
-    # Spotify is manual-only and disabled until setup + combined-app policy acceptance.
+    # Live music and separately approved voice control are opt-in deployment gates.
     spotify_client_id: str = ""
     spotify_client_secret: str = Field(default="", repr=False)
     spotify_redirect_uri: str = ""
     spotify_enabled: bool = False
+    spotify_voice_approved: bool = False
     koe_local_url: str = "http://localhost:5173"
 
 

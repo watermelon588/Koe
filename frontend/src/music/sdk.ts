@@ -40,7 +40,7 @@ export function loadSpotifySDK(): Promise<SDKConstructor> {
   return loading
 }
 
-type Options = { connectionId: string; tracks: () => Track[]; request: MusicRequest; intents: MusicIntents }
+type Options = { connectionId: string; tracks: () => Track[]; request: MusicRequest; intents: MusicIntents; volume?: number }
 const bounded = <T>(promise: Promise<T>, ms = 8000): Promise<T> => new Promise((resolve, reject) => {
   const timer = setTimeout(() => reject(new MusicFailure('spotify_device_unavailable', 'Spotify’s player did not respond.')), ms)
   promise.then(value => { clearTimeout(timer); resolve(value) }, error => { clearTimeout(timer); reject(error) })
@@ -50,7 +50,7 @@ const bounded = <T>(promise: Promise<T>, ms = 8000): Promise<T> => new Promise((
 export function spotifyPlayer(Constructor: SDKConstructor, options: Options): Player {
   const { connectionId, request, intents } = options
   const evidence = audioEvidence()
-  let state: PlayState = { ...IDLE }
+  let state: PlayState = { ...IDLE, volume: options.volume ?? .6 }
   let device = ''
   let disposed = false
   let connected = false
@@ -59,11 +59,11 @@ export function spotifyPlayer(Constructor: SDKConstructor, options: Options): Pl
   let tail: Promise<unknown> = Promise.resolve()
   let localInFlight = 0
   let resolveReady: (id: string) => void = () => {}
-  const ready = new Promise<string>(resolve => { resolveReady = resolve })
+  let ready = new Promise<string>(resolve => { resolveReady = resolve })
   const listeners = new Set<() => void>()
   const update = (patch: Partial<PlayState>) => { if (!disposed) { state = { ...state, ...patch }; listeners.forEach(fn => fn()) } }
   const fail = (code: string, message: string) => { update({ status: played ? 'unknown' : 'idle', error: message }); return new MusicFailure(code, message) }
-  const raw = new Constructor({ name: 'Koe Web Player', volume: .6, getOAuthToken: callback => {
+  const raw = new Constructor({ name: 'Koe Web Player', volume: options.volume ?? .6, getOAuthToken: callback => {
     void request('/api/music/sdk-token', 'POST', { connection_id: connectionId }).then(reply => {
       const body = reply.body as { access_token?: string; connection_id?: string; error?: { code?: string } }
       if (!disposed && reply.http === 200 && body.connection_id === connectionId && typeof body.access_token === 'string') callback(body.access_token)
@@ -80,7 +80,11 @@ export function spotifyPlayer(Constructor: SDKConstructor, options: Options): Pl
     update({ status: seen.paused ? 'paused' : 'playing', index, position: seen.position, at: performance.now(), error: '' })
   }
   raw.addListener('ready', info => { if (!disposed) { device = info.device_id; resolveReady(device) } })
-  raw.addListener('not_ready', () => { device = ''; fail('spotify_device_unavailable', 'This browser’s Spotify player disconnected.') })
+  raw.addListener('not_ready', () => {
+    device = ''; connected = false
+    ready = new Promise<string>(resolve => { resolveReady = resolve })
+    fail('spotify_device_unavailable', 'This browser’s Spotify player disconnected.')
+  })
   raw.addListener('player_state_changed', observe)
   raw.addListener('account_error', () => fail('spotify_premium_required', 'Spotify Premium is required for this player.'))
   raw.addListener('authentication_error', () => fail('spotify_reconnect_required', 'Reconnect Spotify to renew access.'))
@@ -95,7 +99,7 @@ export function spotifyPlayer(Constructor: SDKConstructor, options: Options): Pl
   const refresh = async () => { const seen = await bounded(raw.getCurrentState()); observe(seen); return seen }
   const allowed = (action: string) => { if (disallows[action]) throw new MusicFailure('spotify_unsupported_operation', 'Spotify does not allow this control right now.') }
   const local = (action: string, run: () => Promise<void>) => queue(async () => {
-    allowed(action); evidence?.mark(connectionId); evidence?.local(connectionId, true)
+    allowed(action); evidence?.mark(connectionId); evidence?.local(connectionId, true); played = true
     localInFlight++
     const sent = Promise.resolve().then(run).finally(() => { localInFlight--; if (!localInFlight) evidence?.local(connectionId, false) })
     await bounded(sent); await refresh()
@@ -117,19 +121,28 @@ export function spotifyPlayer(Constructor: SDKConstructor, options: Options): Pl
     update({ status: 'unknown', error: 'Could not confirm music stopped. Try pausing again.' })
     return 'unknown'
   })
+  const prepare = async () => {
+    if (!connected) { connected = await bounded(raw.connect()); if (!connected) throw fail('spotify_device_unavailable', 'Spotify’s player did not connect. Press Play to retry.') }
+    const id = device || await bounded(ready)
+    const registered = await request('/api/music/device', 'POST', { connection_id: connectionId, device_id: id })
+    if (registered.http !== 200) {
+      const error = (registered.body as { error?: { code?: string; message?: string } })?.error
+      throw fail(error?.code ?? 'spotify_device_unavailable', error?.message ?? 'Spotify has not made this browser available. No playback was requested; press Play to retry.')
+    }
+    return id
+  }
   return {
-    mock: false, state: () => state, playing: () => !played ? false : state.status === 'unknown' || state.status === 'starting' ? null : state.status === 'playing',
+    mock: false, state: () => state, playing: () => !played ? false : localInFlight || state.status === 'unknown' || state.status === 'starting' ? null : state.status === 'playing',
     subscribe: fn => { listeners.add(fn); return () => { listeners.delete(fn) } },
     activate: () => { void raw.activateElement().catch(() => fail('spotify_device_unavailable', 'Press Play again to allow audio.')) },
-    async play(index) {
+    prepare: () => queue(async () => { await prepare() }),
+    async play(index, snapshot) {
       return queue(async () => {
         if (!options.tracks()[index]?.playable) throw new MusicFailure('spotify_invalid_request')
-        played = true; update({ status: 'starting', index, error: '' })
-        if (!connected) { connected = true; if (!await bounded(raw.connect())) throw fail('spotify_device_unavailable', 'Spotify’s player did not connect.') }
-        const id = device || await bounded(ready)
-        const registered = await request('/api/music/device', 'POST', { connection_id: connectionId, device_id: id })
-        if (registered.http !== 200) throw fail('spotify_device_unavailable', 'This browser’s Spotify player is unavailable.')
+        update({ status: 'starting', index, error: '' })
+        const id = await prepare()
         evidence?.mark(connectionId)
+        played = true // Only sent transfer/play can leave uncertain playback behind.
         await intents.write('/api/music/playback', 'POST', { device_id: id, operation: 'transfer' })
         // Spotify transfer is asynchronous; confirm target before the start request.
         const until = performance.now() + 4000
@@ -140,9 +153,9 @@ export function spotifyPlayer(Constructor: SDKConstructor, options: Options): Pl
           await new Promise(resolve => setTimeout(resolve, 100))
         } while (performance.now() < until)
         if (!targeted) throw fail('spotify_device_unavailable', 'Spotify has not confirmed this browser as the active player.')
-        await intents.write('/api/music/playback', 'POST', { device_id: id, operation: 'play', position: index })
+        await intents.write('/api/music/playback', 'POST', { device_id: id, operation: 'play', position: index, ...(snapshot ? { snapshot_id: snapshot } : {}) })
         await refresh()
-      }).catch(error => { update({ status: 'unknown', error: error instanceof Error ? error.message : 'Spotify could not start.' }); throw error })
+      }).catch(error => { update({ status: played ? 'unknown' : 'idle', error: error instanceof Error ? error.message : 'Spotify could not start.' }); throw error })
     },
     resume: () => local('resuming', () => raw.resume()), pause,
     next: () => local('skipping_next', () => raw.nextTrack()), previous: () => local('skipping_prev', () => raw.previousTrack()),

@@ -1,9 +1,10 @@
-import type { ReactNode } from 'react'
-import { ArrowClockwise, ArrowRight, CalendarBlank, ChartBar, Eye, GitPullRequest, Pulse, SealCheck, type Icon } from '@phosphor-icons/react'
+import type { ComponentType, ReactNode } from 'react'
+import { ArrowClockwise, ArrowRight, Pulse, SealCheck } from '@phosphor-icons/react'
 import { ActivityFeed, ApprovalList, GitHubStats, PRList, TodayList } from './Dashboard'
 import { clockTime, isBusy, type Approval, type DashboardState } from './state'
 import { usePending } from './useDashboard'
 import './dashboard.css'
+import { CalendarIcon, GitHubIcon } from '../components/BrandIcon'
 
 type Props = {
   data: DashboardState; connected: boolean; status: string; refresh: () => void
@@ -35,20 +36,20 @@ export function DashboardPage({ data, connected, status, refresh, currentApprova
       {!connected && !children && <p className="note dash-page-status">{status}</p>}
 
       <div className="dash-grid">
-        <Tile area="today" icon={CalendarBlank} title="Today" count={calendar?.result.events?.length} busy={isBusy(data, 'calendar_list')}
+        <Tile area="today" icon={CalendarIcon} title="Today" count={calendar?.result.events?.length} busy={isBusy(data, 'calendar_list')}
           meta={calendar ? `Updated ${clockTime(calendar.ts)}` : undefined}>
           <TodayList calendar={calendar} />
         </Tile>
         <Tile area="approvals" icon={SealCheck} title="Approvals" count={pending.length} attention={pending.length > 0}>
           <ApprovalList pending={pending} currentApproval={currentApproval} decide={decide} />
         </Tile>
-        <Tile area="reviews" icon={Eye} title="Waiting for your review" count={reviews?.result.prs?.length} busy={isBusy(data, 'github_review_queue')}>
+        <Tile area="reviews" icon={GitHubIcon} title="Waiting for your review" count={reviews?.result.prs?.length} busy={isBusy(data, 'github_review_queue')}>
           <PRList panel={reviews} label="No reviews waiting on you." />
         </Tile>
-        <Tile area="prs" icon={GitPullRequest} title="Your pull requests" count={prs?.result.prs?.length} busy={isBusy(data, 'github_my_prs')}>
+        <Tile area="prs" icon={GitHubIcon} title="Your pull requests" count={prs?.result.prs?.length} busy={isBusy(data, 'github_my_prs')}>
           <PRList panel={prs} label="No open pull requests." />
         </Tile>
-        <Tile area="github" icon={ChartBar} title="GitHub stats" busy={isBusy(data, 'github_activity') || isBusy(data, 'github_contributions')}>
+        <Tile area="github" icon={GitHubIcon} title="GitHub stats" busy={isBusy(data, 'github_activity') || isBusy(data, 'github_contributions')}>
           <GitHubStats data={data} />
         </Tile>
         <Tile area="activity" icon={Pulse} title="Activity">
@@ -60,7 +61,7 @@ export function DashboardPage({ data, connected, status, refresh, currentApprova
 }
 
 function Tile({ area, icon: TileIcon, title, count, busy, meta, attention, children }: {
-  area: string; icon: Icon; title: string; count?: number; busy?: boolean; meta?: string; attention?: boolean; children: ReactNode
+  area: string; icon: ComponentType<{ size?: number }>; title: string; count?: number; busy?: boolean; meta?: string; attention?: boolean; children: ReactNode
 }) {
   return (
     <section className="dash-tile" style={{ gridArea: area }} data-area={area} data-attention={attention || undefined} aria-labelledby={`tile-${area}`}>
@@ -87,7 +88,7 @@ export function TodaySummary({ data, connected }: { data: DashboardState; connec
   return (
     <section className="today" aria-labelledby="today-title">
       <header>
-        <h2 id="today-title">Today</h2>
+        <CalendarIcon size={18} /><h2 id="today-title">Today</h2>
         <span className="live-dot" data-on={connected} aria-hidden="true" />
         <span className="visually-hidden">{connected ? 'Live' : 'Offline'}</span>
         <a className="today-link" href="#dashboard">Open dashboard<ArrowRight size={14} /></a>

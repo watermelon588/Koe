@@ -7,6 +7,7 @@ import os
 import shutil
 import socket
 import subprocess
+from uuid import uuid4
 from pathlib import Path
 
 import psycopg
@@ -14,6 +15,31 @@ import pytest
 
 from koe import connections, db, spotify_service as sp, spotify_store as journal, store
 from koe.config import settings
+
+
+def test_saved_approval_display_queries_hydrate_without_private_args(postgres):
+    with psycopg.connect(**postgres, autocommit=True) as con:
+        for migration in sorted((Path(__file__).resolve().parents[1] / 'migrations').glob('*.sql')):
+            con.execute(migration.read_text(encoding='utf-8'), prepare=False)
+
+    async def scenario():
+        session = str(uuid4())
+        action = await store.propose(session, 'app', 'sheets_add_columns', {
+            'columns': ['Billable'], 'sheet_name': 'Timesheet', 'spreadsheet_id': 'sheet',
+            'private_guard': 'must-stay-server-side'}, 'Complete exact audit')
+        saved = await store.dashboard_read()
+        assert saved['pending'][0]['display']['title'] == 'Add column Billable'
+        await store.claim(action['id'], session, False)
+        history = await store.dashboard_read()
+        assert history['pending'] == []
+        assert history['activity'][0]['summary'] == 'rejected'
+        assert history['activity'][0]['display']['title'] == 'Add column Billable'
+        assert history['activity'][0]['audit_summary'] == 'Complete exact audit'
+        previews = await store.action_previews([action['id']])
+        assert previews[action['id']]['display']['title'] == 'Add column Billable'
+        assert 'must-stay-server-side' not in str([saved, history, previews])
+
+    asyncio.run(scenario())
 
 
 @pytest.fixture

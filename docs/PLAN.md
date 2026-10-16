@@ -141,3 +141,29 @@ Goal: an invited friend goes from link to working assistant without touching cod
 
 ## Buffer and v2 ideas (not this month)
 Gmail triage · team mode · WebRTC/Pipecat transport if latency demands it · voice-note replies on WhatsApp · weekly report · Linear/Jira.
+
+## End-to-end findings repairs (2026-10-16)
+
+Source: [FINDINGS_2026-10-16.md](FINDINGS_2026-10-16.md). Keep the existing slice order and verify each before moving on.
+
+- [x] S1: natural voice yes/no, presentation timing, exact action binding and regression tests. 538 backend tests verified (including the PostgreSQL rerun with an ASCII temp path). Real-call acceptance and deployment remain outstanding.
+- [x] S2: readable approval cards and Activity (U1–U3). Shared call/dashboard/chat/Notion previews, complete audit disclosures, reload hydration, safe Open links, day headings and 24-hour timestamps verified with backend/frontend tests and a synthetic Edge fixture.
+- [ ] S3: path URLs with legacy hash compatibility (U8).
+- [ ] S4: scrolling and styled native selects (U4–U7).
+- [ ] S5: honest connection labels, dashboard empty states and recent decisions.
+- [ ] S6–S9: Sheets Start/End, Owner page, live Spotify setup and optional Notion OAuth; resolve the product/account questions recorded in the findings before dependent work.
+
+### Original logos and approved Spotify transport (2026-10-16)
+
+- [x] Replace provider symbols with original shared logo assets throughout the restored app; retain the original design and Studio landing page.
+- [x] Implement a default-off, owner/session/playlist-granted voice transport service and separate Music window; verify queued playback only after PCM drain, voice AudioContext close and audio ownership release.
+- [x] With explicit owner permission, apply only migration 007 to Neon and enable Spotify/approved voice in local `.env`; verify credentials, schema, RLS and provider constraint. Migration 006 already exists.
+- [x] Review and build: 564 backend + 60 frontend tests; 24 pipeline browser scenarios; 9 original-app and 15 retained-homepage checks; build passed. See latest BUILD_LOG.
+- [ ] Owner Spotify consent and real browser audio/microphone/voice-command acceptance on laptop and phone.
+- [ ] Deploy the reviewed working tree and hosted callback/flag configuration; current work is local. Read-only production check confirms baseline Music/People are already deployed, resolving the initial stale-backend finding.
+
+S6 Sheets, S7 Owner requests and S9 Notion OAuth remain separate work. [Current review](REVIEW_2026-10-16.md) distinguishes completed fixes from open product/acceptance tasks.
+
+### Music feedback recorded — do not build yet (2026-10-16)
+
+The user explicitly requests requirements capture only and will say when to begin. [Plan](../tasks/plan.md) and [pending checklist](../tasks/todo.md) record M1–M7: same-page compact conversational assistant/Call, reliable control readiness/recovery, artist/title selection from the allowed playlist, absent-song add suggestions, direct one-click Add with in-place feedback, search thumbnails, and a professional Music-only composition/scrolling/GSAP pass consistent with current Koe design. No code, build, service restart, provider action or deployment is authorized by this planning request.

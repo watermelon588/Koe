@@ -6,11 +6,16 @@ os.environ.setdefault("GEMINI_API_KEY", "test")
 import pytest
 
 from koe.config import settings
-from koe import agent, app_channel, connections, db, events, gemini, store, usage, whatsapp
+from koe import agent, app_channel, connections, db, events, gemini, store, usage, whatsapp, music_voice, auth
 
 
 @pytest.fixture(autouse=True)
 def isolate_live_storage(monkeypatch, tmp_path):
+    monkeypatch.setattr(settings, 'spotify_voice_approved', False)
+    monkeypatch.setattr(music_voice, 'drivers', {})
+    monkeypatch.setattr(music_voice, 'tickets', {})
+    monkeypatch.setattr(music_voice, 'history', {})
+    monkeypatch.setattr(auth, '_ticket_sessions', {})
     monkeypatch.setattr(events, "_hubs", {})  # every person's live hub starts empty
     monkeypatch.setattr(settings, "database_url", "")
     monkeypatch.setattr(settings, "openrouter_api_key", "")

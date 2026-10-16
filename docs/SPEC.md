@@ -83,7 +83,18 @@ Earlier contract, still true inside the workspace:
 - During calls a Day/Chat switch keeps the dashboard accessible alongside the current call controls. The existing audio-driven mascot states remain on `/ws/call`; dashboard alerts can trigger a brief reaction only when idle.
 
 ## 3. Tools (the agent's whole surface: 13 tools)
+### Confirmation repair (2026-10-16, findings slice S1)
+- Recognize only complete, allowlisted affirmative/negative utterances of at most four words. Normalize case, whitespace, punctuation and curly apostrophes; support common English and Hindi responses. Conditional, mixed and embedded replies never authorize a write.
+- During a call, the exact proposal becomes eligible after its `approval_pending` card is sent. Bind a spoken utterance to the proposal visible when its first transcript chunk arrives; a response started before the card or for an earlier proposal cannot approve a later action. Wait for the complete input transcript (`finished`, with model `turn_complete` as fallback), never a partial “yes”.
+- Resolve through the existing conversation/action-ID gate and atomic store claim. Send the authoritative result to the model. If a completed response to a visible proposal is unclear, tell the model no approval was recorded and ask for a clear yes or the Confirm button; requested edits need clarification and their own proposal.
+- This slice changes no tools, credentials, database schema or hosting. Synthetic transport tests prove behavior; real microphone/transcription acceptance remains a separate check.
+
 All tools live in one registry and are shared by both channels. Each tool returns JSON. On failure it returns `{"error": {"code", "message", "hint"}}` instead of raising, so the model can recover.
+
+### Approval and Activity presentation (2026-10-16, findings slice S2)
+- Add an optional deterministic `display` block (`title`, up to four bounded plain-text `lines`, optional validated HTTPS provider `url`) to public proposals and approval outcomes. Derive it from the stored normalized action; it is presentation only and never execution input. Preserve the complete authoritative `summary` for audit/model use and a keyboard-accessible Details disclosure.
+- Reuse the preview on the call, dashboard, app chat and Notion approval card. Saved dashboard/chat proposals regain their previews from owner-scoped stored actions after reload; execution arguments and private payloads never leave the backend. Older responses without `display` remain reviewable via the existing full summary.
+- Activity shows concise operation/outcome text with an Open link, keeps errors visible, groups entries under Today/Yesterday/local dates, and formats timestamps as nonwrapping 24-hour time. No new dependency, migration, tool, external write or approval path.
 
 | # | Tool | Args | Returns | Write? |
 |---|---|---|---|---|
@@ -235,3 +246,58 @@ Calls, voice-note recording and stored replies share an audio coordinator. It dr
 No Spotify metadata, tokens or audio enters the agent, transcripts, tools, activity or AI providers. There are no spoken Spotify commands. The official Spotify app/web fallback always explains that Koe cannot see or pause external playback.
 
 Implemented and isolated-tested; **SPOTIFY_ENABLED defaults false**. Live acceptance still needs developer credentials/allowlist, exact callback origin, hosted migration and resolution of the combined manual-player/voice-app policy interpretation. See [setup and simulated preview](../backend/SPOTIFY_LOCAL_SETUP.md). Passing simulated browser tests does not claim real streaming or mobile-background acceptance.
+
+## 16. Public homepage and original provider artwork — 2026-10-16
+
+The public root `/` now introduces Koe before sign-in. Three user-requested variations share existing Geist typography and mascot assets: `?look=studio`, `?look=after-hours`, and `?look=field-notes`. The selector updates the URL and supports browser history. The product, original provider artwork, interactive illustrative workflows, truthful feature counts, planned integrations, companion previews, approvals/privacy, and FAQ are detailed in [HOMEPAGE.md](HOMEPAGE.md).
+
+The existing Engawa workspace and all real actions remain behind the sign-in gate at `/app`. Existing `/#home`, `/#settings`, and other application hash bookmarks continue to work. Installed-app startup and successful sign-in target `/app`. Existing public Guide, Privacy and Terms pages remain public. Static route rewrite configuration includes `/app`; no hosting deployment is part of this change.
+
+The homepage never reads accounts or calls provider APIs. Sample approvals only update local demo state. GitHub, Google Calendar, Notion and Sheets are implemented; Spotify is optional and setup-dependent. Google Docs and Drive are explicitly planned. Connection settings, Google sign-in, Spotify surfaces and the live workspace share locally stored original provider marks. GSAP transitions clean up and honor reduced motion. The existing VRM companion remains interactive.
+
+**Homepage artwork follow-up (2026-10-16):** The supplied transparent mascot PNGs now provide the initial hero and companion previews, with different poses per variation. The interactive VRM is an explicit Try in 3D option; Back to artwork disposes it. Existing in-app mascot and call behavior remain unchanged. See HOMEPAGE.md and BUILD_LOG.md for provenance and verification.
+
+**Final homepage selection (2026-10-16):** Studio is now the sole homepage. The design picker and alternate variations are removed. Only Kami, Mint and Kobashi appear in its companion gallery; the count and copy say three. Aoi remains available in the separate application catalog. Earlier variation query links resolve to Studio.
+
+## 17. Studio design principles throughout the application — 2026-10-16
+
+The user requests Studio's typography, spacing, composition and restrained surfaces throughout the frontend, with a small font-size increase. Preserve every existing dark/light background, surface, text and mascot accent token: this is a structural and typographic redesign, not a palette change. Use shared original provider logos wherever a service is represented, including navigation, dashboard, connection settings, page headings and live work views; action icons remain Phosphor.
+
+The selectable application and homepage companions are Kami, Mei and Kobashi. Mei replaces both displayed Miku and Mint names; retain her existing internal `miku` model/storage identifier to preserve saved choices, runtime artwork and exact accent colors. Remove Aoi from the catalog and selection UI; an old Aoi preference falls back to Kami. Do not delete the user's original model/source files.
+
+Home receives a contained companion scene and workspace summary; Dashboard, Chat, Notion, Music, Settings and Install share a coherent Studio layout, clear page headings, consistent panel shapes, more readable text and responsive navigation. Preserve existing authentication, calls, transcripts, approval gates, music/audio coordination, settings forms, API requests and keyboard behavior. No backend, dependency, account or deployment changes are required. Verification includes build/lint, preference regressions, existing frontend tests and isolated browser coverage of all major pages at desktop and mobile widths, including exact palette values.
+
+
+### 17.1 Preserve the open companion and unify interactions (2026-10-16)
+
+The companion on Home stands freely on the existing transparent viewport stage beside the greeting; remove the newly added enclosing scene card and redundant composition wrappers. Keep the original desk, camera placement, mobile stacking and full-figure call behavior. Settings previews also use an open transparent background. Keep the selected Studio homepage, exact existing app palettes, original service logos, Mei naming and three-companion catalog. Do not introduce a new visual direction.
+
+All equivalent controls share Geist typography, a 15px action / 13px compact control scale, 160ms state transitions, subtle color/opacity hover feedback, 0.97 press feedback, consistent keyboard focus and inert disabled states. No button lifts or decorative hover shadows. Selected rows, approval outlines and mascot selection rings remain meaningful state indicators. Floating utilities share one elevation token. Verify actual computed styles and interactions across all routes, themes and responsive layouts.
+
+
+### 17.2 Core application design rollback (2026-10-16)
+
+The user's latest instruction supersedes the app redesign and interaction/typography changes in sections 17 and 17.1. Restore the core application's pre-homepage-work design from the original repository source: original Engawa layout, typography sizes, Phosphor icons, hover/press/shadow rules, page composition and original companion catalog. Keep the selected Studio landing page exactly as it currently appears, including its supplied artwork, original provider logos and Kami/Mei/Kobashi marketing choices. Scope landing-page typography and interaction CSS so it cannot alter the core app. Keep routing necessary for the landing page and /app. Preserve unrelated pre-existing backend, approval presentation and audit work. Make no further design improvements until the user specifies them.
+
+
+### 17.3 Original provider logos only; separately approved voice/music control (2026-10-16)
+
+Keep the restored core application layout, fonts, colors, mascot catalog and interaction rules. Replace third-party service symbols with their original local brand artwork across navigation, dashboard, settings, music, Notion, workspace and provider links; do not redesign containers.
+
+Sign-in mascot styles apply only to the direct mascot image. The Google button's original mark stays 18px square with no mascot ring, clipping or inherited margins. Verify computed sizing and button fit at desktop/mobile widths in both themes; preserve the existing sign-in composition.
+
+Music settings transport/server failures must show a recoverable loading error with an explicit Retry button, not claim the player is unimplemented. Retrying reads must not repeat writes, launch Spotify consent or start playback. A 401 remains a sign-in action, and known disabled/missing configuration states remain distinct.
+
+A connected account with a saved playlist that becomes public, collaborative or no longer owned must remain connected. Clear the displayed stale playlist/tracks and return to eligible playlist selection with an explanation and existing preview-confirm private-playlist creation. Do not turn a playlist eligibility error into a network/sign-in error or change its privacy automatically.
+
+SDK connection/device registration is preparation, not sent playback. If preparation fails before any transfer/play/local resume, an otherwise clean player must remain idle and must not falsely block voice. Prior playback evidence, unresolved sent commands and actual observed playback still block until verified paused. Retry only read-only device discovery for bounded readiness propagation; never retry uncertain playback writes automatically. A failed SDK connect must be retryable on the next explicit Play.
+
+### 17.4 Music UX feedback — planned, not authorized to implement (2026-10-16)
+
+**Subsequent authorization:** Rohit has now instructed implementation, committing/pushing the complete reviewed working tree and verifying local/live compatibility. The earlier hold below is historical. Same-page compact Call reuses the conversational agent; a requested playback finishes speech and ends the call before music, with that transition visible. Artist/title queries are resolved outside the model against the granted playlist; no catalog data is fed into the model. Missing matches suggest a search/add opportunity without automatic writes. Direct manual Add is an explicit music-only approval and remains idempotent. Shared Neon schema and hosted callback/feature configuration must be checked independently of code deployment.
+
+The user explicitly says **do not build now**. Record the later target in [tasks/plan.md](../tasks/plan.md) and [tasks/todo.md](../tasks/todo.md): compact conversational assistant with Call directly on Music, no separate-window prerequisite, artist/random-artist and exact-song requests within the permitted playlist, a useful suggestion to add a missing song, real thumbnails in search, direct deliberate Add without a second dialog or oversized notification, reliable connection recovery, and a coherent Music-only visual/scrolling/GSAP treatment that preserves current Koe design principles. The assistant is a small instance, not a full-body scene. This changes the future desired Music experience, including its Add interaction; it does not remove other approval rules or authorize implementation, metadata-policy assumptions, mixed audio, account actions or deployment. Await an explicit start instruction.
+
+The user explicitly confirms written Spotify approval for voice control and requests separate voice and music entities. Implement a separately gated music-control service with an owner-session-bound player connection and an explicit per-playlist user grant. Only play/resume, pause, bounded next/previous and volume commands are allowed; no voice playlist edits, Spotify search, catalog metadata, credentials or audio enter model context. The music tool is offered only to live web voice when the deployment flag records policy approval. Default is disabled. A model cannot grant itself permission.
+
+Music remains paused while voice owns audio. A requested play during a call is acknowledged as queued, then the call ends after its response audio drains, releases audio ownership, and the explicitly requested music starts. No unrequested automatic resume, audio extraction, overlay or false success. Browser autoplay restrictions, unavailable service/player, stale/revoked grants, duplicate commands and uncertain/disconnected outcomes must be reported honestly. The restored design changes only by the necessary original-logo replacements and an explicit voice-permission control using existing component styles. Hosted migrations, account consent and real streaming acceptance are separate from isolated end-to-end tests.

@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import { spotifyPlayer } from '../src/music/sdk.ts'
 import { MusicIntents } from '../src/music/intents.ts'
 
-function setup({ unknown = false, nullState = false, delayedResume = false } = {}) {
+function setup({ unknown = false, nullState = false, delayedResume = false, registrationDenied = false, registrationDeniedAfterPlay = false, firstConnectFails = false } = {}) {
   const events = {}; const trace = []; let playing = false
   let settleResume
   const resumeWait = new Promise(resolve => { settleResume = resolve })
@@ -11,7 +11,7 @@ function setup({ unknown = false, nullState = false, delayedResume = false } = {
     constructor() { trace.push('created') }
     addListener(name, fn) { events[name] = fn; return true }
     removeListener(name) { delete events[name]; return true }
-    async connect() { trace.push('connect'); events.ready({ device_id: 'browser' }); return true }
+    async connect() { trace.push('connect'); if (firstConnectFails && trace.filter(value => value === 'connect').length === 1) return false; events.ready({ device_id: 'browser' }); return true }
     disconnect() { trace.push('disconnect') }
     async activateElement() { trace.push('activate') }
     async getCurrentState() { return nullState ? null : { paused: !playing, position: 0, duration: 1000, disallows: {}, track_window: { current_track: { uri: 'spotify:track:t' } } } }
@@ -21,6 +21,7 @@ function setup({ unknown = false, nullState = false, delayedResume = false } = {
   }
   const memory = new Map(); const saved = { getItem: k => memory.get(k) ?? null, setItem: (k, v) => memory.set(k, v), removeItem: k => memory.delete(k) }
   const request = async (_path, method, body) => {
+    if (_path === '/api/music/device' && (registrationDenied || registrationDeniedAfterPlay && trace.includes('play'))) return { http: 409, body: { error: { code: 'spotify_device_unavailable' } } }
     if (body?.operation) { trace.push(body.operation); if (body.operation === 'play') playing = true; return { http: unknown ? 202 : 200, body: { state: unknown ? 'outcome_unknown' : 'confirmed', result: { accepted: true } } } }
     if (_path.includes('/mutations/')) return { http: 202, body: { state: 'outcome_unknown' } }
     return { http: 200, body: method === 'POST' ? { device_id: 'browser' } : { device_id: 'browser', state: 'observed' } }
@@ -28,6 +29,42 @@ function setup({ unknown = false, nullState = false, delayedResume = false } = {
   const intents = new MusicIntents('g', request, saved)
   return { player: spotifyPlayer(Fake, { connectionId: 'g', tracks: () => [{ uri: 'spotify:track:t', playable: true }], request, intents }), trace, events, settleResume }
 }
+test('device registration rejection before any sent playback remains idle and does not block voice', async () => {
+  const { player, trace } = setup({ registrationDenied: true, nullState: true })
+  await assert.rejects(player.play(0))
+  assert.equal(player.state().status, 'idle')
+  assert.equal(player.playing(), false)
+  assert.equal(await player.pause(), 'paused')
+  assert.equal(trace.includes('transfer'), false)
+  assert.equal(trace.includes('play'), false)
+  player.dispose()
+})
+test('a failed SDK connection can reconnect on the next explicit play', async () => {
+  const { player, trace } = setup({ firstConnectFails: true })
+  await assert.rejects(player.play(0))
+  await player.play(0)
+  assert.equal(trace.filter(value => value === 'connect').length, 2)
+  assert.equal(trace.filter(value => value === 'play').length, 1)
+  player.dispose()
+})
+test('registration failure after actual playback preserves the voice barrier until verified pause', async () => {
+  const { player } = setup({ registrationDeniedAfterPlay: true })
+  await player.play(0)
+  await assert.rejects(player.play(0))
+  assert.equal(player.state().status, 'unknown')
+  assert.equal(player.playing(), null)
+  assert.equal(await player.pause(), 'paused')
+  player.dispose()
+})
+test('SDK not_ready invalidates readiness and reconnects on explicit play', async () => {
+  const { player, events, trace } = setup()
+  await player.play(0)
+  await player.pause()
+  events.not_ready({ device_id: 'browser' })
+  await player.play(0)
+  assert.equal(trace.filter(value => value === 'connect').length, 2)
+  player.dispose()
+})
 test('SDK is inert until explicit playback; activate stays synchronous and pause follows every sent command', async () => {
   const { player, trace } = setup()
   assert.deepEqual(trace, ['created'])

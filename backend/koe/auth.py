@@ -301,6 +301,7 @@ async def http_owner(request: Request) -> str:
 
 TICKET_SECONDS = 60
 _tickets: dict[str, tuple[str, float]] = {}  # ponytail: in memory, one backend instance; a restart only voids tickets
+_ticket_sessions: dict[str, str] = {}  # optional cookie proof for separately gated music commands
 
 
 @router.post("/api/ws-ticket")
@@ -310,9 +311,20 @@ async def ws_ticket(request: Request, response: Response):
     now = time.monotonic()
     for old in [t for t, (_, expires) in _tickets.items() if expires < now]:
         del _tickets[old]
+        _ticket_sessions.pop(old, None)
     ticket = secrets.token_urlsafe(32)
     _tickets[ticket] = (owner, now + TICKET_SECONDS)
+    if request.cookies.get(SESSION_COOKIE) and settings.spotify_voice_approved:
+        _ticket_sessions[ticket] = _hash(request.cookies[SESSION_COOKIE])
     return {"ticket": ticket}
+
+
+def consume_ticket_session(credential):
+    if not isinstance(credential, str):
+        return None
+    session = _ticket_sessions.pop(credential, None)
+    ticket = _tickets.get(credential)
+    return session if ticket and ticket[1] >= time.monotonic() else None
 
 
 def ws_required() -> bool:
@@ -324,6 +336,7 @@ def ws_owner(credential) -> str | None:
     if not isinstance(credential, str) or not credential:
         return None
     ticket = _tickets.pop(credential, None)
+    _ticket_sessions.pop(credential, None)
     if ticket and ticket[1] >= time.monotonic():
         return ticket[0]
     return settings.koe_owner_id if _access_token_ok(credential) else None

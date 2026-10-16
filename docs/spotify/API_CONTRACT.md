@@ -1,10 +1,24 @@
 # Koe Spotify API — v1
 
+**Additive same-page Music extension:** `music_control.action=play_match` requires an artist and/or title copied from the user's request (each up to 200 characters). Selection runs outside AI context and yields generic `not_found`, `unavailable`, `ambiguous`, or queued playback. The Music socket may send `{type:'suggestion', query, state, connection_id, playlist_id}` to its authorized browser only. Matched commands include `position` and `snapshot_id`; play accepts optional `snapshot_id` and rejects a stale match before sending playback. Existing transport commands are unchanged. Manual Add is a deliberate direct action with the same durable mutation journal; no automatic missing-song writes.
+
 Published 2026-10-15 by Codex. Version `1.0.0`. Paths and JSON below are frozen for frontend integration; implementation progress is in BACKEND_STATUS.md. Use same-origin cookie requests (`credentials: 'same-origin'`), `Content-Type: application/json`, and the browser's Origin for writes. Spotify routes require a real signed-in Koe owner session, including in development; bearer credentials alone are insufficient. All responses are `Cache-Control: no-store`, `X-Koe-Music-Contract: 1.0.0`. Do not cache music data/tokens or send it to AI, transcripts, activity, analytics, or push.
 
 Live access is off by default. Backend settings: `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`, `SPOTIFY_REDIRECT_URI` (exact canonical Koe origin + `/auth/spotify/callback`), existing `KOE_SECRET_KEY`, and `SPOTIFY_ENABLED=true` only after policy/setup acceptance. HTTPS required except explicit `127.0.0.1`/`[::1]` loopback; `localhost` callbacks are rejected. `KOE_LOCAL_URL` optionally replaces the existing localhost development origin for all Koe sign-in/CSRF checks; configure it deliberately before using IP loopback. No automatic developer-console/account changes.
 
 ## Shared shapes
+
+Additive extension published 2026-10-16: [approved voice transport](VOICE_CONTROL.md). Existing v1 paths and envelopes are unchanged. `status.capabilities.voice_control` is true only when Spotify is usable and `SPOTIFY_VOICE_APPROVED=true`; it does not itself grant a playlist.
+
+| Method/path | Contract |
+|---|---|
+| `GET /api/music/voice-permission` | Owner cookie; `{available: boolean, enabled: boolean, grant: {connection_id, playlist_id} \| null}` |
+| `PUT /api/music/voice-permission` | Owner cookie + Origin; `{enabled: boolean, connection_id, playlist_id}`; returns `{enabled}`. Enabling verifies the selected owned/private playlist; disabling closes its player channel. |
+| `POST /api/music/voice-ticket` | Owner cookie + Origin + current grant; `{ticket}` single-use, 30 seconds, session/grant-bound. |
+| `/ws/music-control` | Exact approved Origin; first frame `{ticket}`. One player per owner. Server sends `ready`, `command` or `release`; browser sends `ping` or `{type:'result', id, state}`. States: `applied`, `deferred`, `queued`, `failed`, `outcome_unknown`. |
+| `POST /api/music/voice-release` | Owner cookie + Origin; `{id}` 64-character opaque handoff ID. Consumes a queued command once within 30 seconds; returns `{state}`. |
+
+Command frames carry `id`, `connection_id`, `playlist_id`, `action`, and optional `volume_percent`. Supported actions are play/pause/next/previous/set_volume/volume_up/volume_down; strict volume 0–100 only for set_volume. No metadata is acknowledged. The live-call adapter removes the private handoff ID before returning a generic outcome to the model and sends it only to the browser as `music_handoff`. Play/next/previous release follows PCM drain and actual voice AudioContext close. Unknown outcomes must not be retried automatically. In-memory delivery requires one backend worker.
 
 ```ts
 type Playlist = { id: string; name: string; spotify_url: string;
@@ -78,6 +92,8 @@ Use the latest playlist `snapshot_id` in previews. Stale selection/snapshot erro
 | `GET /api/music/playback` | `connection_id=...&device_id=...` | `{state: 'unknown'|'observed', is_playing: boolean|null, device_id: string|null}`; only registered target, no remote data |
 
 Device registration validates against Spotify's current available devices and a Koe SDK player name, then binds to the session+generation; this is accidental-remote-control protection, not cryptographic attestation. Instantiate SDK with name `Koe Web Player`. Renew registration after expiry/readiness or foreground reconciliation. No arbitrary context URI, track URI, remote device list, or automatic takeover. Check local SDK state to confirm transfer/playback; accepted provider responses alone do not prove audible playback. Use SDK for pause/resume/seek/previous/next/volume and honor `disallows`.
+
+Registration discovery may wait up to four seconds/eight read attempts for the exact SDK ID to appear. It never sends transfer/play during discovery and still rejects a renamed, restricted or wrong-type device. Discovery failure returns `spotify_device_unavailable` with a specific not-listed/identity message. A clean frontend player remains idle if preparation fails before any playback command; previously observed playback or unresolved evidence remains unknown until verified paused. An explicit next Play retries SDK connection/registration; no uncertain playback write is automatically repeated.
 
 Transfer detail: Spotify documents `play:false` as preserving the current playback state, not as forcing pause. Acquire audio ownership before explicit transfer, treat an in-flight transfer as a possible start, and verify local SDK pause before voice. See [Transfer Playback](https://developer.spotify.com/documentation/web-api/reference/transfer-a-users-playback). Refresh retains an omitted replacement refresh token and handles invalid_grant without retry; the original authorization timestamp is preserved because refresh does not extend the provider's six-month grant lifetime ([refresh reference](https://developer.spotify.com/documentation/web-api/tutorials/refreshing-tokens)).
 

@@ -126,6 +126,32 @@ def test_ambiguous_or_embedded_yes_does_not_authorize(text):
     assert agent.confirmation(text) is None
 
 
+@pytest.mark.parametrize('text', [
+    'yes', 'Yes.', 'yes please', 'confirm', 'approve', 'go ahead', 'yes go ahead',
+    'Yeah!', 'yep', 'sure', 'OK', 'okay', 'do it', 'Yes, do it.', 'confirm it',
+    'Yes confirm it', 'haan', 'haa', 'हाँ', 'हां', '  YES,   PLEASE!  ',
+])
+def test_complete_affirmatives_authorize(text):
+    assert agent.confirmation(text) is True
+
+
+@pytest.mark.parametrize('text', [
+    'no', 'no thanks', 'cancel', 'reject', "don't do it", 'do not do it',
+    'nope', 'nah', 'cancel it', 'stop', 'nahi', 'nahin', 'नहीं', 'नही', 'Don’t do it.',
+])
+def test_complete_negatives_reject(text):
+    assert agent.confirmation(text) is False
+
+
+@pytest.mark.parametrize('text', [
+    'yes but change the time', 'yes, but wait', 'okay maybe', 'sure if free',
+    'no yes', 'yes no', 'haan nahi', 'yes/no', 'not okay', 'say yes',
+    'yes; cancel', 'yes\nno', 'yes please do it tomorrow', '', '…',
+])
+def test_qualifiers_and_mixed_decisions_never_authorize(text):
+    assert agent.confirmation(text) is None
+
+
 def test_yes_before_proposal_is_presented_never_authorizes(fake_store):
     async def scenario():
         ctx = agent.Conversation("web")
@@ -190,14 +216,16 @@ def test_voice_only_final_complete_yes_executes_not_partial_yes(fake_store):
         session = SimpleNamespace(send_realtime_input=send_realtime_input)
         # The transcription is assembled before checking: "yes, but..." must not authorize.
         state.user_text = "yes, but move it to 8"
+        state.user_action_id = state.context.pending['id']
         await voice_call._finish_user_turn(browser, session, state)
         assert not fake_store[1]
         state.user_text = "Yes."
+        state.user_action_id = state.context.pending['id']
         await voice_call._finish_user_turn(browser, session, state)
         assert len(fake_store[1]) == 1
         assert (await browser.hears())["type"] == "approval_progress"
         assert (await browser.hears())["status"] == "executed"
-        assert "Application approval result" in sent[0]["text"]
+        assert "Application approval result" in sent[-1]["text"]
     asyncio.run(scenario())
 
 
@@ -234,4 +262,125 @@ def test_failed_finish_never_reexecutes_external_write(fake_store, monkeypatch):
         assert (await agent.confirm(ctx, True))["error"]["code"] == "storage_unavailable"
         await agent.confirm(ctx, True)
         assert len(fake_store[1]) == 1
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize('finished', [True, False])
+@pytest.mark.parametrize('reply,status', [('Yeah!', 'executed'), ('Nahi.', 'rejected')])
+def test_voice_decision_after_card_before_model_turn_ends(fake_store, finished, reply, status):
+    from types import SimpleNamespace
+    from koe import voice_call
+    from test_voice_call import FakeBrowser, content, msg
+
+    async def scenario():
+        state, browser, sent = voice_call.CallState(), FakeBrowser(), []
+
+        async def receive():
+            yield msg(tool_call=SimpleNamespace(function_calls=[
+                SimpleNamespace(id='proposal', name='calendar_upsert_event', args=ARGS)]))
+            yield msg(content(input_transcription=SimpleNamespace(text=reply, finished=finished)))
+            if finished:
+                # Decision is already resolved, without waiting for Koe's turn_complete.
+                assert state.context.pending is None
+            yield msg(content(turn_complete=True))
+            yield msg(go_away=SimpleNamespace(time_left='5s'))
+
+        async def send_tool_response(**kwargs):
+            pass
+
+        async def send_realtime_input(**kwargs):
+            sent.append(kwargs['text'])
+
+        session = SimpleNamespace(receive=receive, send_tool_response=send_tool_response,
+                                  send_realtime_input=send_realtime_input)
+        await voice_call._gemini_to_browser(browser, session, state)
+        results = [event for event in list(browser.to_browser._queue)
+                   if isinstance(event, dict) and event['type'] == 'approval_result']
+        assert len(results) == 1 and results[0]['status'] == status
+        assert len(fake_store[1]) == (1 if status == 'executed' else 0)
+        assert len(sent) == 1 and 'Application approval result' in sent[0]
+
+    asyncio.run(scenario())
+
+
+def test_voice_partial_yes_waits_for_full_transcript_and_clarifies(fake_store):
+    from types import SimpleNamespace
+    from koe import voice_call
+    from test_voice_call import FakeBrowser, content, msg
+
+    async def scenario():
+        state, browser, sent = voice_call.CallState(), FakeBrowser(), []
+        await agent.run_tool('calendar_upsert_event', ARGS, context=state.context)
+        state.context.approval_ready = True
+
+        async def receive():
+            yield msg(content(input_transcription=SimpleNamespace(text='Yes', finished=False)))
+            assert not fake_store[1]
+            yield msg(content(input_transcription=SimpleNamespace(text=', but change the time', finished=False)))
+            # Some API messages finish the transcript without more text.
+            yield msg(content(input_transcription=SimpleNamespace(text='', finished=True)))
+            yield msg(content(turn_complete=True))
+            yield msg(go_away=SimpleNamespace(time_left='5s'))
+
+        async def send_realtime_input(**kwargs):
+            sent.append(kwargs['text'])
+
+        await voice_call._gemini_to_browser(browser, SimpleNamespace(
+            receive=receive, send_realtime_input=send_realtime_input), state)
+        assert not fake_store[1] and state.context.pending
+        assert len(sent) == 1 and 'no approval was recorded' in sent[0].lower()
+        assert "I didn't catch a clear yes" in sent[0]
+
+    asyncio.run(scenario())
+
+
+def test_voice_yes_started_before_card_cannot_approve_new_proposal(fake_store):
+    from types import SimpleNamespace
+    from koe import voice_call
+    from test_voice_call import FakeBrowser, content, msg
+
+    async def scenario():
+        state, browser, sent = voice_call.CallState(), FakeBrowser(), []
+
+        async def receive():
+            yield msg(content(input_transcription=SimpleNamespace(text='yes', finished=False)))
+            yield msg(tool_call=SimpleNamespace(function_calls=[
+                SimpleNamespace(id='proposal', name='calendar_upsert_event', args=ARGS)]))
+            yield msg(content(turn_complete=True))
+            yield msg(go_away=SimpleNamespace(time_left='5s'))
+
+        async def send_tool_response(**kwargs):
+            pass
+
+        async def send_realtime_input(**kwargs):
+            sent.append(kwargs['text'])
+
+        await voice_call._gemini_to_browser(browser, SimpleNamespace(
+            receive=receive, send_tool_response=send_tool_response,
+            send_realtime_input=send_realtime_input), state)
+        assert not fake_store[1] and state.context.pending and not sent
+
+    asyncio.run(scenario())
+
+
+def test_voice_reply_bound_to_old_action_cannot_approve_replacement(fake_store):
+    from types import SimpleNamespace
+    from koe import voice_call
+    from test_voice_call import FakeBrowser
+
+    async def scenario():
+        state, sent = voice_call.CallState(), []
+        await agent.run_tool('calendar_upsert_event', ARGS, context=state.context)
+        state.user_text, state.user_action_id = 'yes', state.context.pending['id']
+        await agent.run_tool('calendar_upsert_event', {**ARGS, 'title': 'Replacement'}, context=state.context)
+        state.context.approval_ready = True
+
+        async def send_realtime_input(**kwargs):
+            sent.append(kwargs)
+
+        await voice_call._finish_user_turn(FakeBrowser(), SimpleNamespace(
+            send_realtime_input=send_realtime_input), state)
+        assert not fake_store[1] and state.context.pending['args_json']['title'] == 'Replacement'
+        assert not sent
+
     asyncio.run(scenario())

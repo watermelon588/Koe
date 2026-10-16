@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from 'react'
-import { CalendarBlank, ChatCircle, ChatCircleDots, GearSix, HandWaving, House, Key, Microphone, MicrophoneSlash, Moon, PaperPlaneRight,
-  Phone, PhoneDisconnect, Sun, IconContext, Notebook, SquaresFour, Question, SidebarSimple, MusicNotes } from '@phosphor-icons/react'
+import { ChatCircle, ChatCircleDots, GearSix, HandWaving, House, Key, Microphone, MicrophoneSlash, Moon, PaperPlaneRight,
+  Phone, PhoneDisconnect, Sun, IconContext, SquaresFour, Question, SidebarSimple } from '@phosphor-icons/react'
 import { LiveWorkspace } from './workspace/LiveWorkspace'
 import { moodOf, useCall, type Line } from './call/useCall'
 import { MascotView, type MascotController } from './mascot/MascotView'
@@ -18,6 +18,8 @@ import { AppFooter } from './AppFooter'
 import { useMusic } from './music/useMusic'
 import { MusicPage } from './music/MusicPage'
 import { MiniPlayer } from './music/MiniPlayer'
+import { CalendarIcon, NotionIcon, SpotifyIcon } from './components/BrandIcon'
+import { ApprovalPreview } from './approvals/ApprovalPreview'
 
 // Layout (Engawa, "veranda"): she stands on the left; your day sits on the right; a call raises a sheet
 // over it while she shows her full figure.
@@ -54,7 +56,7 @@ export default function App() {
   const mascot = useRef<MascotController | null>(null)
   const call = useCall(mascot)
   const inCall = call.state !== 'idle'
-  const music = useMusic() // app-level: the mini player follows you, and a call pauses it first
+  const music = useMusic(page === 'music') // player service registers only in its dedicated Music window
   const miniHidden = page === 'music' || inCall
   const dashboard = useDashboard(() => { if (!inCall) mascot.current?.react('sad', 3) })
   const x = wide ? PLACE[inCall ? 'call' : 'home'] : 0.5
@@ -151,10 +153,10 @@ export default function App() {
             <ChatCircleDots weight={page === 'chat' ? 'fill' : 'light'} /><span>Chat</span>
           </a>
           <a className="nav-link" href="#notion" aria-label="Notion" title="Notion" aria-current={page === 'notion' ? 'page' : undefined}>
-            <Notebook weight={page === 'notion' ? 'fill' : 'light'} /><span>Notion</span>
+            <NotionIcon size={18} /><span>Notion</span>
           </a>
           <a className="nav-link" href="#music" aria-label="Music" title="Music" aria-current={page === 'music' ? 'page' : undefined}>
-            <MusicNotes weight={page === 'music' ? 'fill' : 'light'} /><span>Music</span>
+            <SpotifyIcon size={18} /><span>Music</span>
           </a>
           <a className="nav-link" href="#settings" aria-label="Settings" aria-current={page === 'settings' ? 'page' : undefined} title="Settings">
             <GearSix weight={page === 'settings' ? 'fill' : 'light'} /><span>Settings</span>
@@ -173,7 +175,7 @@ export default function App() {
         return saveMascot(id)
       }} /> : page === 'chat' ? <ChatPage model={model} /> : page === 'notion' ? <NotionPage token={accessToken} onToken={value => {
         setAccessToken(value); saveToken(value)
-      }} /> : page === 'music' ? <MusicPage music={music} /> : page === 'install' ? <InstallPage model={model} /> : page === 'dashboard' ? <DashboardPage data={dashboard.data}
+      }} /> : page === 'music' ? <MusicPage music={music} call={call} model={model} token={accessToken} /> : page === 'install' ? <InstallPage model={model} /> : page === 'dashboard' ? <DashboardPage data={dashboard.data}
         connected={dashboard.connected} status={dashboard.status} refresh={dashboard.refresh} currentApproval={call.approval} decide={call.decide}>
         {connectRow}
       </DashboardPage> : <>
@@ -198,7 +200,7 @@ export default function App() {
       {page !== 'chat' && page !== 'install' && !(page === 'home' && inCall) && <AppFooter />}
       <MiniPlayer music={music} hidden={miniHidden} />
       <CallPanel open={inCall && page === 'home'} call={call} dashboard={dashboard} />
-      {inCall && page !== 'home' && <aside className="workspace-call" aria-label="Active Koe call">
+      {inCall && page !== 'home' && page !== 'music' && <aside className="workspace-call" aria-label="Active Koe call">
         <span className="dot" aria-hidden="true" /><span>{call.approval ? 'Your call has a pending approval' : `Koe · ${STATUS[call.state]}`}</span>
         <a className="soft" href="#home">Return to call</a>
         <button className="ghost" aria-pressed={call.muted} onClick={call.toggleMute}>{call.muted ? 'Unmute' : 'Mute'}</button>
@@ -243,7 +245,7 @@ export function CallPanel({ open, call, dashboard }: { open: boolean; call: Retu
       <div className="call-tabs">
         <div className="seg" role="group" aria-label="Call view">
           <button aria-pressed={tab === 'chat'} onClick={() => setTab('chat')}><ChatCircle size={15} />Chat</button>
-          <button aria-pressed={tab === 'day'} onClick={() => setTab('day')}><CalendarBlank size={15} />Day</button>
+          <button aria-pressed={tab === 'day'} onClick={() => setTab('day')}><CalendarIcon size={15} />Day</button>
           <button aria-pressed={tab === 'work'} onClick={() => setTab('work')}><SidebarSimple size={15} />Workspace</button>
         </div>
       </div>
@@ -263,7 +265,7 @@ export function CallPanel({ open, call, dashboard }: { open: boolean; call: Retu
         {call.approval && (
           <div className="approval-card" role="status">
             <div className="approval-copy">
-            <p>{call.approval.summary}</p>
+            <ApprovalPreview action={call.approval} />
             <small>{expired ? 'Expired. Ask Koe to propose it again.' : `Expires ${new Date(call.approval.expires_ts).toLocaleTimeString()}. Say yes/no or choose below.`}</small>
             </div>
             <div className="pair">

@@ -8,7 +8,7 @@ import { saveToken } from './chat/api'
 export const SESSION = 'session'
 
 export function signIn() {
-  const next = location.hash ? `/${location.hash}` : '/'
+  const next = `/app${location.hash}`
   location.href = httpUrl(`/auth/google/start?next=${encodeURIComponent(next)}`)
 }
 

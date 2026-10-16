@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
-import { ArrowSquareOut, ArrowsClockwise, Check, Columns, FileText, MagnifyingGlass, Plus, Trash, X } from '@phosphor-icons/react'
+import { ArrowSquareOut, ArrowsClockwise, Check, Columns, MagnifyingGlass, Plus, Trash, X } from '@phosphor-icons/react'
 import { inputDate, localDate, notionLink, notionRequest, type Connection, type Detail, type Pending, type RecordRow } from './api'
 import { AddPropertyForm, PropertyFields, type FieldValues, type Schema } from './NotionFields'
 import './notion.css'
+import { NotionIcon } from '../components/BrandIcon'
+import { ApprovalPreview } from '../approvals/ApprovalPreview'
 
 type Draft = { title: string; kind: string; status: string; date: string; end: string; body: string; page_id: string; expected_edited: string }
 const blank = (): Draft => ({ title: '', kind: 'Note', status: 'Open', date: localDate(), end: '', body: '', page_id: '', expected_edited: '' })
@@ -122,7 +124,7 @@ export function NotionPage({ token, onToken }: { token: string; onToken: (value:
   const update = (field: keyof Draft, value: string) => setDraft(d => d ? { ...d, [field]: value } : d)
   return <main className="notion-workspace" id="main-content" tabIndex={-1}>
     <div className="workspace-heading">
-      <div><h1>Notion</h1><p>Your daily work, notes and next steps.</p></div>
+      <div><h1><NotionIcon size={30} /> Notion</h1><p>Your daily work, notes and next steps.</p></div>
       <div className="workspace-actions">
         <button className="ghost" onClick={() => void refresh()} disabled={!!busy || !token}><ArrowsClockwise />Refresh</button>
         <button className="ghost" disabled={!!busy || !connection?.workflow_ready || !!pending} onClick={() => { setAdding(true); setDraft(null); setDetail(null) }}><Columns />Add property</button>
@@ -150,7 +152,7 @@ export function NotionPage({ token, onToken }: { token: string; onToken: (value:
     </section>}
     {pending && <section className="workspace-approval" aria-label="Confirm Notion change">
       <div><h2>{expired ? 'This preview expired' : 'Review before saving'}</h2>
-        <p className="approval-summary">{pending.summary}</p>{/* verbatim: the authoritative preview of the exact change */}
+        <ApprovalPreview action={pending} />
         <small>{expired ? 'Refresh to prepare a new change.' : `Destination: ${connection?.name || 'your configured Notion database'} · expires in ${countdown(pending.expires_ts, clock)}`}</small></div>
       <div className="pair"><button className="ghost" disabled={!!busy || !!expired} onClick={() => decision(false)}><X />Cancel</button>
         <button className="primary" disabled={!!busy || !!expired} onClick={() => decision(true)}><Check />Confirm change</button></div>
@@ -164,7 +166,7 @@ export function NotionPage({ token, onToken }: { token: string; onToken: (value:
           </select>
         </form>
         <div className="workspace-list-meta"><span>{busy || `${rows.length} records${cursor ? ' · more available' : ''}`}</span><span>Recently edited</span></div>
-        {!rows.length && !busy && <div className="workspace-empty"><FileText size={28} /><h2>{query || kind ? 'No matching records' : 'A place for your work'}</h2>
+        {!rows.length && !busy && <div className="workspace-empty"><NotionIcon size={28} /><h2>{query || kind ? 'No matching records' : 'A place for your work'}</h2>
           <p>{query || kind ? 'Try another title or record type.' : 'Create a note, task or meeting record. Ask Koe to log shipped work to start a daily log.'}</p></div>}
         <ul>{rows.map(row => <li key={row.id}><button className="record-row" aria-pressed={detail?.page.id === row.id} disabled={!!busy} onClick={() => void open(row)}>
           <span className="record-kind">{row.kind}</span><span className="record-title">{row.title}</span>
@@ -203,7 +205,7 @@ export function NotionPage({ token, onToken }: { token: string; onToken: (value:
             <button className="ghost" disabled={!!busy || !!pending} onClick={() => void run('Preparing trash preview', async () => {
               await propose('notion_archive', { page_id: detail.page.id, title: detail.page.title, expected_edited: detail.page.last_edited_time })
             })}><Trash />Move to trash</button></div>
-        </article> : <div className="workspace-empty preview-empty"><FileText size={32} /><h2>See the whole picture</h2><p>Select a record to read its notes and properties, or create something new.</p>
+        </article> : <div className="workspace-empty preview-empty"><NotionIcon size={32} /><h2>See the whole picture</h2><p>Select a record to read its notes and properties, or create something new.</p>
           <p>Ask Koe: “Create a task to review my pull requests tomorrow.”</p></div>}
       </section>
     </div>

@@ -72,3 +72,12 @@ test('tracks: missing URI or unplayable never becomes playable; unknown error co
   assert.equal(m.playable, false); assert.equal(m.id, 'p3'); assert.equal(m.artists, 'A, B'); assert.match(m.url, /^https:\/\/open\.spotify\.com\//)
   assert.equal(say('made_up_code'), 'Something went wrong with Spotify. Try again.')
 })
+
+test('temporary music reads can be retried without confusing setup and sign-in states', () => {
+  assert.deepEqual(statusFrom(0), { phase: 'unavailable', retryable: true, message: 'Koe couldn’t finish loading music. Retry to request it again.' })
+  assert.equal(statusFrom(503, { error: { code: 'spotify_storage_unavailable' } }).message, say('spotify_storage_unavailable'))
+  assert.equal(statusFrom(503).retryable, true)
+  assert.deepEqual(statusFrom(401), { phase: 'signed-out' })
+  assert.equal(statusFrom(404).retryable, undefined)
+  assert.equal(statusFrom(200, { ...base, enabled: false }).retryable, undefined)
+})

@@ -3,6 +3,7 @@ import { calendarLayout, clockTime, meetLink, MEET_STATUS, recurrenceText, remin
 import { notionRequest, type Detail } from '../notion/api'
 import { savedToken } from '../chat/api'
 import './work.css'
+import { CalendarIcon, MeetIcon } from '../components/BrandIcon'
 
 // "Koe's view": Koe's own rendering of exactly what it read, proposed or wrote. `.lw-target` marks the one item
 // the GSAP timeline in LiveWorkspace animates (the proposed/saved slot, row or record).
@@ -67,7 +68,7 @@ function EventProposal({ card, timezone }: { card: WorkCard; timezone: string })
     {saved && work.occurrences && work.occurrences.length > 1 && <details className="work-occurrences"><summary>{work.occurrences.length} occurrences ({timezone})</summary>
       <ol>{work.occurrences.map((o, i) => <li key={i}>{when(o.start, timezone, allDay)}{allDay ? '' : ` – ${clockTime(o.end, timezone)}`}</li>)}</ol></details>}
     {saved && work.conference && <p className="work-meet" data-status={work.conference.status}>{MEET_STATUS[work.conference.status]}
-      {meet && <a className="soft" href={meet} target="_blank" rel="noopener">Join Meet</a>}</p>}
+      {meet && <a className="soft" href={meet} target="_blank" rel="noopener"><MeetIcon size={16} />Join Meet</a>}</p>}
     <small>{saved ? work.verified ? 'Google confirmed the saved event.' : 'Saved.'
       : phase === 'cancelled' ? 'This proposal was cancelled. Nothing changed.'
       : `Proposed change · availability is rechecked before saving.${d.attendees?.length ? ' Guests get an email from Google when it’s saved.' : ''}`}</small>
@@ -100,8 +101,8 @@ function EventCard({ event, timezone }: { event: CalendarEvent; timezone: string
     {event.recurring_event_id && <p>Part of a recurring series.</p>}
     {event.attendees?.length ? <p>Guests: {event.attendees.join(', ')}{event.attendees_omitted ? ' (and more)' : ''}</p> : null}
     {event.conference && <p className="work-meet" data-status={event.conference.status}>{MEET_STATUS[event.conference.status]}
-      {meet && <a className="soft" href={meet} target="_blank" rel="noopener">Join Meet</a>}</p>}
-    {link && <a className="work-link" href={link} target="_blank" rel="noopener">Open in Google Calendar</a>}
+      {meet && <a className="soft" href={meet} target="_blank" rel="noopener"><MeetIcon size={16} />Join Meet</a>}</p>}
+    {link && <a className="work-link" href={link} target="_blank" rel="noopener"><CalendarIcon size={14} />Open in Google Calendar</a>}
   </div>
 }
 

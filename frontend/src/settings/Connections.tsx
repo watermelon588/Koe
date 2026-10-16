@@ -1,5 +1,5 @@
-import { Fragment, useEffect, useState, type ReactNode } from 'react'
-import { CalendarBlank, GithubLogo, NotePencil, Sparkle, SpotifyLogo, Table, type Icon } from '@phosphor-icons/react'
+import { Fragment, useEffect, useState, type ComponentType, type ReactNode } from 'react'
+import { CalendarIcon, GeminiIcon, GitHubIcon, NotionIcon, SheetsIcon, SpotifyIcon } from '../components/BrandIcon'
 import { httpUrl } from '../backend'
 import { savedToken } from '../chat/api'
 import { SESSION } from '../session'
@@ -9,7 +9,7 @@ import { SESSION } from '../session'
 // tokens stay on the server, encrypted (connections.py). The page only ever sees provider + account email.
 type Connection = { provider: 'google' | 'github' | 'notion' | 'gemini' | 'spotify'; connected: boolean; account: string }
 const NAMES = { google: 'Google Calendar & Sheets', github: 'GitHub', notion: 'Notion', gemini: 'Your Gemini key', spotify: 'Spotify' }
-const ICONS = { google: CalendarBlank, github: GithubLogo, notion: NotePencil, gemini: Sparkle, spotify: SpotifyLogo }
+const ICONS = { google: CalendarIcon, github: GitHubIcon, notion: NotionIcon, gemini: GeminiIcon, spotify: SpotifyIcon }
 const NOTICES: Record<string, string> = {
   'connected=google': 'Google connected. Koe now uses your calendar and timesheet.',
   'connect=missing-scopes': 'Koe needs both Calendar and Sheets. Connect again and leave both boxes ticked.',
@@ -32,7 +32,7 @@ export function SettingSection({ id, title, intro, children }: { id: string; tit
 // One row: icon, name, a one-line status, one action. `sub` rows belong to the row above (Timesheet → Google).
 // Anything else (a form, the repository list) goes underneath as children.
 export function SettingRow({ icon: RowIcon, title, status, on, sub, action, children }: {
-  icon: Icon; title: string; status: ReactNode; on?: boolean; sub?: boolean; action?: ReactNode; children?: ReactNode
+  icon: ComponentType<{ size?: number }>; title: string; status: ReactNode; on?: boolean; sub?: boolean; action?: ReactNode; children?: ReactNode
 }) {
   return (
     <div className="set-row" data-on={on || undefined} data-sub={sub || undefined}>
@@ -138,7 +138,7 @@ export function ConnectionsSection() {
         : !ready ? <p className="set-empty">The server needs KOE_SECRET_KEY before it can store connections.</p>
         : list === null ? <p className="set-empty">Loading your connections…</p>
         : list.filter((c) => c.provider !== 'gemini' && NAMES[c.provider]).map(({ provider, connected, account }) => {
-          if (provider === 'spotify') return <SettingRow key={provider} icon={SpotifyLogo} title="Spotify" on={connected}
+          if (provider === 'spotify') return <SettingRow key={provider} icon={SpotifyIcon} title="Spotify" on={connected}
             status={connected ? 'Connected. Music only: Koe never hears or sees it.' : 'Optional. For your playlist on the Music page.'}
             action={<a className="soft" href="#music">{connected ? 'Manage' : 'Set up'}</a>} />
           const canConnect = CONNECT[provider] && (provider !== 'github' || githubReady || connected)
@@ -148,12 +148,12 @@ export function ConnectionsSection() {
               action={canConnect && (connected
                 ? <button className="ghost" disabled={busy === provider} onClick={() => void disconnect(provider)}>{busy === provider ? 'Disconnecting…' : 'Disconnect'}</button>
                 : <a className="soft" href={httpUrl(CONNECT[provider])}>Connect</a>)} />
-            {provider === 'google' && connected && <SettingRow sub icon={Table} title="Timesheet"
+            {provider === 'google' && connected && <SettingRow sub icon={SheetsIcon} title="Timesheet"
               status={sheetError || (timesheet ? 'Koe logs your hours here (each row needs your OK).' : 'A Google Sheet for logging hours, made for you.')}
               action={timesheet
                 ? <a className="soft" href={timesheet} target="_blank" rel="noopener">Open</a>
                 : <button className="soft" disabled={busy === 'timesheet'} onClick={() => void createTimesheet()}>{busy === 'timesheet' ? 'Creating…' : 'Create my timesheet'}</button>} />}
-            {provider === 'github' && connected && <SettingRow sub icon={GithubLogo} title="Repositories" status="Which repositories Koe reads (up to 20)."
+            {provider === 'github' && connected && <SettingRow sub icon={GitHubIcon} title="Repositories" status="Which repositories Koe reads (up to 20)."
               action={!repos && <button className="soft" disabled={busy === 'repos'} onClick={() => void openRepos()}>{busy === 'repos' ? 'Loading…' : 'Choose'}</button>}>
               {repos && <fieldset className="repo-pick">
                 <legend className="visually-hidden">Repositories Koe reads</legend>
@@ -171,7 +171,7 @@ export function ConnectionsSection() {
     </SettingSection>
 
     {signedIn && ready && <SettingSection id="set-gemini" title="Your Gemini key" intro="Koe’s shared key has a daily limit for friends. Your own free key removes it.">
-      <SettingRow icon={Sparkle} title="Gemini API key" on={gemini?.connected}
+      <SettingRow icon={GeminiIcon} title="Gemini API key" on={gemini?.connected}
         status={keyError || (gemini?.connected ? `Using your own key (${gemini.account}), no daily limit.` : 'Optional. Using Koe’s shared key.')}
         action={gemini?.connected && <button className="ghost" disabled={busy === 'gemini'} onClick={() => void disconnect('gemini')}>Remove</button>}>
         {!gemini?.connected && <form className="token-row" onSubmit={(e) => { e.preventDefault(); void saveGeminiKey() }}>

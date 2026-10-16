@@ -1,6 +1,10 @@
 # Spotify feature — two-session coordination
 
-Setup date: 2026-10-15. Backend and frontend are integrated and verified with isolated providers. Live Spotify remains off pending the acceptance steps in the setup guide.
+Updated 2026-10-16: manual and separately approved voice/music pipelines are implemented locally. With explicit user approval, migration 007 is applied to Neon and both local flags are enabled. App credentials/configuration checks pass; owner Spotify consent, real audible playback and spoken-command acceptance remain pending. The new voice extension is not deployed. See [current review](../REVIEW_2026-10-16.md), [local setup](../../backend/SPOTIFY_LOCAL_SETUP.md) and [voice transport](VOICE_CONTROL.md).
+
+Verification: 564 backend tests, 60 frontend tests, 15 manual-pipeline + 9 voice-pipeline browser scenarios, 9 original-app + 15 retained-homepage checks passed; production build passed. Browser pipeline providers/SDK audio/Gemini function selection are simulated. Four existing lint warnings remain. The session records below describe earlier implementation coordination and do not supersede this update.
+
+Later local acceptance update: owner Spotify connection now exists, and live read-only Spotify metadata requests succeed. The saved playlist is owned but public; all nine listed playlists are public (five owned). The UI now preserves the connection and returns to private-playlist choose/create controls for this rejection, with selected-playlist and refresh actions. No Spotify privacy/content change or audible playback acceptance has been performed. Frontend suite is now 61 tests; four targeted recovery browser scenarios cover transient failure/session expiry and invalid selection with populated/empty eligible lists.
 
 | Session | Agent | Owns | Live status |
 |---|---|---|---|

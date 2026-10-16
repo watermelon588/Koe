@@ -1,0 +1,58 @@
+/* One interaction contract across lazy-loaded pages. Layout stays with each component. */
+.hp {
+  --type-action: 15px;
+  --type-compact: 13px;
+  --control-duration: 160ms;
+  --shadow-floating: 0 8px 32px rgb(0 0 0 / .2);
+}
+.hp {
+  --control-surface: var(--hp-tint);
+  --control-text: var(--hp-text);
+  --control-focus: var(--hp-accent);
+}
+/* Root specificity keeps component CSS from silently redefining shared feedback. */
+:root .hp :is(button, .primary, .soft, .ghost, .end, .chip, .icon-btn, .nav-link, .hp-button, .hp-nav-cta) {
+  font-family: var(--sans);
+  font-weight: 400;
+  font-size: var(--type-action);
+  transition: transform var(--control-duration) var(--ease-out),
+    background-color var(--control-duration) ease,
+    color var(--control-duration) ease,
+    opacity var(--control-duration) ease,
+    border-color var(--control-duration) ease;
+  -webkit-tap-highlight-color: transparent;
+}
+:root .hp :is(.chip, .seg button, .dash-tabs button, .hp-demo-tabs button, .hp-integration-toolbar button, .hp-preview-toggle) {
+  font-size: var(--type-compact);
+}
+:root .hp :is(.primary, .soft, .end, .icon-btn, .nav-link, .music-play, .hp-button, .hp-nav-cta, .hp-integration, .hp-portrait) {
+  box-shadow: none;
+}
+:root .hp :focus-visible {
+  outline: 2px solid var(--control-focus);
+  outline-offset: 3px;
+}
+:root .hp :is(button:disabled, [aria-disabled='true']) {
+  opacity: .4;
+  cursor: default;
+  transform: none;
+}
+:root .hp :is(button, .primary, .soft, .ghost, .end, .chip, .icon-btn, .nav-link, .hp-button, .hp-nav-cta):not(:disabled):not([aria-disabled='true']):active {
+  transform: scale(.97);
+}
+@media (hover: hover) and (pointer: fine) {
+  :root .hp :is(button, .soft, .ghost, .chip, .icon-btn, .nav-link, .hp-nav-cta):where(:not(.primary, .end, .music-play, .hp-button, .hp-demo-tabs button[aria-pressed='true'])):not(:disabled):not([aria-disabled='true']):hover {
+    background-color: var(--control-surface);
+    color: var(--control-text);
+  }
+  :root .hp :is(.primary, .end, .music-play, .hp-button):not(:disabled):not([aria-disabled='true']):hover {
+    opacity: .9;
+  }
+  /* Filled controls retain their semantic colors; all share the same feedback. */
+  :root .hp .hp-button:hover { background-color: var(--hp-accent); color: var(--hp-on-accent); }
+  :root .hp .hp-demo-tabs button[aria-pressed='true']:hover { background-color: var(--hp-accent); color: var(--hp-on-accent); opacity: .9; }
+}
+@media (prefers-reduced-motion: reduce) {
+  :root .hp :is(button, .primary, .soft, .ghost, .end, .chip, .icon-btn, .nav-link, .hp-button, .hp-nav-cta) { transition: none; }
+  :root .hp :is(button, .primary, .soft, .ghost, .end, .chip, .icon-btn, .nav-link, .hp-button, .hp-nav-cta):not(:disabled):not([aria-disabled='true']):active { transform: none; }
+}

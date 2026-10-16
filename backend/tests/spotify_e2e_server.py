@@ -12,6 +12,7 @@ import tempfile
 import time
 import uuid
 import wave
+from types import SimpleNamespace
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -20,7 +21,7 @@ import httpx
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import RedirectResponse, FileResponse, Response
 
-from koe import auth, connections, db, music_api, spotify_auth, spotify_service as sp
+from koe import auth, connections, db, music_api, spotify_auth, spotify_service as sp, music_voice, identity, voice_call
 from koe.config import settings
 
 PLAYLIST = "p" * 22
@@ -41,8 +42,10 @@ class Provider:
         self.shuffle = False
         self.repeat = "off"
         self.calls = []
+        self.music_results = []
         self.unknown_next_write = False
         self.pause_unknown = False
+        self.hidden_devices = False
         self.voice_connections = 0
 
     def track(self, identifier):
@@ -103,7 +106,7 @@ class Provider:
         if path.startswith("/v1/tracks/") and path.rsplit("/", 1)[-1] in TRACKS:
             return httpx.Response(200, json=self.track(path.rsplit("/", 1)[-1]))
         if path == "/v1/me/player/devices":
-            return httpx.Response(200, json={"devices": list(self.devices.values())})
+            return httpx.Response(200, json={"devices": [] if self.hidden_devices else list(self.devices.values())})
         if path == "/v1/me/player":
             if method == "GET":
                 return httpx.Response(200, json=self.playback()) if self.device else httpx.Response(204)
@@ -134,7 +137,7 @@ def create_app(origin="http://127.0.0.1:5174"):
         "koe_public_url": origin, "google_web_client_id": "simulated-google-client",
         "google_web_client_secret": "simulated-google-secret", "spotify_client_id": "simulated-spotify-client",
         "spotify_client_secret": "simulated-spotify-secret", "spotify_redirect_uri": origin + "/auth/spotify/callback",
-        "spotify_enabled": True}.items():
+        "spotify_enabled": True, "spotify_voice_approved": True}.items():
         setattr(settings, key, value)
     db.DB, db.DATA = data / "app.db", data
     auth.SESSION_COOKIE = "koe_spotify_e2e_session"  # cannot overwrite the real local Koe session
@@ -195,7 +198,8 @@ def create_app(origin="http://127.0.0.1:5174"):
                 "playing": provider.playing, "device_id": provider.device, "position": provider.position,
                 "index": index, "volume": provider.volume, "pause_unknown": provider.pause_unknown,
                 "track": provider.track(provider.order[index]) if provider.order else None,
-                "calls": provider.calls, "voice_connections": provider.voice_connections}
+                "calls": provider.calls, "voice_connections": provider.voice_connections,
+                "music_results": provider.music_results}
 
     @app.get("/api/app/messages")
     async def messages():
@@ -215,7 +219,7 @@ def create_app(origin="http://127.0.0.1:5174"):
         body = await request.json()
         if body.get("reset") is True:
             provider.__init__()
-        for key in ("unknown_next_write", "pause_unknown"):
+        for key in ("unknown_next_write", "pause_unknown", "hidden_devices"):
             if key in body:
                 setattr(provider, key, body[key] is True)
         return {"ok": True}
@@ -262,16 +266,40 @@ def create_app(origin="http://127.0.0.1:5174"):
         if provider.playing:
             await socket.close(1008, "E2E: music was not paused before voice")
             return
+        context = voice_call.CallState()
+        owner_token = identity.OWNER.set(settings.koe_owner_id)
+        class Session:
+            async def send_tool_response(self, function_responses):
+                provider.music_results.extend(item.response for item in function_responses)
         try:
             while True:
                 message = await socket.receive()
                 if message["type"] == "websocket.disconnect":
                     break
+                if message.get('text'):
+                    data = json.loads(message['text'])
+                    if data.get('type') == 'auth':
+                        context.music_session = auth.consume_ticket_session(data.get('token'))
+                        if auth.ws_owner(data.get('token')) != settings.koe_owner_id:
+                            await socket.close(1008, 'Invalid fixture owner ticket')
+                            break
+                    if data.get('type') == 'text' and data.get('text', '').startswith('E2E_MUSIC '):
+                        # Only this isolated fixture simulates Gemini's function selection.
+                        args = json.loads(data['text'].removeprefix('E2E_MUSIC '))
+                        call = SimpleNamespace(name='music_control', args=args, id=uuid.uuid4().hex)
+                        await voice_call._run_tools(socket, Session(), [call], context)
+                        await socket.send_json({'type': 'transcript', 'role': 'koe', 'text': 'Simulated tool response. Music handoff will follow this reply.'})
+                        await socket.send_bytes(bytes(4800))  # 100ms of silent 24kHz PCM through the real playback queue
+                        await socket.send_json({'type': 'turn_complete'})
         except (WebSocketDisconnect, RuntimeError):
             pass  # Microphone bytes are discarded and never stored or sent to a model.
+        finally:
+            music_voice.end_session(context.context.session_id)
+            identity.OWNER.reset(owner_token)
 
     app.include_router(spotify_auth.router)
     app.include_router(music_api.router)
+    app.include_router(music_voice.router)
     app.include_router(auth.router)
     app.include_router(connections.api)
     return app

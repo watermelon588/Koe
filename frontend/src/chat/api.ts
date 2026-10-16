@@ -1,6 +1,7 @@
 // The Koe app API (backend /api/app, SPEC §14). Every call carries the access token remembered on this device.
 import { httpUrl } from '../backend'
 import type { WorkEvent } from '../workspace/workState'
+import type { ReviewAction } from '../approvals/presentation'
 
 export type Message = {
   id: number
@@ -10,6 +11,7 @@ export type Message = {
   voice: string | null
   action_id: string | null
   action_status: string | null
+  approval?: ReviewAction
   sending?: boolean // local only: on its way, not yet saved
 }
 

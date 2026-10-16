@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, StrictBool
 
-from koe import agent, events, identity, notion_service, store
+from koe import action_display, agent, events, identity, notion_service, store
 from koe.app_channel import authorized
 from koe.config import settings
 
@@ -45,7 +45,7 @@ async def context():
 
 
 def public_pending(ctx):
-    return ({k: ctx.pending[k] for k in ('id', 'summary', 'expires_ts')} if ctx.pending else None)
+    return action_display.pending(ctx.pending)
 
 
 @router.get('/status')

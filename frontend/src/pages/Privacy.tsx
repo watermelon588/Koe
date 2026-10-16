@@ -38,8 +38,9 @@ export function Privacy() {
       </Section>
 
       <Section id="spotify" title="Optional Spotify music">
-        <p>If enabled by the owner, Spotify provides account identifiers, playlist metadata and playback state for the manual Music page. Spotify music and metadata are not sent to Gemini, OpenRouter, chat, transcripts, activity logs or notifications. Spotify streams audio directly to its browser player.</p>
+        <p>If enabled by the owner, Spotify provides account identifiers, playlist metadata and playback state for the Music page. Spotify music and metadata are not sent to Gemini, OpenRouter, chat, transcripts, activity logs or notifications. Spotify streams audio directly to its browser player.</p>
         <p>Koe encrypts Spotify credentials and the intent and result of playlist changes on the server. It remembers your selected playlist and request IDs to prevent duplicate writes. A short-lived playback token reaches the browser in memory; the client secret and refresh token stay on the server. Your browser stores pending action IDs and unverified playback markers so reloading cannot silently repeat a change or bypass a voice safety check. An optional pasted playlist link stays on your device.</p>
+        <p>Separately enabled, approved voice controls require an explicit grant for your selected playlist. Koe stores its connection and playlist identifiers as a preference and uses temporary session-bound player tickets and command IDs. Your spoken commands are processed as live-call input; the music service returns only generic transport or volume outcomes to Gemini. Disable voice controls to revoke the grant. Changing the connection or selected playlist invalidates it.</p>
         <p><b>Disconnect Spotify</b> removes Koe’s stored credentials and selected playlist. It retains action records to explain uncertain changes; ask the owner to delete those records and other retained data. You can also remove Koe from <a href="https://www.spotify.com/account/apps/" rel="noopener">Spotify app access</a>. Disconnecting Koe does not delete or undo playlists in Spotify.</p>
       </Section>
 

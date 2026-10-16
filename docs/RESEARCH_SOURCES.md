@@ -115,3 +115,25 @@ Deterministic integration extension references: [GitHub commit detail statistics
 - MDN [X-Frame-Options](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/X-Frame-Options) and [CSP frame-ancestors](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Content-Security-Policy/frame-ancestors): what decides whether a page may be shown in an iframe.
 - Google Calendar [embed a calendar on a website](https://support.google.com/calendar/answer/41207) (`/calendar/embed?src=…&ctz=…&mode=…`).
 - Frameability measured with `curl -D -` on 2026-10-13 (headers in DECISIONS.md). `rm=minimal` for Sheets is observed, not documented.
+
+## Voice confirmation repair (2026-10-16)
+
+- Google [Live API capabilities](https://ai.google.dev/gemini-api/docs/live-api/capabilities#audio-transcriptions) and [WebSocket reference](https://ai.google.dev/api/live): input/output transcripts are separate from tool calls and model turn completion. The installed `google-genai` `types.Transcription.model_fields` was inspected locally and includes `finished`; continue to tolerate its absence and use the existing model-turn fallback. No new transport API or model was introduced.
+
+## Original logos and separately approved Spotify transport (checked 2026-10-16)
+
+- [SDK ready event](https://developer.spotify.com/documentation/web-playback-sdk/reference#ready) and [available devices](https://developer.spotify.com/documentation/web-api/reference/get-a-users-available-devices): SDK supplies its device ID; independently validate that exact device before requesting transfer/play. Bounded discovery polling is a defensive implementation choice, not a guaranteed provider propagation time.
+
+- [Spotify Developer Policy](https://developer.spotify.com/policy): standard voice-control restriction remains; implementation is gated on the written approval the user confirmed, never inferred from separate windows.
+- [Web Playback SDK setup](https://developer.spotify.com/documentation/web-playback-sdk/tutorials/getting-started), [SDK reference](https://developer.spotify.com/documentation/web-playback-sdk/reference): Premium, browser activation, playback state, volume and SDK lifecycle.
+- [Redirect URI rules](https://developer.spotify.com/documentation/web-api/concepts/redirect_uri), [February 2026 migration](https://developer.spotify.com/documentation/web-api/tutorials/february-2026-migration-guide): exact canonical callbacks, loopback and development-mode account restrictions.
+- [Spotify design](https://developer.spotify.com/documentation/design): original supplied logo/icon package, 21px minimum and white/black variants. Asset provenance lives in `frontend/public/brands/README.md`.
+- [FastAPI WebSockets](https://fastapi.tiangolo.com/advanced/websockets/), [React useEffect](https://react.dev/reference/react/useEffect): separate player connection and lifecycle cleanup. No additional framework or dependency.
+- [Google sign-in branding](https://developers.google.com/identity/branding-guidelines): original Google mark; product marks obtained from gstatic, including Meet. Existing layout is preserved.
+
+### Homepage and original connection logos — 2026-10-16
+- GSAP React cleanup and scoped hooks: https://gsap.com/resources/React/
+- GSAP reduced-motion media contexts: https://gsap.com/docs/v3/GSAP/gsap.matchMedia()/
+- GitHub original mark and usage: https://brand.github.com/foundations/logo
+- Notion original mark reference: https://notion.notion.site/Media-Kit-205535b1d9c4440497a3d7a2ac096286
+- Local asset source URLs are recorded in `frontend/public/brands/README.md`; existing Geist fonts and bundled SIL licenses are documented in `frontend/public/fonts/README.md`.

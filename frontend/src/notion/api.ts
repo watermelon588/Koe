@@ -1,10 +1,11 @@
 import { httpUrl } from '../backend'
+import type { ActionDisplay } from '../approvals/presentation'
 export { inputDate, localDate, notionLink } from './state'
 
 export type RecordRow = { id: string; title: string; kind: string; status: string; date: { start: string; end?: string | null } | null;
   url: string; last_edited_time: string; in_trash: boolean }
 export type Connection = { connected: boolean; workflow_ready: boolean; missing_properties: string[]; name: string; database_url: string }
-export type Pending = { id: string; summary: string; expires_ts: string }
+export type Pending = { id: string; summary: string; display?: ActionDisplay; expires_ts: string }
 export type Detail = { page: RecordRow; blocks: { id: string; type: string; text: string; checked?: boolean; has_children: boolean }[];
   truncated: boolean; preview_note: string }
 

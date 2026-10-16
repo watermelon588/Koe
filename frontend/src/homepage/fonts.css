@@ -1,0 +1,6 @@
+@font-face { font-family: 'Koe Studio Geist'; font-style: normal; font-weight: 300; font-display: swap; src: url('/fonts/geist-1.ttf') format('truetype'); }
+@font-face { font-family: 'Koe Studio Geist'; font-style: normal; font-weight: 400; font-display: swap; src: url('/fonts/geist-2.ttf') format('truetype'); }
+@font-face { font-family: 'Koe Studio Geist'; font-style: normal; font-weight: 500; font-display: swap; src: url('/fonts/geist-3.ttf') format('truetype'); }
+@font-face { font-family: 'Koe Studio Geist'; font-style: normal; font-weight: 600; font-display: swap; src: url('/fonts/geist-4.ttf') format('truetype'); }
+@font-face { font-family: 'Koe Studio Geist Mono'; font-style: normal; font-weight: 300; font-display: swap; src: url('/fonts/geist-5.ttf') format('truetype'); }
+@font-face { font-family: 'Koe Studio Geist Mono'; font-style: normal; font-weight: 400; font-display: swap; src: url('/fonts/geist-6.ttf') format('truetype'); }

@@ -10,6 +10,8 @@ export function createPlayer(sampleRate = 24000) {
   const ctx = new AudioContext({ sampleRate })
   let nextStart = 0
   const queued = new Set<AudioBufferSourceNode>() // scheduled or playing
+  const waiters = new Set<() => void>()
+  const settled = () => { if (!queued.size) { waiters.forEach(resolve => resolve()); waiters.clear() } }
   // Every chunk passes through one analyser on its way to the speakers; the mascot reads
   // its loudness to move the mouth. https://developer.mozilla.org/en-US/docs/Web/API/AnalyserNode
   const analyser = ctx.createAnalyser()
@@ -31,7 +33,7 @@ export function createPlayer(sampleRate = 24000) {
     src.start(nextStart)
     nextStart += buffer.duration
     queued.add(src)
-    src.onended = () => queued.delete(src)
+    src.onended = () => { queued.delete(src); settled() }
   }
 
   // Barge-in: the user started talking, so drop everything not yet heard.
@@ -39,8 +41,10 @@ export function createPlayer(sampleRate = 24000) {
   function flush() {
     queued.forEach((src) => src.stop())
     queued.clear()
+    settled()
     nextStart = 0
   }
 
-  return { ctx, analyser, play, flush }
+  const drained = () => queued.size ? new Promise<void>(resolve => waiters.add(resolve)) : Promise.resolve()
+  return { ctx, analyser, play, flush, drained }
 }

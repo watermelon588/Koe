@@ -1,4 +1,5 @@
 """Owner's manual music HTTP surface; isolated from Koe agent and voice paths."""
+import asyncio
 import time
 from typing import Annotated, Literal
 
@@ -51,7 +52,7 @@ async def status(current: str = Depends(sp.owner)):
             "connection_id": generation, "selected_playlist_id": selected[0]["value"] if selected else None,
             "capabilities": {"connect": ready and settings.spotify_enabled, "playlist_read": usable,
                              "playlist_write": usable, "playback": usable, "remove_occurrence": False,
-                             "remove_all_occurrences": usable, "voice_control": False},
+                             "remove_all_occurrences": usable, "voice_control": usable and settings.spotify_voice_approved},
             "unavailable_reason": reason, "external_url": "https://open.spotify.com/"}
 
 
@@ -106,6 +107,7 @@ class Transfer(PlaybackIntent):
 class Play(PlaybackIntent):
     operation: Literal["play"]
     position: int = Field(default=0, ge=0, le=5000)
+    snapshot_id: str | None = Field(default=None, min_length=1, max_length=256)
 
 
 class Shuffle(PlaybackIntent):
@@ -267,14 +269,27 @@ async def mutation(request_id: str, connection_id: str = Query(min_length=1, max
 @router.post("/device")
 async def register_device(body: Device, request: Request, current: str = Depends(active)):
     await sp.connection(current, body.connection_id)
-    data = await sp.request(current, "GET", "/me/player/devices", generation=body.connection_id)
-    available = data.get("devices")
-    if not isinstance(available, list) or len(available) > 100:
-        raise sp.SpotifyError("spotify_unavailable", 503)
-    matches = [d for d in available if isinstance(d, dict) and d.get("id") == body.device_id and
-               d.get("name") == "Koe Web Player" and d.get("type") == "Computer" and d.get("is_restricted") is False]
-    if len(matches) != 1:
-        raise sp.SpotifyError("spotify_device_unavailable", message="This browser's Spotify player is unavailable.")
+    # SDK ready and the Web API device list can propagate at different times. Retry reads only;
+    # never transfer/play until this exact SDK ID is independently observed and validated.
+    # https://developer.spotify.com/documentation/web-playback-sdk/reference#ready
+    try:
+        async with asyncio.timeout(4):
+            for attempt in range(8):
+                data = await sp.request(current, "GET", "/me/player/devices", generation=body.connection_id)
+                available = data.get("devices")
+                if not isinstance(available, list) or len(available) > 100:
+                    raise sp.SpotifyError("spotify_unavailable", 503)
+                matches = [d for d in available if isinstance(d, dict) and d.get("id") == body.device_id]
+                if matches:
+                    if (len(matches) != 1 or matches[0].get("name") != "Koe Web Player"
+                            or matches[0].get("type") != "Computer" or matches[0].get("is_restricted") is not False):
+                        raise sp.SpotifyError("spotify_device_unavailable", message="Spotify did not identify this as an unrestricted Koe browser player. No playback was requested.")
+                    break
+                if attempt == 7:
+                    raise TimeoutError
+                await asyncio.sleep(.3)
+    except TimeoutError:
+        raise sp.SpotifyError("spotify_device_unavailable", message="Spotify has not listed this browser player yet. No playback was requested; press Play to retry.") from None
     record = {"device_id": body.device_id, "connection_id": body.connection_id, "expires_at": time.time() + 900}
     sp.devices[(current, auth._hash(request.cookies[auth.SESSION_COOKIE]))] = record
     return record
@@ -294,6 +309,8 @@ async def playback(body: Annotated[Transfer | Play | Shuffle | Repeat, Field(dis
     token = await sp.access_token(current, body.connection_id)
     if isinstance(body, Play):
         playlist = await sp.selected(current, body.connection_id)
+        if body.snapshot_id is not None and body.snapshot_id != playlist['snapshot_id']:
+            raise sp.SpotifyError('spotify_playlist_stale', message='Playlist changed after song selection. Ask again.')
         if body.position >= playlist["total"]:
             raise sp.SpotifyError("spotify_invalid_request", 400, "Choose a track in this playlist.")
         # Targeted state evidence prevents silent takeover when another device is active.

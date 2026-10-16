@@ -187,19 +187,58 @@ async def dashboard_read() -> dict:
                 con.execute("SET LOCAL statement_timeout = 10000")
                 queries = {
                     "activity": """SELECT to_jsonb(display) FROM (
-                        SELECT id,session_id,channel,kind,summary,ts,latency_json
-                        FROM public.koe_activity WHERE owner_id=%(owner)s ORDER BY ts DESC LIMIT 50
+                        SELECT a.id,a.session_id,a.channel,a.kind,a.summary,a.ts,a.latency_json,
+                          p.tool AS __tool,p.args_json AS __args,p.summary AS __summary,
+                          coalesce(a.payload_json->'result'->>'url',p.result_json->>'url') AS __url,
+                          a.payload_json->'result'->'error'->>'message' AS __error
+                        FROM public.koe_activity a LEFT JOIN public.koe_pending_actions p
+                          ON p.owner_id=a.owner_id AND p.id::text=a.payload_json->>'action_id'
+                        WHERE a.owner_id=%(owner)s ORDER BY a.ts DESC LIMIT 50
                     ) AS display""",
                     "pending": """SELECT to_jsonb(display) FROM (
-                        SELECT id,session_id,channel,summary,expires_ts,status
+                        SELECT id,session_id,channel,summary,expires_ts,status,tool AS __tool,args_json AS __args
                         FROM public.koe_pending_actions WHERE owner_id=%(owner)s AND status='pending'
                         ORDER BY created_ts DESC LIMIT 50
                     ) AS display""",
                 }
-                return {name: [row[0] for row in con.execute(query, {"owner": owner}).fetchall()]
+                return {name: [_display_row(row[0]) for row in con.execute(query, {"owner": owner}).fetchall()]
                         for name, query in queries.items()}
         except psycopg.Error:
             raise StoreError("Saved dashboard activity is unavailable. Check Neon connectivity and migration.") from None
+
+    return await asyncio.to_thread(read)
+
+
+def _display_row(row):
+    # Private query columns are consumed on the server, never returned as execution payloads.
+    from koe import action_display
+    public = {k: v for k, v in row.items() if not k.startswith('__')}
+    if row.get('__tool') and isinstance(row.get('__args'), dict):
+        public['display'] = action_display.describe(row['__tool'], row['__args'])
+    if row.get('__summary'): public['audit_summary'] = row['__summary']
+    if url := action_display.safe_link(row.get('__url')):
+        public['url'] = url
+    if row.get('__error'):
+        public['result'] = {'error': {'message': action_display.text(row['__error'], 2000)}}
+    return public
+
+
+async def action_previews(action_ids):
+    """Hydrate only previews for IDs from this owner's app history; no execution data crosses the boundary."""
+    if not configured() or not action_ids: return {}
+    options, owner = connection_options(), identity.owner_id()
+
+    def read():
+        try:
+            with _connection(options) as con:
+                con.execute('SET LOCAL statement_timeout = 10000')
+                rows = con.execute("""SELECT to_jsonb(display) FROM (
+                    SELECT id,summary,expires_ts,tool AS __tool,args_json AS __args
+                    FROM public.koe_pending_actions WHERE owner_id=%(owner)s AND id::text=ANY(%(ids)s)
+                    LIMIT 200) display""", {'owner': owner, 'ids': list(dict.fromkeys(action_ids))[:200]}).fetchall()
+                return {row[0]['id']: _display_row(row[0]) for row in rows}
+        except psycopg.Error:
+            raise StoreError('Saved approval previews are unavailable.') from None
 
     return await asyncio.to_thread(read)
 

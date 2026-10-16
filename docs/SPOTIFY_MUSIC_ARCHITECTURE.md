@@ -1,10 +1,12 @@
 # Spotify Premium music and Koe voice: feature architecture
 
 **Date:** 2026-10-15 (Asia/Kolkata)  
-**Status:** Proposed architecture; implementation has not started.  
+**Status:** Manual pipeline implemented; separate approved voice extension added locally 2026-10-16. Real account/device acceptance remains pending.
 **Scope:** Personal Spotify Premium playback, one dedicated private playlist, and coexistence with Koe's existing voice features.  
 **Owner:** Rohit's authenticated Koe account initially.  
 **Budget:** Existing Spotify Premium subscription; no new paid music service or backend framework planned.
+
+**2026-10-16 update:** The user confirmed written Spotify approval for voice control and explicitly approved migration 007 plus local enablement. The default-off extension and its permission/session/transport boundaries are specified in [VOICE_CONTROL.md](spotify/VOICE_CONTROL.md) and SPEC §17.3. The standard-policy limitations below still apply to deployments without that separate approval; separate windows do not themselves create permission. The extension uses only generic transport/volume and no Spotify content in the model. Current setup and acceptance are in [SPOTIFY_LOCAL_SETUP.md](../backend/SPOTIFY_LOCAL_SETUP.md). This working tree has not been deployed.
 
 **Implementation split:** [Two-session coordination and current status](spotify/CURRENT_STATUS.md). Codex owns backend implementation; Plotcode owns frontend implementation. Those session briefs define file ownership and persistent handoffs.
 
