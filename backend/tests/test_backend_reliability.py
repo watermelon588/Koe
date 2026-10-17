@@ -82,6 +82,11 @@ def test_deployment_diagnostics_are_authenticated_and_never_return_secret_values
     monkeypatch.setattr(settings, 'koe_access_token', 'synthetic-access-secret')
     monkeypatch.setattr(settings, 'gemini_api_key_2', 'synthetic-gemini-secret')
     monkeypatch.setattr(settings, 'openrouter_api_key', 'synthetic-router-secret')
+    monkeypatch.setattr(settings, 'spotify_client_id', 'synthetic-spotify-id')
+    monkeypatch.setattr(settings, 'spotify_client_secret', 'synthetic-spotify-secret')
+    monkeypatch.setattr(settings, 'spotify_redirect_uri', 'https://koe-pi.vercel.app/auth/spotify/callback')
+    monkeypatch.setattr(settings, 'koe_secret_key', 'synthetic-encryption-secret-longer-than-32')
+    monkeypatch.setattr(settings, 'spotify_enabled', True)
     monkeypatch.setenv('RENDER_GIT_COMMIT', 'a' * 40)
     with TestClient(app) as client:
         health = client.get('/health')
@@ -92,7 +97,14 @@ def test_deployment_diagnostics_are_authenticated_and_never_return_secret_values
         assert r.status_code == 200
         assert r.headers['cache-control'] == 'no-store'
         assert r.json()['configuration']['gemini_secondary_configured'] is True
+        assert r.json()['configuration']['spotify_configured'] is True
+        assert r.json()['configuration']['spotify_client_secret_present'] is True
+        assert r.json()['configuration']['spotify_enabled'] is True
         assert 'synthetic-' not in r.text
+        monkeypatch.setattr(settings, 'spotify_client_secret', '')
+        missing = client.get('/api/backend/status', headers={'Authorization': 'Bearer synthetic-access-secret'}).json()['configuration']
+        assert missing['spotify_configured'] is False
+        assert missing['spotify_client_secret_present'] is False
         monkeypatch.setenv('RENDER_GIT_COMMIT', 'not-a-revision\nprivate')
         assert client.get('/health').headers['x-koe-revision'] == 'unknown'
 

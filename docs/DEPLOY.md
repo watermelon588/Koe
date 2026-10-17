@@ -120,3 +120,7 @@ npm run dev
 cloudflared tunnel --url http://localhost:8000
 ```
 To try the app on the phone from the laptop, tunnel the frontend instead: `cloudflared tunnel --url http://localhost:5173`. Vite proxies `/api` and `/ws` to the backend.
+
+## Spotify production settings
+
+Local `backend/.env` is ignored and is not deployed by GitHub. On the existing Render backend, configure `SPOTIFY_CLIENT_ID` and `SPOTIFY_CLIENT_SECRET` from the existing Spotify developer app; keep the existing `KOE_SECRET_KEY` unchanged. Set `SPOTIFY_REDIRECT_URI=https://koe-pi.vercel.app/auth/spotify/callback`, `SPOTIFY_ENABLED=true`, and, for the owner-confirmed written approval, `SPOTIFY_VOICE_APPROVED=true`. Add that exact HTTPS callback to the existing Spotify developer app while retaining its local callback. Never place the secret in Vercel frontend variables. Save/redeploy Render, then refresh Music. Owner-only `/api/backend/status` exposes booleans for the required values, encryption readiness and enablement; it never returns their secret contents. If all presence booleans are true but `spotify_configured` is false, inspect callback format. These instructions describe required setup, not a claim that it was applied.

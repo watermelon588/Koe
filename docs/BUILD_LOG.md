@@ -1412,3 +1412,11 @@ Backend 435 passed; frontend 26 tests, tsc, lint (no new warnings) and build pas
 **Try it:** Open `http://127.0.0.1:5173/app/music`. Use Change playlist, type an artist and select a suggestion, then use Call Koe directly on Music. Request an artist or exact song in the allowed playlist; missing songs should offer search rather than silently add anything.
 
 **Interview line:** “I traced a stuck UI to a persisted uncertainty state, separated settings from playback hazards, and verified recovery and the whole user flow across browser, API and audio lifecycle.”
+
+## Correct keshi and diagnose hosted Spotify configuration (2026-10-17)
+
+The user clarified the artist is keshi and that the unavailable message is on the live site. Corrected the Music example. Live `/health` now reports 7752b54, so the previous deployment-delay explanation no longer applies. The music route exists (unauthenticated request correctly returns 401); the screenshot configuration message and locally valid settings point to hosted configuration, whose values cannot be inspected without Render access. Added secret-free Spotify presence/enablement/encryption booleans to the existing owner-only diagnostics and extended its credential-redaction regression. No credentials or hosting flags were changed. Production setup remains blocked on Render access or owner configuration; do not claim playback fixed by this copy/diagnostic change.
+
+Try it: inspect owner backend diagnostics for missing Spotify booleans, then configure Render and the matching developer callback. Interview line: “A successful code deployment does not deploy ignored local environment settings.”
+
+Verification: five backend reliability/authorization/redaction tests pass; frontend production build passes. Existing mascot chunk-size advisory remains.

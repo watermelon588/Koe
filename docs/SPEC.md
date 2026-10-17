@@ -4,6 +4,8 @@
 
 ## 1. Objective
 
+Production Spotify setup diagnostics (2026-10-17): the existing owner-only backend status reports configuration presence and enablement as booleans, including Spotify credentials, callback, encryption readiness and approved voice flag. It never returns secret values. Music's example artist is keshi.
+
 A single-user, voice-first agent for a developer founder. It works across GitHub, Google Calendar, Notion and Google Sheets, through two channels: a **live web voice call with a mascot** and **WhatsApp**. Every write that affects others or the calendar waits for the user's approval. Accuracy and latency are measured.
 
 ### Backend reliability pass (2026-10-13; UI frozen)

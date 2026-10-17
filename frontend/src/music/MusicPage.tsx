@@ -71,7 +71,7 @@ function MusicAssistant({ music, call, model, token }: { music: Music; call: Ret
         <button className="end" onClick={call.stop}><PhoneDisconnect />End call</button>
       </> : <button className="primary" onClick={() => void call.start(token, music.status.phase === 'connected' && music.playlist ? music.prepareVoice : undefined)}><Phone />Call Koe</button>}</div>
     </header>
-    <p className="music-assistant-hint">Talk about your day, or ask “play some Kesha”.</p>
+    <p className="music-assistant-hint">Talk about your day, or ask “play some keshi”.</p>
     <p className="music-assistant-note">Call to talk or choose music from this playlist. Koe finishes her reply before the music starts.</p>
     {music.voice.available && music.voice.enabled && <button className="music-link" onClick={() => void music.voice.allow(false)}>Disable voice controls</button>}
     {(call.error || music.voice.notice) && <p className="music-inline-status" role="status">{call.error || music.voice.notice}</p>}

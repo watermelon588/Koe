@@ -4,7 +4,7 @@ import re
 
 from fastapi import APIRouter, Depends, HTTPException, Response
 
-from koe import auth, gemini, identity, store
+from koe import auth, connections, gemini, identity, store, spotify_service
 from koe.config import settings
 
 router = APIRouter(prefix='/api/backend', dependencies=[Depends(auth.http_owner)])
@@ -28,6 +28,13 @@ async def status(response: Response):
         'openrouter_free_model': settings.openrouter_model == 'openrouter/free' or settings.openrouter_model.endswith(':free'),
         'notion_configured': bool(settings.notion_token and (settings.notion_database_id or settings.notion_data_source_id)),
         'neon_configured': store.configured(),
+        'spotify_configured': spotify_service.configured(),
+        'spotify_client_id_present': bool(settings.spotify_client_id),
+        'spotify_client_secret_present': bool(settings.spotify_client_secret),
+        'spotify_redirect_uri_present': bool(settings.spotify_redirect_uri),
+        'connection_encryption_configured': connections.configured(),
+        'spotify_enabled': settings.spotify_enabled,
+        'spotify_voice_approved': settings.spotify_voice_approved,
     }, 'limits': {'gemini_attempt_ms': gemini.TIMEOUT_MS, 'gemini_generation_seconds': gemini.GENERATION_SECONDS,
                   'audit_backlog_capacity': store.MAX_BACKGROUND},
         'audit_pending': len(store._background),
