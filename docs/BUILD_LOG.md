@@ -1439,3 +1439,19 @@ Verification: five backend reliability/authorization/redaction tests pass; front
 **Final root cause in the browser:** A fresh resume restored the saved seek position after Play resolved, even when voice had already queued Pause. That late seek reopened the audio barrier. Resume now checks current audio ownership/switching and observed playback before appending a seek. The delayed browser test failed repeatedly before this correction and passes afterward.
 
 **Verification:** 73 frontend tests; 72 backend Spotify/auth/voice tests; 19 manual browser checks plus 10 same-page voice checks, all passing. The SDK double now delays playing observations by 450ms. An acknowledgement arriving after 8.2 seconds is accepted without duplicate release. Production build passes; lint has only the four pre-existing warnings, and the existing mascot chunk-size advisory remains. Browser screenshots checked at 375px; iOS volume capability is emulated in Chromium, not verified on physical Safari. Spotify/provider audio and Gemini function selection remain simulated: no claim of live streaming, microphone recognition or physical mobile acceptance. No hosted configuration or deployment changes performed.
+
+## Complete GitHub activity wiring — 2026-10-18
+
+**Request:** Defer Music latency, choose Docs versus Drive, then finish GitHub awareness of yesterday's commits, summaries and statistics. User selected Docs creation/editing.
+
+**Trace:** Used existing Graphify nodes for GitHub tools, approval gate and dashboard, then verified current code because the graph predates several integrations. Applied API/interface-design guidance. Found that stats were only visible after conversational tool calls, commit metadata had no dedicated agent tool, repository selection silently restored defaults for an empty choice, and the picker exposed only the first 100 repositories with silent failures.
+
+**Changes:** Dashboard refresh publishes yesterday's activity through the existing per-person event stream. Desktop/mobile stats show linked commit titles, repositories, observation time, scope and missing coverage. Added github_commit_summary to the shared chat/voice registry with bounded message/file-stat evidence and no automatic writes. History retains accessible repos when others fail; missing counts remain unknown. JSON repository preferences preserve empty selections; picker pagination/retry/errors use existing UI styles. Future work is in tasks/todo.md and tasks/plan.md; operator instructions in GITHUB_WORKFLOW.md.
+
+**Verification:** 79 focused backend tests passed; the added OAuth → saved repository → agent activity → commit detail integration test also passed in the six-test connection rerun (80 distinct backend checks total). All 74 frontend tests pass. Production build passes; lint retains four existing warnings and the existing mascot chunk advisory. Browser tests of the built app pass at desktop and 375px: automatic yesterday data, linked commits, load failure/retry, pagination and saved selection; no uncaught browser errors. Visually inspected the mobile screenshot.
+
+**Limits:** Provider responses and model tool selection are simulated; real GitHub access, live Gemini speech and hosted acceptance remain unverified. No Render operation, push/deployment, provider writes or Music optimization. Preserve concurrent design mockups and their log entries.
+
+**Try it:** Connect GitHub and choose repositories in Settings; open Dashboard; ask Koe “What did I commit yesterday?”, then request details of a returned commit. Summary content is source evidence, never instructions or proof of correctness.
+
+**Interview line:** “I connected authenticated provider evidence through shared agent tools and a live dashboard, preserving time boundaries, ownership and partial-data semantics.”

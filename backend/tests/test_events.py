@@ -146,6 +146,22 @@ def test_background_refresh_does_not_overwrite_a_newer_conversational_result(mon
     assert events.hub_for().panels["calendar"]["result"]["events"][0]["id"] == "new"
 
 
+def test_dashboard_loads_yesterday_without_a_conversation(monkeypatch):
+    from koe import connections
+    monkeypatch.setattr(connections, 'github_account', lambda: {'token': 'synthetic', 'login': 'me'})
+    async def empty(*args, **kwargs): return {'prs': [], 'events': []}
+    async def activity(**kwargs):
+        assert kwargs == {'since': 'yesterday'}
+        return {'totals': {'commits': 3, 'merged_prs': 1}, 'commits': [{'sha': 'abcdef1'}]}
+    monkeypatch.setattr(dashboard.calendar, 'calendar_list', empty)
+    monkeypatch.setattr(dashboard.github, 'github_my_prs', empty)
+    monkeypatch.setattr(dashboard.github, 'github_review_queue', empty)
+    monkeypatch.setattr(dashboard.github_stats, 'github_activity', activity)
+    asyncio.run(dashboard.refresh())
+    result = events.hub_for().snapshot()['panels']['github_yesterday']['result']
+    assert result['totals']['commits'] == 3
+
+
 def test_cancelled_tool_emits_an_end_event_and_propagates_cancellation(monkeypatch):
     async def cancelled(**kwargs):
         raise asyncio.CancelledError()

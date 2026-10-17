@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { activityText, emptyState, latencyStats, latestResult, reduceEvent } from '../src/dashboard/state.ts'
+import { activityText, emptyState, githubActivityView, latencyStats, latestResult, reduceEvent } from '../src/dashboard/state.ts'
 
 test('snapshot restores state; unknown events do not reset it', () => {
   const state = reduceEvent(emptyState, { type: 'snapshot', panels: { calendar: { result: { events: [] } } },
@@ -53,4 +53,14 @@ test('GitHub stats come only from the latest successful tool result', () => {
   const found = latestResult({ ...emptyState, activity: [failed, ok] }, 'github_activity')
   assert.equal(found.result.totals.commits, 3)
   assert.equal(found.result.totals.merged_prs, null) // unknown stays unknown, never zero
+})
+
+test('yesterday snapshot renders without an agent call and a newer failed refresh does not become zero', () => {
+  const result = { totals: { commits: 2, merged_prs: 0 }, commits: [{ sha: 'abcdef1', title: 'Fix playback' }] }
+  const data = reduceEvent(emptyState, { type: 'panel', name: 'github_yesterday', ts: '2026-10-18T10:00:00Z', result })
+  assert.equal(githubActivityView(data).result.commits[0].title, 'Fix playback')
+  assert.equal(githubActivityView(data).label, 'Yesterday')
+  const failed = reduceEvent(data, { type: 'panel', name: 'github_yesterday', ts: '2026-10-18T11:00:00Z', result: { error: { message: 'Access revoked' } } })
+  assert.equal(githubActivityView(failed).result, undefined)
+  assert.equal(githubActivityView(failed).error, 'Access revoked')
 })

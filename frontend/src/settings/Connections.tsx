@@ -51,7 +51,8 @@ export function ConnectionsSection() {
   const [list, setList] = useState<Connection[] | null>(null)
   const [ready, setReady] = useState(true)
   const [githubReady, setGithubReady] = useState(false)
-  const [repos, setRepos] = useState<{ all: string[]; chosen: string[] } | null>(null)
+  const [repos, setRepos] = useState<{ all: string[]; chosen: string[]; next: number | null } | null>(null)
+  const [repoError, setRepoError] = useState('')
   const [timesheet, setTimesheet] = useState('')
   const [sheetError, setSheetError] = useState('')
   const [geminiKey, setGeminiKey] = useState('')
@@ -99,11 +100,15 @@ export function ConnectionsSection() {
     }
   }
 
-  async function openRepos() {
+  async function openRepos(page = 1) {
     setBusy('repos')
+    setRepoError('')
     try {
-      const r = await fetch(httpUrl('/api/connections/github/repos'))
-      if (r.ok) { const body = await r.json(); setRepos({ all: body.repos, chosen: body.selected }) }
+      const r = await fetch(httpUrl(`/api/connections/github/repos?page=${page}`))
+      if (!r.ok) throw Error('Could not load repositories. Check your GitHub connection and retry.')
+      const body = await r.json()
+      setRepos(old => ({ all: [...new Set([...(page > 1 ? old?.all ?? [] : []), ...body.repos, ...body.selected])] as string[], chosen: page > 1 ? old?.chosen ?? body.selected : body.selected, next: body.next_page ?? null }))
+    } catch (error) { setRepoError(error instanceof Error ? error.message : 'Could not load repositories.')
     } finally {
       setBusy('')
     }
@@ -114,7 +119,9 @@ export function ConnectionsSection() {
     setBusy('repos')
     try {
       const r = await fetch(httpUrl('/api/connections/github/repos'), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ repos: repos.chosen }) })
-      if (r.ok) setRepos(null)
+      if (!r.ok) throw Error('Could not save repositories. Choose up to 20 and try again.')
+      setRepos(null); setRepoError('')
+    } catch (error) { setRepoError(error instanceof Error ? error.message : 'Could not save repositories.')
     } finally {
       setBusy('')
     }
@@ -155,6 +162,7 @@ export function ConnectionsSection() {
                 : <button className="soft" disabled={busy === 'timesheet'} onClick={() => void createTimesheet()}>{busy === 'timesheet' ? 'Creating…' : 'Create my timesheet'}</button>} />}
             {provider === 'github' && connected && <SettingRow sub icon={GitHubIcon} title="Repositories" status="Which repositories Koe reads (up to 20)."
               action={!repos && <button className="soft" disabled={busy === 'repos'} onClick={() => void openRepos()}>{busy === 'repos' ? 'Loading…' : 'Choose'}</button>}>
+              {repoError && <p role="status">{repoError}</p>}
               {repos && <fieldset className="repo-pick">
                 <legend className="visually-hidden">Repositories Koe reads</legend>
                 <div className="repo-list">{repos.all.map((name) => <label key={name}>
@@ -162,6 +170,7 @@ export function ConnectionsSection() {
                     onChange={(e) => setRepos({ ...repos, chosen: e.target.checked ? [...repos.chosen, name] : repos.chosen.filter((r) => r !== name) })} />
                   <span>{name}</span>
                 </label>)}</div>
+                {repos.next && <button type="button" className="ghost" disabled={busy === 'repos'} onClick={() => void openRepos(repos.next!)}>Load more repositories</button>}
                 <div className="pair"><button type="button" className="ghost" onClick={() => setRepos(null)}>Cancel</button>
                   <button type="button" className="soft" disabled={busy === 'repos'} onClick={() => void saveRepos()}>Save {repos.chosen.length}</button></div>
               </fieldset>}

@@ -67,6 +67,23 @@ def test_repos_are_listed_from_github_and_chosen_per_person(client, monkeypatch)
     assert client.put("/api/connections/github/repos", json={"repos": ["not a repo"]}).status_code == 400
     assert client.put("/api/connections/github/repos", json={"repos": ["rohit/koe"]}).status_code == 204
     assert github_work.repositories() == ["rohit/koe"]
+    monkeypatch.setattr(settings, 'github_repos', 'owner/default')
+    assert client.put('/api/connections/github/repos', json={'repos': []}).status_code == 204
+    assert connections.github_repos() == []
+    with pytest.raises(ValueError, match='Pick'):
+        github_work.repositories()
+
+
+def test_repository_picker_pagination_does_not_follow_external_links(client, monkeypatch):
+    sign_in(client, monkeypatch, ADMIN)
+    connect_github(client)
+    with respx.mock:
+        route = respx.get(f'{connections.GITHUB_API}/user/repos').respond(200, json=[{'full_name': 'me/later'}],
+            headers={'Link': '<https://untrusted.invalid/repos?page=3>; rel="next"'})
+        response = client.get('/api/connections/github/repos?page=2')
+        assert response.json()['next_page'] == 3
+        assert route.calls.last.request.url.params['page'] == '2'
+        assert client.get('/api/connections/github/repos?page=0').status_code == 422
 
 
 def test_tools_use_the_callers_token_and_a_friend_never_gets_the_owners(monkeypatch):
@@ -86,6 +103,7 @@ def test_tools_use_the_callers_token_and_a_friend_never_gets_the_owners(monkeypa
         assert asyncio.run(whoami()) == "Bearer gho_friends_token"
     finally:
         identity.OWNER.reset(token)
+
     token = identity.OWNER.set("someone-else")
     try:
         with pytest.raises(github_work.GitHubError, match="not connected"):
@@ -94,6 +112,33 @@ def test_tools_use_the_callers_token_and_a_friend_never_gets_the_owners(monkeypa
             github_work.repositories()
     finally:
         identity.OWNER.reset(token)
+
+
+def test_connected_account_selection_drives_agent_activity_and_commit_evidence(client, monkeypatch):
+    from koe import agent, events
+    sign_in(client, monkeypatch, ADMIN)
+    connect_github(client)
+    assert client.put('/api/connections/github/repos', json={'repos': ['rohit/koe']}).status_code == 204
+    sha = 'abcdef1234567890'
+    commit = {'sha': sha, 'html_url': f'https://github.com/rohit/koe/commit/{sha}',
+              'commit': {'message': 'Fix playback handoff', 'committer': {'date': '2026-10-16T12:00:00Z'}},
+              'stats': {'additions': 3, 'deletions': 1, 'total': 4},
+              'files': [{'filename': 'player.ts', 'status': 'modified', 'additions': 3, 'deletions': 1}]}
+    with respx.mock:
+        respx.get('https://api.github.com/search/issues').respond(200, json={'items': [], 'total_count': 0})
+        history = respx.get('https://api.github.com/repos/rohit/koe/commits').respond(200, json=[commit])
+        detail = respx.get(f'https://api.github.com/repos/rohit/koe/commits/{sha}').respond(200, json=commit)
+        async def scenario():
+            context = agent.Conversation('web')
+            result = await agent.run_tool('github_activity', {'since': '2026-10-16', 'until': '2026-10-17'}, context=context)
+            assert result['totals']['commits'] == 1 and result['totals_are_complete']
+            found = result['commits'][0]
+            summary = await agent.run_tool('github_commit_summary', {'repo': found['repo'], 'sha': found['sha']}, context=context)
+            assert summary['url'] == commit['html_url'] and summary['files'][0]['path'] == 'player.ts'
+            assert events.hub_for().activity[0]['name'] == 'github_commit_summary'
+        asyncio.run(scenario())
+        assert history.calls.last.request.url.params['author'] == 'octo-rohit'
+        assert detail.calls.last.request.headers['authorization'] == 'Bearer gho_secret_token'
 
 
 def test_disconnecting_github_revokes_the_grant(client, monkeypatch):

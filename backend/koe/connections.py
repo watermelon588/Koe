@@ -23,7 +23,7 @@ from datetime import datetime, timezone
 
 import httpx
 from cryptography.fernet import Fernet, InvalidToken
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from google.auth.transport.requests import Request as GoogleRequest
 from google.oauth2.credentials import Credentials
 from pydantic import BaseModel
@@ -262,22 +262,30 @@ def forget_github(owner: str) -> None:
 
 def github_repos() -> list[str]:
     mine = pref("github_repos")
+    if mine.startswith('['):
+        # JSON preserves an explicit empty choice instead of restoring owner defaults.
+        try:
+            selected = json.loads(mine)
+            return selected if isinstance(selected, list) and all(isinstance(r, str) for r in selected) else []
+        except ValueError:
+            return []
     chosen = mine or (settings.github_repos if identity.is_owner() else "")
     return list(dict.fromkeys(x.strip() for x in chosen.split(",") if x.strip()))
 
 
 @api.get("/github/repos")
-async def github_repo_list():
+async def github_repo_list(page: int = Query(default=1, ge=1, le=1000)):
     """The person's repositories (most recently pushed first) and which ones Koe watches."""
     account = await asyncio.to_thread(github_account)
     if not account["token"]:
         raise HTTPException(409, "Connect GitHub first.")
     async with httpx.AsyncClient(timeout=15) as http:
-        r = await http.get(f"{GITHUB_API}/user/repos", params={"per_page": 100, "sort": "pushed"},
+        r = await http.get(f"{GITHUB_API}/user/repos", params={"per_page": 100, "sort": "pushed", "page": page},
                            headers={"Authorization": f"Bearer {account['token']}", "Accept": "application/vnd.github+json"})
     if r.status_code != 200:
         raise HTTPException(502, "GitHub didn't list your repositories. Try reconnecting.")
-    return {"repos": [repo["full_name"] for repo in r.json()], "selected": await asyncio.to_thread(github_repos)}
+    return {"repos": [repo["full_name"] for repo in r.json()], "selected": await asyncio.to_thread(github_repos),
+            "next_page": page + 1 if 'next' in r.links and page < 1000 else None}
 
 
 class RepoChoice(BaseModel):
@@ -289,5 +297,5 @@ async def choose_github_repos(body: RepoChoice):
     repos = list(dict.fromkeys(r.strip() for r in body.repos if r.strip()))
     if len(repos) > 20 or any(not _REPO.fullmatch(r) for r in repos):
         raise HTTPException(400, "Choose up to 20 repositories (owner/name).")
-    await set_pref("github_repos", ",".join(repos))
+    await set_pref("github_repos", json.dumps(repos))
     return Response(status_code=204)

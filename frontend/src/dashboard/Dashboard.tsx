@@ -1,6 +1,6 @@
 import { useEffect, useState, type KeyboardEvent, type ReactNode, type ComponentType } from 'react'
 import { ArrowClockwise, Pulse, SealCheck } from '@phosphor-icons/react'
-import { activityAudit, activityDay, activityLink, activityText, clockTime, isBusy, latencyStats, latestResult, type Activity, type Approval, type DashboardState, type GitHubActivity,
+import { activityAudit, activityDay, activityLink, activityText, clockTime, githubActivityView, isBusy, latencyStats, latestResult, type Activity, type Approval, type DashboardState,
   type GitHubContributions, type Panel, type PullRequest } from './state'
 import { usePending } from './useDashboard'
 import { CalendarIcon, GitHubIcon } from '../components/BrandIcon'
@@ -60,12 +60,14 @@ const Stat = ({ n, unit = '' }: { n: number | null | undefined; unit?: string })
 // Only what Koe actually read this session: commits and merged PRs stay separate, unknown is never shown as zero,
 // and lines are "changed lines in analyzed commits", not a total.
 export function GitHubStats({ data }: { data: DashboardState }) {
-  const activity = latestResult<GitHubActivity>(data, 'github_activity')?.result
+  const view = githubActivityView(data)
+  const activity = view.result
   const streaks = latestResult<GitHubContributions>(data, 'github_contributions')?.result
-  if (!activity && !streaks) return <p className="dash-empty">Ask Koe “How much did I ship yesterday?” or “What’s my GitHub streak?”
-    and the numbers it read show up here.</p>
+  if (!activity && !streaks) return <p className="dash-empty">{view.error ?? 'Loading yesterday’s activity. Connect GitHub and choose repositories in Settings.'}</p>
   return <>
+    {view.error && <p className="dash-empty" role="status">{view.error}</p>}
     {activity && <div className="gh-stats">
+      <h3>{view.label}</h3>
       <dl className="gh-totals">
         <div><dt>Commits</dt><dd><Stat n={activity.totals.commits} /></dd></div>
         <div><dt>Merged PRs</dt><dd><Stat n={activity.totals.merged_prs} /></dd></div>
@@ -76,6 +78,13 @@ export function GitHubStats({ data }: { data: DashboardState }) {
         <span>{r.repo}</span><small>{known(r.commits)} commits · {known(r.merged_prs)} merged</small></li>)}</ul>}
       {!!activity.prs?.length && <ul className="rows">{activity.prs.slice(0, 5).map((pr) => <li key={`${pr.repo}#${pr.number}`}>
         <SafeLink url={pr.url}>{pr.title}</SafeLink><small>merged · {pr.repo}#{pr.number}</small></li>)}</ul>}
+      {!!activity.commits?.length && <ul className="rows">{activity.commits.slice(0, 10).map(commit => <li key={`${commit.repo}:${commit.sha}`}>
+        <div><SafeLink url={commit.url}>{commit.title}</SafeLink><small>{commit.repo} · {commit.sha.slice(0, 7)}</small></div>
+        <time dateTime={commit.date}>{clockTime(commit.date, activity.timezone)}</time>
+      </li>)}</ul>}
+      {(activity.commits?.length ?? 0) > 10 && <p className="dash-meta">Showing 10 of {activity.commits!.length} commits. Ask Koe for the full summary.</p>}
+      {!!activity.unavailable_repositories?.length && <p className="dash-meta">Could not read: {activity.unavailable_repositories.join(', ')}</p>}
+      <p className="dash-meta">{activity.scope}{activity.as_of && ` · Checked ${clockTime(activity.as_of, activity.timezone)}`}</p>
       <p className="dash-meta">{activity.since} to {activity.until}{activity.end_exclusive ? ' (end not included)' : ''} · {activity.timezone}
         {(activity.partial || activity.totals_are_complete === false) && ' · partial: some data could not be read'}
         {activity.lines && ` · lines from ${activity.lines.commits_analyzed ?? '?'} analyzed commits${activity.lines.partial ? ' (partial)' : ''}`}</p>
@@ -173,6 +182,7 @@ export function Dashboard({ data, connected, currentApproval, decide, refresh }:
       </>}
 
       {tab === 'github' && <>
+        <GitHubStats data={data} />
         <h3>Waiting for your review</h3>
         <PRList panel={reviews} label="No reviews waiting on you." />
         <h3>Your pull requests</h3>

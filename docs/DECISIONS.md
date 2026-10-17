@@ -143,3 +143,6 @@ Replace a timed-out SDK script on explicit retry. Music Call preparation errors 
 Source: https://developer.spotify.com/documentation/web-playback-sdk/reference (getCurrentState, activateElement, setVolume).
 
 Saved-position restoration must not append Seek after a pending audio handoff. Check current music ownership, no active switch, and observed playing state before the follow-up seek. The existing browser voice-reply scenario with delayed SDK observations is the regression test.
+
+## GitHub evidence and integration priorities — 2026-10-18
+Rohit selected Google Docs creation/editing over standalone Drive file management. Record it for later; Music latency is also deferred. GitHub work reuses existing account, tools, event stream and dashboard instead of introducing a second integration. Yesterday uses the configured local timezone and an exclusive next-midnight boundary; default-branch authored commits and merged PRs remain separate metrics. Commit detail is a bounded read-only evidence tool shared by chat and voice. Inaccessible repositories yield partial coverage and unknown per-repo counts. Repository selection now stores JSON so an empty list cannot silently restore owner environment defaults; legacy comma-separated choices still work. Pagination stays on the fixed GitHub origin. No hosted changes or real GitHub writes.

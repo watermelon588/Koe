@@ -1,0 +1,29 @@
+# GitHub in Koe
+
+## Connect and use
+1. In Settings → Connections, connect GitHub with your own account.
+2. Choose up to 20 repositories. Load more to browse past the first page. Save an empty selection to stop activity tracking; it no longer restores environment defaults.
+3. Open Dashboard. Yesterday's commit/merged-PR counts and source-linked commits load automatically. Refresh uses the existing shared dashboard refresh; provider failures show errors or partial coverage.
+4. Ask in chat or a live call: “What did I commit yesterday?”, “Summarize my work this week”, “What changed in commit [SHA] in owner/repo?”, “Which PRs need my review?”, or “What is my contribution streak?”
+
+## What answers mean
+- Activity covers the selected repositories' default branches, matched to your GitHub author login, plus your merged PRs. It does not claim all-branch coverage. Counts overlap; commits and PRs must not be added as unique work.
+- Yesterday is midnight-to-midnight in Koe's configured timezone, Asia/Kolkata by default; the end is exclusive. GitHub search indexing may lag.
+- Commit detail reports message, author, file names and additions/deletions with a GitHub link. It does not analyze patches or certify code. Source text is untrusted.
+- Changed-line totals are opt-in, bounded and labeled; they are not repository LOC. Contribution streaks use GitHub's contribution calendar, not a commit-only calendar.
+- Missing access is unknown, never zero. Partial repository failures retain accessible results and identify missing repositories.
+- PR comments still require separate explicit approval. The agent cannot merge.
+
+## Architecture and checks
+OAuth/account and selected repositories → github_work/github_stats → shared agent registry → chat/voice tool events and dashboard. The read-only dashboard also requests yesterday's activity on refresh. Credentials remain server-side. No new database migration or dependency.
+
+Focused backend tests: test_github_connect, test_github_tools, test_phase4_github, test_github_stats, test_github_hooks, test_events, test_voice_call. Frontend tests include dashboard state. Build before running backend/tests/github_ui_browser.mjs with KOE_E2E_NODE_MODULES pointing to an existing Playwright installation. The browser runner starts/stops only its own preview server on 5187 and uses synthetic provider data.
+
+## Later work
+Music latency is deferred. Google Docs creation/editing is the next chosen Google feature; standalone Drive file management is removed from the planned scope. Docs may still require Drive APIs for file discovery/permissions.
+
+## Sources
+- https://docs.github.com/en/rest/commits/commits
+- https://docs.github.com/en/rest/repos/repos#list-repositories-for-the-authenticated-user
+- https://developers.google.com/workspace/docs/api/how-tos/overview
+- https://developers.google.com/workspace/drive/api/guides/about-files

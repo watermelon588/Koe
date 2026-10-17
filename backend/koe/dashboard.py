@@ -9,7 +9,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from koe import auth, connections, events, identity, store
 from koe.config import settings
-from koe.tools import calendar, github
+from koe.tools import calendar, github, github_stats
 
 router = APIRouter()
 
@@ -35,7 +35,7 @@ async def refresh():
                 events.publish("panel", name=name, result=result, date=day, timezone=settings.timezone)
 
         async def github_read(fn):
-            if not connections.github_account()["token"]:
+            if not (await asyncio.to_thread(connections.github_account))["token"]:
                 return {"error": {"message": "GitHub is not connected: Settings → Connections → GitHub."}}
             return await fn()
 
@@ -52,7 +52,8 @@ async def refresh():
 
         await asyncio.gather(panel("calendar", lambda: calendar.calendar_list(day)),
                              panel("reviews", lambda: github_read(github.github_review_queue)),
-                             panel("prs", lambda: github_read(github.github_my_prs)), history())
+                             panel("prs", lambda: github_read(github.github_my_prs)),
+                             panel("github_yesterday", lambda: github_read(lambda: github_stats.github_activity(since='yesterday'))), history())
 
 
 async def _receive(ws: WebSocket):

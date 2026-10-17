@@ -83,6 +83,7 @@ export const isBusy = (data: DashboardState, name: string) => data.activity.find
 // GitHub stats come only from a real github_activity / github_contributions result in this session's activity feed
 // (backend/koe/tools/github_stats.py). Nothing is fetched automatically; null means unknown, never zero.
 export type GitHubActivity = { since: string; prs?: { repo: string; number: number; title: string; url?: string }[]; until: string; end_exclusive?: boolean; timezone: string; partial?: boolean
+  commits?: { repo: string; sha: string; title: string; url: string; date: string }[]; as_of?: string; scope?: string; unavailable_repositories?: string[]
   totals: { commits: number | null; merged_prs: number | null }; totals_are_complete?: boolean
   by_repository?: { repo: string; commits: number | null; merged_prs: number | null }[]
   lines?: { additions: number | null; deletions: number | null; net: number | null; commits_analyzed?: number; commits_in_history?: number; partial?: boolean; note?: string } }
@@ -93,4 +94,13 @@ export type GitHubContributions = { window_start: string; window_end: string; to
 export function latestResult<T>(data: DashboardState, name: string): { ts: string; result: T } | null {
   const item = data.activity.find((e) => e.type === 'tool' && e.phase === 'end' && e.name === name && e.ok && e.result && !e.result.error)
   return item ? { ts: item.ts, result: item.result as unknown as T } : null
+}
+
+export function githubActivityView(data: DashboardState): { result?: GitHubActivity; error?: string; label: string } {
+  const panel = data.panels.github_yesterday
+  const conversation = latestResult<GitHubActivity>(data, 'github_activity')
+  if (conversation && (!panel || Date.parse(conversation.ts) > Date.parse(panel.ts))) return { ...conversation, label: 'Requested activity' }
+  if (panel?.result.error) return { error: panel.result.error.message, label: 'Yesterday' }
+  if (panel) return { result: panel.result as unknown as GitHubActivity, label: 'Yesterday' }
+  return { label: 'Yesterday' }
 }

@@ -24,8 +24,9 @@ async def github_activity(since='today', until='', include_lines=False):
     history = await work.github_shipped(since=since, until=until)
     if 'error' in history:
         return history
-    counts = [{'repo': repo, 'commits': sum(c['repo'] == repo for c in history['commits']),
-               'merged_prs': sum(p['repo'] == repo for p in history['prs'])} for repo in history['repositories']]
+    unavailable = set(history.get('unavailable_repositories', []))
+    counts = [{'repo': repo, 'commits': None if repo in unavailable else sum(c['repo'] == repo for c in history['commits']),
+               'merged_prs': None if repo in unavailable else sum(p['repo'] == repo for p in history['prs'])} for repo in history['repositories']]
     result = {**history, 'totals': {'commits': len(history['commits']), 'merged_prs': len(history['prs'])},
               'by_repository': counts, 'totals_are_complete': not history['partial']}
     if not include_lines:

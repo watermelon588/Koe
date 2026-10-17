@@ -101,3 +101,11 @@ This section updates the earlier pending implementation checklist. The user subs
 - [ ] Verify hosted authenticated music and voice after the GitHub deployment completes.
 
 The unchecked items require real provider/audio acceptance; automated fixture checks do not stand in for those outcomes.
+
+
+## 2026-10-18 priorities
+- [ ] Deferred: profile and reduce Music-page latency (load, SDK readiness, search, call preparation, voice-to-playback). Measure each stage first; preserve verified audio handoff. Do not implement in the GitHub task.
+- [ ] Next Google integration: Google Docs creation/editing, selected by Rohit. Drop standalone Google Drive from the planned feature list; keep only any Drive API support needed by Docs. No removal of working Google Calendar/Sheets integration.
+- [x] Implemented locally: GitHub connection/repository selection, yesterday's local-time authored commits and merged PRs, evidence-linked commit summaries, honest scoped statistics, dashboard visibility and agent read tools across chat/voice. Verify authorization, partial provider failures, pagination and UI/API integration. No automatic comments, merges or account changes.
+
+- [ ] GitHub live acceptance after deployment: connect the real account, choose repositories, ask about yesterday and a specific commit in chat and voice; compare source links. Automated tests simulate provider responses and model tool selection.

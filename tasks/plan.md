@@ -50,3 +50,9 @@ Use the ordered task list in [todo.md](todo.md). Establish the same-page player/
 Verification will include focused tests and build at implementation time, plus real-account acceptance for artist/title requests, absent songs, device restrictions, reconnection, microphone/music handoff and Add behavior on desktop/phone. Existing simulated suites are useful regressions but do not establish audible real Spotify playback or speech recognition.
 
 Implementation is now authorized. Same-page Call deliberately completes its reply and ends before requested playback; the compact assistant remains visible and can be called again to pause music and talk. Artist/title resolution happens in the music service, with generic model outcomes only. Manual Add is direct and deduplicated; other consequential approvals remain unchanged. Verify hosted revision/configuration as well as local tests before calling deployment complete.
+
+
+## 2026-10-18 follow-up order
+1. GitHub workflow completion: implemented locally with shared agent tools, automatic yesterday dashboard, commit evidence, partial failure handling and repository picker repairs. See docs/GITHUB_WORKFLOW.md.
+2. Music latency: explicitly deferred; measure load/device preparation/search/call/handoff stages before optimizing.
+3. Google Docs: user chose document creation/editing. Replace standalone Drive roadmap scope with Docs; Drive may support document lookup/permissions internally. No Google feature implementation in the GitHub task.
