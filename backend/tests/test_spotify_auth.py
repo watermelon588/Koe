@@ -75,9 +75,9 @@ def test_connect_callback_is_bound_one_time_and_encrypted(client):
         params = {"code": "private-code", "state": query["state"][0]}
         done = client.get(url, params=params)
         replay = client.get(url, params=params)
-    assert done.status_code == 303 and done.headers["location"] == "/?spotify=connected#music"
+    assert done.status_code == 303 and done.headers["location"] == "/app/music?spotify=connected"
     assert exchange.call_count == 1
-    assert replay.headers["location"] == "/?spotify=error#music"
+    assert replay.headers["location"] == "/app/music?spotify=error"
     rows = asyncio.run(db.sql("select token_enc from koe_connections where provider='spotify'"))
     assert "private" not in rows[0]["token_enc"]
     assert "private" not in done.text
@@ -131,7 +131,7 @@ def test_callback_binding_failures_do_not_exchange_or_replace_existing_connectio
     with respx.mock:
         exchange = respx.post(spotify.TOKEN_URL).mock(return_value=httpx.Response(500))
         response = client.get("/auth/spotify/callback", params={"code": "private-code", "state": state})
-    assert response.headers["location"] == "/?spotify=error#music" and exchange.call_count == 0
+    assert response.headers["location"] == "/app/music?spotify=error" and exchange.call_count == 0
     assert connections.load(settings.koe_owner_id, "spotify")["token"]["connection_id"] == "generation-1"
 
 
@@ -140,7 +140,7 @@ def test_consent_cancellation_preserves_old_connection_and_consumes_flow(client)
     query = start(client)
     with respx.mock:
         result = client.get("/auth/spotify/callback", params={"error": "access_denied", "state": query["state"][0]})
-    assert result.headers["location"] == "/?spotify=cancelled#music"
+    assert result.headers["location"] == "/app/music?spotify=cancelled"
     assert connections.load(settings.koe_owner_id, "spotify")["token"]["connection_id"] == "generation-1"
     assert asyncio.run(db.sql("select consumed from koe_spotify_flows"))[0]["consumed"]
 
@@ -152,7 +152,7 @@ def test_missing_granted_scopes_rejects_callback_without_replacing_connection(cl
         respx.post(spotify.TOKEN_URL).mock(return_value=httpx.Response(200, json={
             "access_token": "new-access", "refresh_token": "new-refresh", "token_type": "Bearer", "expires_in": 3600, "scope": "streaming"}))
         result = client.get("/auth/spotify/callback", params={"code": "code", "state": query["state"][0]})
-    assert result.headers["location"] == "/?spotify=error#music"
+    assert result.headers["location"] == "/app/music?spotify=error"
     assert connections.load(settings.koe_owner_id, "spotify")["token"]["connection_id"] == "generation-1"
 
 
@@ -224,7 +224,7 @@ def test_disconnect_is_available_while_disabled_and_invalidates_pending_callback
     monkeypatch.setattr(settings, "spotify_enabled", True)
     with respx.mock:
         result = client.get("/auth/spotify/callback", params={"code": "code", "state": query["state"][0]})
-    assert result.headers["location"] == "/?spotify=error#music"
+    assert result.headers["location"] == "/app/music?spotify=error"
 
 
 def test_error_envelopes_are_private_and_not_cached(client):

@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Pause, Play, SkipBack, SkipForward, SpeakerHigh, SpeakerLow, SpeakerX } from '@phosphor-icons/react'
+import { useRef, useState, type CSSProperties } from 'react'
+import { Pause, Play, SkipBack, SkipForward, SpeakerHigh, SpeakerLow, SpeakerX, Minus, Plus } from '@phosphor-icons/react'
 import { clock, positionAt } from './model'
 import type { Music } from './useMusic'
 import './music.css'
@@ -8,7 +8,8 @@ import { SpotifyIcon } from '../components/BrandIcon'
 // Shared by the Music page and the mini player.
 
 export function Art({ src, size }: { src: string | null | undefined; size: 'sm' | 'md' | 'lg' }) {
-  return src ? <img className={`music-art ${size}`} src={src} alt="" loading="lazy" />
+  const [failed, setFailed] = useState<string | null>(null)
+  return src && failed !== src ? <img className={`music-art ${size}`} src={src} alt="" loading="lazy" onError={() => setFailed(src)} />
     : <span className={`music-art ${size} blank`} aria-hidden="true"><SpotifyIcon /></span>
 }
 
@@ -46,13 +47,19 @@ export function Progress({ music, now }: { music: Music; now: number }) {
 }
 
 export function Volume({ music }: { music: Music }) {
-  const v = music.play.volume
+  const [drag, setDrag] = useState<number | null>(null)
+  const previous = useRef(.6)
+  const v = drag ?? music.play.volume
   const Icon = v === 0 ? SpeakerX : v < 0.5 ? SpeakerLow : SpeakerHigh
+  const commit = () => { if (drag !== null) { void music.setVolume(drag); setDrag(null) } }
   return (
-    <label className="music-volume">
-      <Icon aria-hidden="true" />
+    <div className="music-volume" role="group" aria-label="Volume controls" style={{ '--volume': `${v * 100}%` } as CSSProperties}>
+      <button className="icon-btn" aria-label={v === 0 ? 'Unmute music' : 'Mute music'} onClick={() => { if (v > 0) previous.current = v; void music.setVolume(v === 0 ? previous.current : 0) }}><Icon /></button>
+      <button className="icon-btn volume-step" aria-label="Decrease volume" disabled={v === 0} onClick={() => void music.setVolume(Math.max(0, v - .05))}><Minus /></button>
       <input type="range" min={0} max={1} step={0.05} value={v} aria-label="Volume" aria-valuetext={`${Math.round(v * 100)}%`}
-        onChange={(e) => void music.setVolume(Number(e.target.value))} />
-    </label>
+        onChange={event => setDrag(Number(event.target.value))} onPointerUp={commit} onKeyUp={commit} onBlur={commit} />
+      <button className="icon-btn volume-step" aria-label="Increase volume" disabled={v >= 1} onClick={() => void music.setVolume(Math.min(1, v + .05))}><Plus /></button>
+      <output aria-live="off">{Math.round(v * 100)}%</output>
+    </div>
   )
 }

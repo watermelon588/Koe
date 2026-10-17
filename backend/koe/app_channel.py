@@ -319,7 +319,7 @@ async def notify(body: str, title: str = "Koe", tag: str = "koe") -> int:
     if not subs:
         return 0
     sent = 0
-    payload = json.dumps({"title": title, "body": body[:300], "tag": tag, "url": "/#chat"})
+    payload = json.dumps({"title": title, "body": body[:300], "tag": tag, "url": "/app/chat"})
     key = vapid()
     for endpoint, sub in subs:
         try:

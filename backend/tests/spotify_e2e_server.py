@@ -102,6 +102,8 @@ class Provider:
                 raise httpx.ReadTimeout("Simulated accepted write with lost response", request=request)
             return httpx.Response(200, json={"snapshot_id": str(self.snapshot)})
         if path == "/v1/search":
+            if request.url.params.get('type') == 'artist':
+                return httpx.Response(200, json={'artists': {'items': [{'id': 'a'*22, 'name': 'Simulated artist', 'images': []}], 'total': 1}})
             return httpx.Response(200, json={"tracks": {"items": [self.track(TRACKS[3])], "total": 1}})
         if path.startswith("/v1/tracks/") and path.rsplit("/", 1)[-1] in TRACKS:
             return httpx.Response(200, json=self.track(path.rsplit("/", 1)[-1]))
@@ -117,6 +119,10 @@ class Provider:
             self.device = request.url.params["device_id"]
             self.index = body.get("offset", {}).get("position", 0)
             self.playing = True
+            return httpx.Response(204)
+        if path == "/v1/me/player/pause":
+            if not self.pause_unknown:
+                self.playing = False
             return httpx.Response(204)
         if path == "/v1/me/player/shuffle":
             self.shuffle = request.url.params["state"] == "true"

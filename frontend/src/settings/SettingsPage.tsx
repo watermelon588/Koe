@@ -146,7 +146,7 @@ function DeviceSection() {
           : install.ios ? 'On iPhone: Share, then Add to Home Screen.' : 'Scan a QR code to set Koe up on your phone.'}
         action={!install.installed && (install.canPrompt
           ? <button className="soft" onClick={() => void install.install()}>Install app</button>
-          : <a className="ghost" href="#install">Phone setup</a>)} />
+          : <a className="ghost" href="/app/install">Phone setup</a>)} />
       <SettingRow icon={BellSimple} title="Notifications" on={push === 'on'}
         status={push === 'unsupported' ? (install.ios ? 'Install Koe to your home screen first.' : 'Not supported in this browser.')
           : push === 'denied' ? 'Blocked. Allow notifications for this site in the browser settings.'

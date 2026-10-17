@@ -137,3 +137,9 @@ Deterministic integration extension references: [GitHub commit detail statistics
 - GitHub original mark and usage: https://brand.github.com/foundations/logo
 - Notion original mark reference: https://notion.notion.site/Media-Kit-205535b1d9c4440497a3d7a2ac096286
 - Local asset source URLs are recorded in `frontend/public/brands/README.md`; existing Geist fonts and bundled SIL licenses are documented in `frontend/public/fonts/README.md`.
+
+
+### Music recovery and artist search — rechecked 2026-10-17
+- Spotify [Search](https://developer.spotify.com/documentation/web-api/reference/search): artist type and ordinary search results power the bounded autocomplete.
+- Spotify [Get Playback State](https://developer.spotify.com/documentation/web-api/reference/get-information-about-the-users-current-playback): inspect actual playback before clearing uncertainty.
+- Spotify [Pause Playback](https://developer.spotify.com/documentation/web-api/reference/pause-a-users-playback): pause the exact recorded Koe device, then verify; an accepted pause is not itself proof of stopped playback.

@@ -21,7 +21,7 @@ export function Layout({ title, intro, children }: { title: string; intro: React
         <a href="/" className="doc-brand"><img src="/icons/icon-192.png" alt="" width="28" height="28" />Koe <span lang="ja">声</span></a>
         <nav aria-label="Pages">
           <a href="/guide" aria-current={location.pathname === '/guide' ? 'page' : undefined}>Guide</a>
-          <a href="/app#install">Install</a>
+          <a href="/app/install">Install</a>
           <a href="/app">Open Koe</a>
         </nav>
       </header>

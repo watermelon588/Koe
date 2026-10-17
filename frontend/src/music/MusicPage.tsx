@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { ArrowSquareOut, SpeakerHigh, Warning, Phone, PhoneDisconnect, Microphone, MicrophoneSlash, PaperPlaneRight, Check } from '@phosphor-icons/react'
+import { useEffect, useRef, useState } from 'react'
+import { ArrowSquareOut, SpeakerHigh, Warning, Phone, PhoneDisconnect, Microphone, MicrophoneSlash, PaperPlaneRight, Shuffle, Repeat, RepeatOnce, DotsThree, ArrowUp, ArrowDown, Trash } from '@phosphor-icons/react'
 import gsap from 'gsap'
 import { useGSAP } from '@gsap/react'
 import type { useCall } from '../call/useCall'
@@ -8,13 +8,15 @@ import { ApprovalPreview } from '../approvals/ApprovalPreview'
 import { LiveWorkspace } from '../workspace/LiveWorkspace'
 import { SpotifyIcon } from '../components/BrandIcon'
 import { signIn } from '../session'
-import { appPlaylist, clock, playlistId, webPlaylist, type Playlist, type Track } from './model'
+import { clock, type Track } from './model'
 import { Art, Controls, Progress, Volume } from './Controls'
 import { useNow, type Music } from './useMusic'
+import { PlaylistPicker } from './PlaylistPicker'
+import { MusicSearch } from './MusicSearch'
 
 gsap.registerPlugin(useGSAP)
 
-// #music: your dedicated playlist and the in-app player (when the server offers it), plus a plain way out to the
+// /app/music: your dedicated playlist and the in-app player (when the server offers it), plus a plain way out to the
 // Spotify app or web player. Koe can't see or pause music played there, and the page says so.
 export function MusicPage({ music, call, model, token }: { music: Music; call: ReturnType<typeof useCall>; model: MascotId; token: string }) {
   const root = useRef<HTMLElement>(null)
@@ -39,18 +41,19 @@ export function MusicPage({ music, call, model, token }: { music: Music; call: R
           {music.busy === 'disconnect' ? 'Disconnecting…' : 'Disconnect Spotify'}</button>}
       </header>
       <MusicAssistant music={music} call={call} model={model} token={token} />
-      {music.notice && <p className="music-notice" role="status">{music.notice}
+      {music.notice && !music.pending && <p className="music-notice" role="status">{music.notice}
         {music.notice === 'Spotify disconnected from Koe.' && <> To remove Koe on Spotify’s side too, use <a href="https://www.spotify.com/account/apps/" target="_blank" rel="noopener">Spotify app access</a>.</>}</p>}
       {connected && status.read
         ? music.playlist
-          ? <><div className="music-layout"><TrackList music={music} preview={setPreview} />{inApp ? <NowPlaying music={music} /> : <PlayInSpotify />}</div>
-              {status.write && !status.mock && <Search music={music} />}</>
-          : <Picker music={music} preview={setPreview} />
+          ? <div className="music-layout"><div className="music-library"><TrackList music={music} preview={setPreview} />
+              {status.write && !status.mock && <MusicSearch music={music} />}</div>{inApp ? <NowPlaying music={music} /> : <PlayInSpotify />}</div>
+          : <PlaylistPicker music={music} />
         : <NotHere music={music} />}
       {music.pending > 0 && <section className="music-pending" role="status"><p>An action is unconfirmed. Koe will not send it again. Inspect your playlist in Spotify before another change.</p>
         <button className="ghost" disabled={!!music.busy} onClick={() => void music.inspect()}>Check action status</button></section>}
+      {music.picking && music.playlist && <PlaylistPicker music={music} modal />}
       {preview && <ConfirmEdit music={music} preview={preview} close={() => setPreview(null)} />}
-      <Elsewhere playlist={connected && !status.mock ? music.playlist : null} />
+      <footer className="music-external"><SpotifyIcon /><span>Prefer the Spotify app?</span><a href={music.playlist?.url ?? 'https://open.spotify.com/'} target="_blank" rel="noopener">Open Spotify <ArrowSquareOut /></a></footer>
     </main>
   )
 }
@@ -62,14 +65,14 @@ function MusicAssistant({ music, call, model, token }: { music: Music; call: Ret
   return <section className="music-assistant" aria-label="Koe music assistant" data-active={active}>
     <header className="music-assistant-head">
       <img className="music-assistant-portrait" src={mascotProfile(model).portrait} width="64" height="64" alt={mascotProfile(model).name} />
-      <div className="music-assistant-copy"><h2>A little company, while you listen.</h2><p><span className="dot" aria-hidden="true" /> Koe · {state}</p></div>
+      <div className="music-assistant-copy"><h2>Your music, with Koe.</h2><p><span className="dot" aria-hidden="true" /> Koe · {state}</p></div>
       <div className="music-assistant-actions">{active ? <>
         <button className="icon-btn" aria-label={call.muted ? 'Unmute microphone' : 'Mute microphone'} aria-pressed={call.muted} onClick={call.toggleMute}>{call.muted ? <MicrophoneSlash /> : <Microphone />}</button>
         <button className="end" onClick={call.stop}><PhoneDisconnect />End call</button>
       </> : <button className="primary" onClick={() => void call.start(token, music.status.phase === 'connected' && music.playlist ? music.prepareVoice : undefined)}><Phone />Call Koe</button>}</div>
     </header>
-    <p className="music-assistant-hint">Ask about your day, or say “play some Kesha” or “play my favourite song”.</p>
-    <p className="music-assistant-note">Calling allows Koe to control this playlist. For music, she finishes her reply and ends the call before playback. Call again to pause and talk.</p>
+    <p className="music-assistant-hint">Talk about your day, or ask “play some Kesha”.</p>
+    <p className="music-assistant-note">Call to talk or choose music from this playlist. Koe finishes her reply before the music starts.</p>
     {music.voice.available && music.voice.enabled && <button className="music-link" onClick={() => void music.voice.allow(false)}>Disable voice controls</button>}
     {(call.error || music.voice.notice) && <p className="music-inline-status" role="status">{call.error || music.voice.notice}</p>}
     {call.lines.length > 0 && <ol className="music-conversation" aria-live="polite">{call.lines.slice(-6).map(line => <li key={line.id} data-who={line.who}><small>{line.who === 'you' ? 'You' : line.who === 'koe' ? 'Koe' : 'Activity'}</small><p>{line.text}</p></li>)}</ol>}
@@ -99,31 +102,6 @@ function NotHere({ music }: { music: Music }) {
   )
 }
 
-// First visit after connecting: pick which of your private playlists Koe shows. Choosing never plays anything.
-function Picker({ music, preview }: { music: Music; preview: (p: Preview) => void }) {
-  const list = music.choices
-  const [name, setName] = useState('Koe — Chill')
-  return (
-    <section className="music-empty music-picker" aria-labelledby="music-pick">
-      <h2 id="music-pick">Choose your playlist</h2>
-      <p>Only private playlists you own are listed. You can change it later.</p>
-      <p className="actions">
-        {music.status.phase === 'connected' && music.status.playlistId && <a className="ghost" href={webPlaylist(music.status.playlistId)} target="_blank" rel="noopener">Open selected playlist in Spotify</a>}
-        <button className="ghost" onClick={() => void music.load()}>Refresh playlists</button>
-      </p>
-      {list === null ? <p>Loading your playlists…</p> : !list.items.length ? <p>No eligible private playlists found. Create one below, or make a playlist you own private in Spotify, then refresh playlists.</p>
-        : <ul>{list.items.map((p) => <li key={p.id}>
-            <Art src={p.art} size="sm" /><span>{p.name}</span>
-            <button className="soft" disabled={!!music.busy} onClick={() => void music.choose(p.id)}>{music.busy === `choose:${p.id}` ? 'Choosing…' : 'Choose'}</button>
-          </li>)}</ul>}
-      {list?.next != null && <button className="ghost" onClick={() => void music.moreChoices()}>Show more</button>}
-      {music.status.phase === 'connected' && music.status.write && <form className="music-edit-form" onSubmit={event => { event.preventDefault(); preview({ kind: 'create', name: name.trim() }) }}>
-        <label>New private playlist<input aria-label="New playlist name" value={name} maxLength={100} onChange={event => setName(event.target.value)} /></label>
-        <button className="soft" disabled={!name.trim() || !!music.busy || music.pending > 0}>Create private playlist</button></form>}
-    </section>
-  )
-}
-
 function PlayInSpotify() {
   return (
     <section className="music-now music-elsewhere-note" aria-label="Playback">
@@ -139,13 +117,14 @@ function TrackList({ music, preview }: { music: Music; preview: (p: Preview) => 
   const inApp = status.phase === 'connected' && status.inApp
   const total = tracks.reduce((n, t) => n + t.ms, 0)
   if (!playlist) return null
+  const snapshot = playlist.snapshot
   return (
     <section className="music-list" aria-labelledby="music-playlist">
       <div className="music-pl">
         <Art src={playlist.art} size="md" />
         <div><h2 id="music-playlist">{playlist.name}</h2><small>{tracks.length} tracks · {Math.round(total / 60000)} min</small></div>
         <a className="icon-btn" href={playlist.url} target="_blank" rel="noopener" aria-label="Open this playlist in Spotify" title="Open in Spotify"><SpotifyIcon /></a>
-        <button className="ghost" disabled={!!music.busy || music.pending > 0} onClick={() => void music.changePlaylist()}>Change playlist</button>
+        <button className="ghost" disabled={music.heldByVoice} onClick={() => void music.changePlaylist()}>Change playlist</button>
       </div>
       <ol className="music-tracks">
         {tracks.map((t, i) => {
@@ -161,11 +140,12 @@ function TrackList({ music, preview }: { music: Music; preview: (p: Preview) => 
             ? <button className="music-track" aria-current={here || undefined} disabled={!t.playable || music.heldByVoice}
                 aria-label={t.playable ? `Play ${t.name} by ${t.artists}` : `${t.name} isn’t available`} onClick={() => void music.start(i)}>{row}</button>
             : <a className="music-track" href={t.url} target="_blank" rel="noopener" aria-label={`Open ${t.name} by ${t.artists} in Spotify`}>{row}</a>}
-            {status.phase === 'connected' && status.write && !status.mock && <span className="music-edit-actions">
-              <button aria-label={`Move ${t.name} up`} disabled={i === 0 || !!music.busy || music.pending > 0} onClick={() => preview({ kind: 'move', track: t, index: i, direction: 'up', snapshot: playlist.snapshot })}>↑</button>
-              <button aria-label={`Move ${t.name} down`} disabled={i >= tracks.length - 1 || !!music.busy || music.pending > 0} onClick={() => preview({ kind: 'move', track: t, index: i, direction: 'down', snapshot: playlist.snapshot })}>↓</button>
-              <button aria-label={`Remove all copies of ${t.name}`} disabled={!t.uri || !!music.busy || music.pending > 0} onClick={() => preview({ kind: 'remove', track: t, snapshot: playlist.snapshot })}>Remove all</button>
-            </span>}</li>
+            {status.phase === 'connected' && status.write && !status.mock && snapshot && <details className="music-track-menu">
+              <summary aria-label={`Options for ${t.name}`}><DotsThree /></summary>
+              <div><button aria-label={`Move ${t.name} up`} disabled={i === 0 || !!music.busy || music.pending > 0} onClick={() => preview({ kind: 'move', track: t, index: i, direction: 'up', snapshot })}><ArrowUp />Move up</button>
+              <button aria-label={`Move ${t.name} down`} disabled={i >= tracks.length - 1 || !!music.busy || music.pending > 0} onClick={() => preview({ kind: 'move', track: t, index: i, direction: 'down', snapshot })}><ArrowDown />Move down</button>
+              <button aria-label={`Remove all copies of ${t.name}`} disabled={!t.uri || !!music.busy || music.pending > 0} onClick={() => preview({ kind: 'remove', track: t, snapshot })}><Trash />Remove all copies</button></div>
+            </details>}</li>
         })}
       </ol>
       {music.more !== null && <button className="ghost music-more" onClick={() => void music.loadMore()}>Load more tracks</button>}
@@ -175,20 +155,22 @@ function TrackList({ music, preview }: { music: Music; preview: (p: Preview) => 
 
 function NowPlaying({ music }: { music: Music }) {
   const { track, play, heldByVoice } = music
+  const display = track ?? music.tracks.find(item => item.playable)
   const now = useNow(play.status === 'playing')
   return (
     <section className="music-now" aria-label="Now playing">
-      <Art src={track?.art} size="lg" />
+      <Art src={display?.art ?? music.playlist?.art} size="lg" />
       <div className="music-meta">
-        <h2>{track?.name ?? 'Nothing playing'}</h2>
-        <p>{track?.artists ?? 'Press play, or pick a track.'}</p>
+        {!track && display && <small>READY TO PLAY</small>}
+        <h2>{display?.name ?? 'Your next favourite'}</h2>
+        <p>{display?.artists ?? 'Add a song to get started.'}</p>
       </div>
       <Progress music={music} now={now} />
       <Controls music={music} big />
       <Volume music={music} />
       {music.status.phase === 'connected' && !music.status.mock && <div className="music-modes">
-        <button className="ghost" aria-pressed={music.shuffle} disabled={!track || heldByVoice || !!music.busy || music.pending > 0} onClick={() => void music.toggleShuffle()}>Shuffle {music.shuffle ? 'on' : 'off'}</button>
-        <button className="ghost" disabled={!track || heldByVoice || !!music.busy || music.pending > 0} onClick={() => void music.cycleRepeat()}>Repeat: {music.repeat}</button>
+        <button className="icon-btn" aria-label={`Shuffle ${music.shuffle ? 'on' : 'off'}`} title="Shuffle" aria-pressed={music.shuffle} disabled={!track || heldByVoice || !!music.busy || music.pending > 0} onClick={() => void music.toggleShuffle()}><Shuffle /></button>
+        <button className="icon-btn" aria-label={`Repeat: ${music.repeat}`} title={`Repeat: ${music.repeat}`} aria-pressed={music.repeat !== 'off'} disabled={!track || heldByVoice || !!music.busy || music.pending > 0} onClick={() => void music.cycleRepeat()}>{music.repeat === 'track' ? <RepeatOnce /> : <Repeat />}</button>
       </div>}
       <p className="music-state" role="status">
         {heldByVoice ? 'Music is paused while Koe uses audio.' : play.status === 'unknown' ? 'Couldn’t confirm what’s playing.' : play.error}
@@ -198,80 +180,23 @@ function NowPlaying({ music }: { music: Music }) {
   )
 }
 
-type Preview = ({ kind: 'add'; track: Track } | { kind: 'remove'; track: Track } | { kind: 'move'; track: Track; index: number; direction: 'up' | 'down' } | { kind: 'create'; name: string }) & { snapshot?: string }
-
-function Search({ music }: { music: Music }) {
-  const [draft, setDraft] = useState({ text: '', suggestion: '' })
-  const query = draft.suggestion === music.suggestion ? draft.text : music.suggestion
-  return <section className="music-search" aria-labelledby="music-search-heading">
-    <h2 id="music-search-heading">Find your next track</h2><p className="note">Discover a song. One click adds it to your playlist.</p>
-    <form className="music-edit-form" onSubmit={event => { event.preventDefault(); void music.search(query) }}>
-      <label>Search Spotify<input type="search" aria-label="Search Spotify tracks" placeholder="A song, an artist, a little inspiration…" maxLength={100} value={query} onChange={event => setDraft({ text: event.target.value, suggestion: music.suggestion })} /></label>
-      <button className="soft" disabled={!query.trim() || music.busy === 'search'}>{music.busy === 'search' ? 'Searching…' : 'Search'}</button>
-    </form>
-    <ul>{music.searchResults.map((track, index) => <li key={`${track.id}-${index}`}><Art src={track.art} size="md" /><span><a href={track.url} target="_blank" rel="noopener"><strong>{track.name}</strong></a><small>{track.artists}</small></span><time>{clock(track.ms)}</time>
-      <button className="soft" aria-label={music.added.has(track.uri) ? `Added ${track.name}` : `Add ${track.name}`} disabled={!track.playable || !!music.busy || music.pending > 0 || music.added.has(track.uri)}
-        onClick={() => void music.mutate('add', track.uri, undefined, music.playlist?.snapshot)}>{music.added.has(track.uri) ? <><Check />Added</> : music.busy === 'add' ? 'Adding…' : 'Add'}</button></li>)}</ul>
-  </section>
-}
+type Preview = ({ kind: 'remove'; track: Track } | { kind: 'move'; track: Track; index: number; direction: 'up' | 'down' }) & { snapshot: string }
 
 function ConfirmEdit({ music, preview, close }: { music: Music; preview: Preview; close: () => void }) {
   const dialog = useRef<HTMLDialogElement>(null)
   useEffect(() => { const element = dialog.current; element?.showModal(); return () => element?.close() }, [])
   const destination = music.playlist?.name ?? 'your Spotify account'
-  const title = preview.kind === 'create' ? 'Create private playlist' : preview.kind === 'add' ? 'Add one copy' : preview.kind === 'remove' ? 'Remove all copies' : 'Move track'
-  const detail = preview.kind === 'create' ? `Create “${preview.name}” as a private playlist and select it in Koe.`
-    : preview.kind === 'remove' ? `Remove every occurrence of “${preview.track.name}” from “${destination}”.`
-    : preview.kind === 'add' ? `Add one copy of “${preview.track.name}” to the end of “${destination}”.`
+  const title = preview.kind === 'remove' ? 'Remove all copies' : 'Move track'
+  const detail = preview.kind === 'remove' ? `Remove every occurrence of “${preview.track.name}” from “${destination}”.`
     : `Move “${preview.track.name}” ${preview.direction} one position in “${destination}”.`
   async function confirm() {
-    if (preview.kind === 'create') await music.mutate('create', preview.name)
-    else if (preview.kind === 'move') await music.mutate('move', preview.index, preview.direction, preview.snapshot)
-    else await music.mutate(preview.kind, preview.track.uri, undefined, preview.snapshot)
-    close()
+    const saved = preview.kind === 'move' ? await music.mutate('move', preview.index, preview.direction, preview.snapshot)
+      : await music.mutate(preview.kind, preview.track.uri, undefined, preview.snapshot)
+    if (saved) close()
   }
   return <dialog className="music-confirm" ref={dialog} aria-labelledby="music-confirm-title" onCancel={event => { event.preventDefault(); close() }}>
     <h2 id="music-confirm-title">{title}</h2><p>{detail}</p><div>
       <button className="ghost" disabled={!!music.busy} onClick={close}>Cancel</button>
       <button className="soft" disabled={!!music.busy || music.pending > 0} onClick={() => void confirm()}>{music.busy ? 'Saving…' : 'Confirm change'}</button>
     </div></dialog>
-}
-
-// The way out: the official app or web player. A link you paste stays on this device (localStorage).
-const LINK_KEY = 'koe-spotify-playlist'
-function savedLink() { try { return localStorage.getItem(LINK_KEY) ?? '' } catch { return '' } }
-
-function Elsewhere({ playlist }: { playlist: Playlist | null }) {
-  const [saved, setSaved] = useState(savedLink)
-  const [draft, setDraft] = useState('')
-  const [error, setError] = useState('')
-  const [editing, setEditing] = useState(false)
-  const id = playlist?.id ?? (saved || null)
-  function save(e: FormEvent) {
-    e.preventDefault()
-    const found = playlistId(draft)
-    if (!found) return setError('That isn’t a Spotify playlist link. In Spotify: Share → Copy link to playlist.')
-    try { localStorage.setItem(LINK_KEY, found) } catch { /* kept for this visit only */ }
-    setSaved(found); setDraft(''); setError(''); setEditing(false)
-  }
-  return (
-    <section className="music-elsewhere" aria-labelledby="music-elsewhere">
-      <div className="music-elsewhere-copy">
-        <h2 id="music-elsewhere">Listen in Spotify</h2>
-        <p>Opens the Spotify app or the web player. Koe can’t see or pause music there, so pause it yourself before a call.</p>
-      </div>
-      <div className="music-open">
-        {id && <a className="soft" href={appPlaylist(id)}><SpotifyIcon />Open in Spotify app</a>}
-        <a className="ghost" href={id ? webPlaylist(id) : 'https://open.spotify.com/'} target="_blank" rel="noopener"><ArrowSquareOut />Open web player</a>
-      </div>
-      {!playlist && (saved && !editing
-        ? <p className="music-saved">Your playlist link is saved on this device. <button className="music-link" onClick={() => setEditing(true)}>Change</button></p>
-        : <form className="music-link-form" onSubmit={save}>
-            <input value={draft} onChange={(e) => { setDraft(e.target.value); setError('') }} placeholder="https://open.spotify.com/playlist/…"
-              aria-label="Your Spotify playlist link" aria-invalid={!!error || undefined} aria-describedby="music-link-help" inputMode="url" autoComplete="off" />
-            <button className="soft" disabled={!draft.trim()}>Save link</button>
-            <small id="music-link-help" role={error ? 'alert' : undefined}>{error || 'Optional: paste your playlist’s share link so these buttons open it.'}</small>
-          </form>)}
-    </section>
-  )
 }

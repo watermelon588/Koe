@@ -23,18 +23,20 @@ export class MusicIntents {
     this.key = `koe-music-intents:${generation}`
     try {
       const saved = JSON.parse(storage.getItem(this.key) ?? '[]')
-      if (!Array.isArray(saved) || saved.length > 20 || saved.some(i => typeof i?.id !== 'string' || typeof i?.path !== 'string')) throw Error('invalid')
+      if (!Array.isArray(saved) || saved.length > 20 || saved.some(i => typeof i?.id !== 'string' || typeof i?.path !== 'string' || !i.body || typeof i.body !== 'object' || Array.isArray(i.body))) throw Error('invalid')
       this.entries = saved
     } catch { this.invalid = true }
   }
   pending() { return [...this.entries] }
+  blocking() { return this.entries.filter(intent => intent.path !== '/api/music/playback' || !['shuffle', 'repeat'].includes(String(intent.body.operation))) }
   private persist() {
     try { this.storage.setItem(this.key, JSON.stringify(this.entries)) }
     catch { throw new MusicFailure('spotify_storage_unavailable', 'Koe could not remember this action safely. Allow browser storage before changing music.') }
   }
   async write(path: string, method: string, args: Record<string, unknown>) {
     if (this.invalid) throw new MusicFailure('spotify_storage_unavailable', 'Koe could not remember earlier music actions safely.')
-    if (this.entries.length) throw new MusicFailure('spotify_outcome_unknown', 'An earlier music action is unconfirmed. Check its status before another change.')
+    if (this.entries.length) await this.inspect()
+    if (this.blocking().length) throw new MusicFailure('spotify_outcome_unknown', 'An earlier music action is unconfirmed. Check its status before another change.')
     const id = this.uuid()
     const body = { ...args, connection_id: this.generation, request_id: id }
     const intent = { id, path, method, body }

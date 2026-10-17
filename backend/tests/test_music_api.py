@@ -286,3 +286,86 @@ def test_revocation_does_not_delete_unknown_journal_evidence(client):
 @pytest.mark.parametrize("url", ["http://i.scdn.co/image/a", "https://i.scdn.co.evil.test/a", "https://user:secret@i.scdn.co/a", "https://[invalid", "https://i.scdn.co:invalid/a"])
 def test_untrusted_artwork_urls_are_not_returned(url):
     assert sp.artwork({"images": [{"url": url}]}) is None
+
+@pytest.mark.parametrize('response', [httpx.Response(204), httpx.Response(200, json={'is_playing': False, 'device': {'id': 'old'}})])
+def test_audio_recovery_observes_stopped_without_playback_write(client, response):
+    seed_connection()
+    with respx.mock:
+        respx.get(sp.API_URL + '/me/player').mock(return_value=response)
+        result = client.post('/api/music/recover-audio', json={'connection_id': 'generation-1'})
+        assert result.json() == {'state': 'stopped', 'connection_id': 'generation-1'}
+        assert all(call.request.method == 'GET' for call in respx.calls)
+
+
+def record_transfer(client, unknown=False):
+    respx.get(sp.API_URL + '/me/player/devices').mock(return_value=httpx.Response(200, json={'devices': [
+        {'id': 'old-browser', 'name': 'Koe Web Player', 'type': 'Computer', 'is_restricted': False}]}))
+    body = {'connection_id': 'generation-1', 'device_id': 'old-browser'}
+    assert client.post('/api/music/device', json=body).status_code == 200
+    route = respx.put(sp.API_URL + '/me/player')
+    if unknown:
+        route.mock(side_effect=httpx.ReadTimeout('lost'))
+    else:
+        route.mock(return_value=httpx.Response(204))
+    assert client.post('/api/music/playback', json={**body, 'request_id': 'old-transfer', 'operation': 'transfer'}).status_code == (202 if unknown else 200)
+
+
+def test_audio_recovery_pauses_only_durably_recorded_koe_device_after_restart(client):
+    seed_connection()
+    with respx.mock:
+        record_transfer(client)
+        sp.devices.clear()  # backend process/device registration gone; durable evidence remains
+        respx.get(sp.API_URL + '/me/player').mock(side_effect=[
+            httpx.Response(200, json={'device': {'id': 'old-browser'}, 'is_playing': True}),
+            httpx.Response(200, json={'device': {'id': 'old-browser'}, 'is_playing': False})])
+        pause = respx.put(sp.API_URL + '/me/player/pause').mock(return_value=httpx.Response(204))
+        result = client.post('/api/music/recover-audio', json={'connection_id': 'generation-1'})
+        assert result.json()['state'] == 'stopped'
+        assert pause.call_count == 1 and pause.calls[0].request.url.params['device_id'] == 'old-browser'
+
+
+def test_audio_recovery_refuses_unrelated_device_and_unknown_sent_intent(client):
+    seed_connection()
+    with respx.mock:
+        respx.get(sp.API_URL + '/me/player').mock(return_value=httpx.Response(200, json={'device': {'id': 'phone'}, 'is_playing': True}))
+        result = client.post('/api/music/recover-audio', json={'connection_id': 'generation-1'})
+        assert result.status_code == 409
+        assert all(call.request.method == 'GET' for call in respx.calls)
+        record_transfer(client, unknown=True)
+        count = len(respx.calls)
+        result = client.post('/api/music/recover-audio', json={'connection_id': 'generation-1'})
+        assert result.json()['error']['code'] == 'spotify_outcome_unknown'
+        assert len(respx.calls) == count  # never replay or hide an unresolved sent request
+
+
+def test_artist_suggestions_are_bounded_and_sanitized(client):
+    seed_connection()
+    with respx.mock:
+        search = respx.get(sp.API_URL + '/search').mock(return_value=httpx.Response(200, json={'artists': {'items': [
+            {'id': 'a'*22, 'name': 'Kesha', 'images': [{'url': 'https://i.scdn.co/image/cover'}], 'private_field': 'hidden'}], 'total': 1}}))
+        result = client.get('/api/music/search?kind=artist&q=Kes&limit=5')
+        assert search.calls[0].request.url.params['type'] == 'artist'
+        assert result.status_code == 200 and result.json()['items'][0]['name'] == 'Kesha'
+        assert 'hidden' not in result.text
+    assert client.get('/api/music/search?kind=artist&q=x&limit=100').status_code == 400
+
+
+def test_unknown_shuffle_does_not_block_verified_audio_recovery(client):
+    seed_connection()
+    with respx.mock:
+        record_transfer(client)
+        asyncio.run(db.sql("update koe_music_mutations set operation='playback_shuffle',state='outcome_unknown'"))
+        respx.get(sp.API_URL + '/me/player').mock(return_value=httpx.Response(204))
+        result = client.post('/api/music/recover-audio', json={'connection_id': 'generation-1'})
+        assert result.json()['state'] == 'stopped'
+    assert asyncio.run(db.sql('select state from koe_music_mutations'))[0]['state'] == 'outcome_unknown'
+
+
+@pytest.mark.parametrize('payload', [{}, {'is_playing': None}, {'is_playing': 'false'}])
+def test_audio_recovery_does_not_treat_malformed_success_as_stopped(client, payload):
+    seed_connection()
+    with respx.mock:
+        respx.get(sp.API_URL + '/me/player').mock(return_value=httpx.Response(200, json=payload))
+        result = client.post('/api/music/recover-audio', json={'connection_id': 'generation-1'})
+        assert result.status_code == 503
+        assert result.json()['error']['code'] == 'spotify_unavailable'

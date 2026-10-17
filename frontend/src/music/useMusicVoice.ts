@@ -18,6 +18,7 @@ export function useMusicVoice(active: boolean, connectionId: string, playlistId:
     const reply = await request('/api/music/voice-permission')
     if (reply.http !== 200) throw Error('Sign in again to enable playlist voice controls.')
     setPermission(reply.body as Permission)
+    return reply.body as Permission
   }, [connectionId, playlistId])
   useEffect(() => {
     if (!connectionId || !playlistId) return

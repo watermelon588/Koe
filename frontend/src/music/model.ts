@@ -32,6 +32,8 @@ export interface Player {
   playing(): boolean | null // null = can't tell (counts as playing for the voice gate)
   play(index: number, snapshot?: string): Promise<void>
   prepare?(): Promise<void>
+  unsettled?(): boolean
+  recovered?(): void
   resume(): Promise<void>
   pause(): Promise<PauseResult> // settles commands already sent, then reports what it saw
   next(): Promise<void>

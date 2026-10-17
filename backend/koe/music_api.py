@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
-from koe import auth, spotify_service as sp, spotify_store as journal
+from koe import auth, connections, spotify_service as sp, spotify_store as journal
 from koe.config import settings
 
 router = APIRouter(prefix="/api/music", route_class=sp.MusicRoute)
@@ -187,11 +187,56 @@ async def items(offset: int = Query(0, ge=0, le=5000), limit: int = Query(50, ge
 
 @router.get("/search")
 async def search(q: str = Query(min_length=1, max_length=100), offset: int = Query(0, ge=0, le=5000),
-                 limit: int = Query(10, ge=1, le=10), current: str = Depends(active)):
+                 limit: int = Query(10, ge=1, le=10), kind: Literal['track', 'artist'] = 'track', current: str = Depends(active)):
     if not q.strip():
         raise sp.SpotifyError("spotify_invalid_request", 400)
-    data = await sp.request(current, "GET", "/search", params={"q": q.strip(), "type": "track", "offset": offset, "limit": limit})
-    return sp.page(data.get("tracks"), offset, limit, sp.track)
+    # Spotify's ordinary artist search, not the deprecated recommendations endpoint.
+    # https://developer.spotify.com/documentation/web-api/reference/search
+    data = await sp.request(current, "GET", "/search", params={"q": q.strip(), "type": kind, "offset": offset, "limit": limit})
+    def artist(item):
+        identifier = item.get('id', '')
+        if not isinstance(identifier, str) or not sp.ID.fullmatch(identifier):
+            raise sp.SpotifyError('spotify_unavailable', 503)
+        return {'id': identifier, 'name': sp.text(item.get('name')), 'image_url': sp.artwork(item),
+                'url': 'https://open.spotify.com/artist/' + identifier}
+    return sp.page(data.get(kind + 's'), offset, limit, sp.track if kind == 'track' else artist)
+
+
+@router.post('/recover-audio')
+async def recover_audio(body: Generation, current: str = Depends(active)):
+    """Verify a previous Koe player stopped after reload; never transfer or replay play.
+
+    Caller holds its cross-tab Web Lock. Owner serialization excludes in-flight API
+    writes; durable unknown playback still blocks recovery. No unrelated device is paused.
+    """
+    await sp.connection(current, body.connection_id)
+    rows = await sp.sql("select * from koe_music_mutations where owner_id=%s and connection_id=%s",
+                        current, body.connection_id)
+    playback_rows = [row for row in rows if row['operation'] in ('playback_play', 'playback_transfer')]
+    if any(row['state'] in ('sent', 'outcome_unknown') for row in playback_rows):
+        raise sp.SpotifyError('spotify_outcome_unknown', message='Spotify has not confirmed an earlier playback request. Check action status in Music before calling.')
+    known = set()
+    for row in playback_rows:
+        evidence = await sp.io(connections.decrypt, row['evidence_enc'])
+        identifier = evidence.get('intent', {}).get('device_id')
+        if identifier:
+            known.add(identifier)
+    # https://developer.spotify.com/documentation/web-api/reference/get-information-about-the-users-current-playback
+    data = await sp.request(current, 'GET', '/me/player', generation=body.connection_id)
+    if data == {} or data.get('is_playing') is False:
+        return {'state': 'stopped', 'connection_id': body.connection_id}
+    device = data.get('device', {}).get('id')
+    if data.get('is_playing') is not True or not device or device not in known:
+        raise sp.SpotifyError('spotify_device_unavailable', message='Pause music in the Spotify app, then try Call again.')
+    # An explicit Call/Pause gesture authorizes stopping this recorded Koe device.
+    # https://developer.spotify.com/documentation/web-api/reference/pause-a-users-playback
+    await sp.request(current, 'PUT', '/me/player/pause', generation=body.connection_id, params={'device_id': device})
+    for _ in range(8):
+        data = await sp.request(current, 'GET', '/me/player', generation=body.connection_id)
+        if data == {} or data.get('is_playing') is False:
+            return {'state': 'stopped', 'connection_id': body.connection_id}
+        await asyncio.sleep(.15)
+    raise sp.SpotifyError('spotify_device_unavailable', message='Spotify has not confirmed pause yet. Try Call again.')
 
 
 async def playlist_intent(current, body, operation):

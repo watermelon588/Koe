@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
-import { acquire, current, interruptVoiceForMusic, setMusic, subscribe, type Release } from '../audio/coordinator'
+import { acquire, current, interruptVoiceForMusic, setMusic, setAudioRecovery, subscribe, type Release } from '../audio/coordinator'
+import { audioEvidence } from '../audio/evidence'
 import { crossTabSupported } from '../audio/crossTab'
 import { codeOf, music as call } from './api'
 import { MusicFailure, MusicIntents } from './intents'
@@ -21,11 +22,13 @@ export function useMusic(musicWindow = false) {
   const [playlist, setPlaylist] = useState<Playlist | null>(null)
   const [more, setMore] = useState<number | null>(null)
   const [choices, setChoices] = useState<{ items: Playlist[]; next: number | null } | null>(null)
+  const [picking, setPicking] = useState(false)
   const [busy, setBusy] = useState('')
   const [play, setPlay] = useState<PlayState>(IDLE)
   const [notice, setNotice] = useState('')
   const [pending, setPending] = useState(0)
   const [searchResults, setSearchResults] = useState<Track[]>([])
+  const [searching, setSearching] = useState(false)
   const [suggestion, setSuggestion] = useState('')
   const [added, setAdded] = useState<Set<string>>(() => new Set())
   const writing = useRef(false)
@@ -46,7 +49,7 @@ export function useMusic(musicWindow = false) {
 
   function report(error: unknown) {
     setNotice(error instanceof MusicFailure ? say(error.code, error.message) : error instanceof Error ? error.message : say(null))
-    setPending(intents.current?.pending().length ?? 0)
+    setPending(intents.current?.blocking().length ?? 0)
   }
   async function loadChoices(offset = 0) {
     const reply = await call(`/api/music/playlists?offset=${offset}&limit=20`)
@@ -91,7 +94,8 @@ export function useMusic(musicWindow = false) {
           getItem: key => sessionStorage.getItem(key), setItem: (key, value) => sessionStorage.setItem(key, value), removeItem: key => sessionStorage.removeItem(key),
         })
       }
-      setPending(intents.current?.pending().length ?? 0)
+      await intents.current?.inspect()
+      setPending(intents.current?.blocking().length ?? 0)
       if (next.phase === 'connected') {
         next.inApp = next.inApp && crossTabSupported()
         if (next.read) await loadItems()
@@ -113,7 +117,12 @@ export function useMusic(musicWindow = false) {
   }
   async function stopPlayer() {
     const p = player.current
-    if (p && await p.pause() !== 'paused') throw new MusicFailure('spotify_outcome_unknown', 'Pause could not be verified. The player stays attached so voice cannot start unsafely.')
+    const needsRecovery = p ? await p.pause() !== 'paused' : audioEvidence()?.uncertain()
+    if (needsRecovery) {
+      // Selection/disconnect recovery needs the same exclusive ownership as a Call.
+      owned.current = await acquire('music', lostAudio)
+      await recoverAudio(!!p)
+    }
     p?.dispose(); player.current = null; setMusic(null); owned.current?.(); owned.current = null
     setPlay(old => ({ ...old, status: old.index >= 0 ? 'paused' : 'idle' }))
   }
@@ -136,9 +145,31 @@ export function useMusic(musicWindow = false) {
       await stopPlayer()
       const reply = await call('/api/music/playlist', 'PUT', { connection_id: status.connectionId, playlist_id: id })
       if (reply.http !== 200) throw new MusicFailure(codeOf(reply.body) ?? 'spotify_unavailable')
-      setChoices(null); setAdded(new Set()); setStatus({ ...status, playlistId: id }); setPlay(IDLE); await loadItems()
+      setAdded(new Set()); setStatus({ ...status, playlistId: id }); setPlay(IDLE); await loadItems(); setPicking(false)
     } catch (error) { report(error) } finally { setBusy('') }
   }
+  async function recoverAudio(force = false) {
+    const evidence = audioEvidence()
+    if (!force && !evidence?.uncertain()) return
+    if (player.current?.unsettled?.()) throw Error('A player command is still finishing. Try Call again in a moment.')
+    await intents.current?.inspect()
+    setPending(intents.current?.blocking().length ?? 0)
+    const generations = new Set(evidence?.generations() ?? [])
+    if (force && generation.current) generations.add(generation.current)
+    if (force && !generations.size) throw Error('Could not verify Spotify stopped. Pause music and try again.')
+    for (const id of generations) {
+      const reply = await call('/api/music/recover-audio', 'POST', { connection_id: id })
+      const body = reply.body as { state?: string; connection_id?: string; error?: { message?: string } }
+      if (reply.http !== 200 || body.state !== 'stopped' || body.connection_id !== id)
+        throw Error(body.error?.message ?? 'Could not check Spotify. Pause it in Spotify and try Call again.')
+      evidence?.clear(id); evidence?.local(id, false)
+    }
+    player.current?.recovered?.()
+    setNotice('')
+  }
+  const recovery = useRef(recoverAudio)
+  useEffect(() => { recovery.current = recoverAudio })
+  useEffect(() => { setAudioRecovery(() => recovery.current(true)); return () => setAudioRecovery(null) }, [])
   function lostAudio() {
     owned.current = null
     if (onMusicPage.current) {
@@ -174,7 +205,7 @@ export function useMusic(musicWindow = false) {
       p.activate?.() // preserve the click gesture before awaiting the lock/network
       owned.current = await acquire('music', lostAudio); setNotice(''); await run(p, fresh)
     }
-    catch (error) { report(error) } finally { setPending(intents.current?.pending().length ?? 0) }
+    catch (error) { report(error) } finally { setPending(intents.current?.blocking().length ?? 0) }
   }
   const controls = {
     start: (index: number) => withAudio(p => p.play(index)),
@@ -189,19 +220,21 @@ export function useMusic(musicWindow = false) {
   }
   async function search(q: string) {
     searchRequest.current?.abort(); const serial = ++searchSerial.current
-    const controller = new AbortController(); searchRequest.current = controller; setBusy('search')
+    if (!q.trim()) { setSearchResults([]); setSearching(false); return }
+    const controller = new AbortController(); searchRequest.current = controller; setSearching(true)
     try {
       const reply = await call(`/api/music/search?q=${encodeURIComponent(q.trim())}&limit=10`, 'GET', undefined, controller.signal)
       if (serial !== searchSerial.current) return
       if (reply.http !== 200) throw new MusicFailure(codeOf(reply.body) ?? 'spotify_unavailable')
       setSearchResults((reply.body as { items: ApiTrack[] }).items.map((track, i) => trackFrom(track, `search${i}`)))
-    } catch (error) { if (!controller.signal.aborted) report(error) } finally { if (serial === searchSerial.current) setBusy('') }
+    } catch (error) { if (!controller.signal.aborted) report(error) } finally { if (serial === searchSerial.current) setSearching(false) }
   }
   async function mutate(kind: 'add' | 'remove' | 'move' | 'create', value: string | number, direction?: 'up' | 'down', expectedSnapshot?: string) {
     if (!intents.current || status.phase !== 'connected' || !status.write || writing.current) return
     writing.current = true
     setBusy(kind); setNotice('')
     try {
+      if (kind === 'create') await stopPlayer()
       let path = '/api/music/playlist/items', method = 'POST'
       let body: Record<string, unknown> = { snapshot_id: expectedSnapshot ?? playlist?.snapshot }
       if (kind === 'create') { path = '/api/music/playlists'; body = { name: value } }
@@ -210,18 +243,20 @@ export function useMusic(musicWindow = false) {
       if (kind === 'move') { path += '/order'; method = 'PUT'; body = { ...body, range_start: value, insert_before: Number(value) + (direction === 'up' ? -1 : 2), range_length: 1 } }
       await intents.current.write(path, method, body)
       if (kind === 'add') setAdded(old => new Set(old).add(String(value)))
-      if (kind === 'create') { setChoices(null); setAdded(new Set()); await load() } else await loadItems()
+      if (kind === 'create') { setChoices(null); setAdded(new Set()); await load(); setPicking(false) } else await loadItems()
       if (kind === 'remove') setAdded(old => { const next = new Set(old); next.delete(String(value)); return next })
       if (kind === 'add') setNotice('')
       else setNotice('Playlist updated.')
+      return true
     } catch (error) {
       report(error)
       if (error instanceof MusicFailure && error.code === 'spotify_playlist_stale') await loadItems().catch(report)
-    } finally { writing.current = false; setPending(intents.current.pending().length); setBusy('') }
+      return false
+    } finally { writing.current = false; setPending(intents.current.blocking().length); setBusy('') }
   }
   async function inspect() {
     setBusy('inspect')
-    try { await intents.current?.inspect(); setPending(intents.current?.pending().length ?? 0); setNotice(intents.current?.pending().length ? say('spotify_outcome_unknown') : 'Recorded actions are confirmed.'); await loadItems() }
+    try { await intents.current?.inspect(); setPending(intents.current?.blocking().length ?? 0); setNotice(intents.current?.blocking().length ? say('spotify_outcome_unknown') : 'Recorded actions are confirmed.'); await loadItems() }
     catch (error) { report(error) } finally { setBusy('') }
   }
   useEffect(() => () => {
@@ -275,18 +310,21 @@ export function useMusic(musicWindow = false) {
   async function prepareVoice() {
     const p = ensurePlayer()
     p?.activate?.() // Capture this Call click, before awaiting authentication/device discovery.
-    if (voice.available) {
-      if (!voice.enabled && !await voice.allow(true)) throw Error('Could not allow this playlist for voice. Try again.')
-      await voice.waitReady()
+    const permission = await voice.refresh()
+    if (permission?.available) {
+      if ((!permission.enabled || permission.grant?.playlist_id !== playlist?.id) && !await voice.allow(true)) throw Error('Could not allow this playlist for voice. Try again.')
+      try { await voice.waitReady() } catch (error) { report(error) }
     }
     if (p?.prepare) {
       try { await p.prepare() } catch (error) { report(error) } // Normal conversation remains available if Spotify is unavailable.
     }
   }
-  return { status, tracks, playlist, more, choices, busy, play, track, notice, heldByVoice, pending, searchResults, suggestion, added, shuffle, repeat,
+  return { status, tracks, playlist, more, choices, picking, busy, play, track, notice, heldByVoice, pending, searchResults, searching, suggestion, added, shuffle, repeat,
     voice,
     load, connect, choose, disconnect, search, mutate, inspect, prepareVoice,
-    changePlaylist: async () => { try { await stopPlayer(); setPlaylist(null); await loadChoices() } catch (error) { report(error) } },
+    changePlaylist: async () => { setPicking(true); setNotice(''); try { await loadChoices() } catch (error) { report(error) } },
+    cancelPicker: () => setPicking(false),
+    refreshChoices: () => loadChoices().catch(report),
     loadMore: () => more !== null && loadItems(more).catch(report), moreChoices: () => choices?.next != null && loadChoices(choices.next).catch(report), ...controls }
 }
 export type Music = ReturnType<typeof useMusic>

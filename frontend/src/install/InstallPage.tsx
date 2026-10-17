@@ -105,7 +105,7 @@ export function InstallPage({ model }: { model: MascotId }) {
 
         <Step n={4} done={false} icon={<ChatCircleDots />} title="Say hi">
           <p>Send a text or hold the mic for a voice note. Koe answers a voice note with a voice note.</p>
-          <a className="primary" href="#chat" aria-disabled={!ready || undefined}>Open chat</a>
+          <a className="primary" href="/app/chat" aria-disabled={!ready || undefined}>Open chat</a>
         </Step>
       </ol>
     </main>

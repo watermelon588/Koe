@@ -177,8 +177,8 @@ export function ChatPage({ model }: { model: MascotId }) {
         </div>
         <button ref={toggle} className="icon-btn lw-toggle" aria-label={panelOpen ? 'Hide live workspace' : 'Show live workspace'} title="Live workspace"
           aria-expanded={panelOpen} aria-controls="live-workspace" data-has-work={hasWork || undefined} onClick={() => openPanel(!panelOpen)}><SidebarSimple /></button>
-        <a className="icon-btn" href="#home" aria-label="Call Koe" title="Call"><Phone /></a>
-        <a className="icon-btn" href="#settings" aria-label="Settings" title="Settings"><GearSix /></a>
+        <a className="icon-btn" href="/app" aria-label="Call Koe" title="Call"><Phone /></a>
+        <a className="icon-btn" href="/app/settings" aria-label="Settings" title="Settings"><GearSix /></a>
       </header>
 
       <ol className="thread" ref={thread} aria-label="Conversation with Koe">

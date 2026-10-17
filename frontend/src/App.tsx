@@ -20,6 +20,7 @@ import { MusicPage } from './music/MusicPage'
 import { MiniPlayer } from './music/MiniPlayer'
 import { CalendarIcon, NotionIcon, SpotifyIcon } from './components/BrandIcon'
 import { ApprovalPreview } from './approvals/ApprovalPreview'
+import { pageOf, type Page } from './navigation'
 
 // Layout (Engawa, "veranda"): she stands on the left; your day sits on the right; a call raises a sheet
 // over it while she shows her full figure.
@@ -38,9 +39,6 @@ function savedTheme(): Theme {
     return 'dark' // storage can be blocked (private mode); dark is the default anyway
   }
 }
-type Page = 'home' | 'dashboard' | 'chat' | 'settings' | 'install' | 'notion' | 'music'
-const PAGES: Page[] = ['dashboard', 'chat', 'settings', 'install', 'notion', 'music']
-const pageOf = (hash: string): Page => PAGES.find((p) => hash === `#${p}`) ?? 'home'
 
 function greeting() {
   const h = new Date().getHours()
@@ -49,7 +47,7 @@ function greeting() {
 
 export default function App() {
   const [model, setModel] = useState(savedMascot)
-  const [page, setPage] = useState<Page>(() => pageOf(location.hash))
+  const [page, setPage] = useState<Page>(() => pageOf(location.pathname, location.hash))
   const [theme, setTheme] = useState<Theme>(savedTheme)
   const [wide, setWide] = useState(() => matchMedia(WIDE).matches)
   const [accessToken, setAccessToken] = useState(savedToken)
@@ -62,12 +60,12 @@ export default function App() {
   const x = wide ? PLACE[inCall ? 'call' : 'home'] : 0.5
   useEffect(() => {
     function navigate() {
-      setPage(pageOf(location.hash))
+      setPage(pageOf(location.pathname, location.hash))
       scrollTo({ top: 0 })
     }
-    addEventListener('hashchange', navigate)
-    return () => removeEventListener('hashchange', navigate)
-  }, [inCall])
+    addEventListener('koe-navigation', navigate)
+    return () => removeEventListener('koe-navigation', navigate)
+  }, [])
 
   useEffect(() => {
     const sync = () => setAccessToken(savedToken())
@@ -143,22 +141,22 @@ export default function App() {
           koe <span className="jp">声</span>
         </span>
         <nav className="controls" aria-label="Main navigation">
-          <a className="nav-link" href="#home" aria-label="Home" title="Home" aria-current={page === 'home' ? 'page' : undefined}>
+          <a className="nav-link" href="/app" aria-label="Home" title="Home" aria-current={page === 'home' ? 'page' : undefined}>
             <House weight={page === 'home' ? 'fill' : 'light'} /><span>Home</span>
           </a>
-          <a className="nav-link" href="#dashboard" aria-label="Dashboard" title="Dashboard" aria-current={page === 'dashboard' ? 'page' : undefined}>
+          <a className="nav-link" href="/app/dashboard" aria-label="Dashboard" title="Dashboard" aria-current={page === 'dashboard' ? 'page' : undefined}>
             <SquaresFour weight={page === 'dashboard' ? 'fill' : 'light'} /><span>Dashboard</span>
           </a>
-          <a className="nav-link" href="#chat" aria-label="Chat" title="Chat" aria-current={page === 'chat' ? 'page' : undefined}>
+          <a className="nav-link" href="/app/chat" aria-label="Chat" title="Chat" aria-current={page === 'chat' ? 'page' : undefined}>
             <ChatCircleDots weight={page === 'chat' ? 'fill' : 'light'} /><span>Chat</span>
           </a>
-          <a className="nav-link" href="#notion" aria-label="Notion" title="Notion" aria-current={page === 'notion' ? 'page' : undefined}>
+          <a className="nav-link" href="/app/notion" aria-label="Notion" title="Notion" aria-current={page === 'notion' ? 'page' : undefined}>
             <NotionIcon size={18} /><span>Notion</span>
           </a>
-          <a className="nav-link" href="#music" aria-label="Music" title="Music" aria-current={page === 'music' ? 'page' : undefined}>
+          <a className="nav-link" href="/app/music" aria-label="Music" title="Music" aria-current={page === 'music' ? 'page' : undefined}>
             <SpotifyIcon size={18} /><span>Music</span>
           </a>
-          <a className="nav-link" href="#settings" aria-label="Settings" aria-current={page === 'settings' ? 'page' : undefined} title="Settings">
+          <a className="nav-link" href="/app/settings" aria-label="Settings" aria-current={page === 'settings' ? 'page' : undefined} title="Settings">
             <GearSix weight={page === 'settings' ? 'fill' : 'light'} /><span>Settings</span>
           </a>
           <span className="bar-divider" aria-hidden="true" />
@@ -202,7 +200,7 @@ export default function App() {
       <CallPanel open={inCall && page === 'home'} call={call} dashboard={dashboard} />
       {inCall && page !== 'home' && page !== 'music' && <aside className="workspace-call" aria-label="Active Koe call">
         <span className="dot" aria-hidden="true" /><span>{call.approval ? 'Your call has a pending approval' : `Koe · ${STATUS[call.state]}`}</span>
-        <a className="soft" href="#home">Return to call</a>
+        <a className="soft" href="/app">Return to call</a>
         <button className="ghost" aria-pressed={call.muted} onClick={call.toggleMute}>{call.muted ? 'Unmute' : 'Mute'}</button>
         <button className="end" onClick={call.stop}>End call</button>
       </aside>}

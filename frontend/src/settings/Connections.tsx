@@ -140,7 +140,7 @@ export function ConnectionsSection() {
         : list.filter((c) => c.provider !== 'gemini' && NAMES[c.provider]).map(({ provider, connected, account }) => {
           if (provider === 'spotify') return <SettingRow key={provider} icon={SpotifyIcon} title="Spotify" on={connected}
             status={connected ? 'Connected. Music only: Koe never hears or sees it.' : 'Optional. For your playlist on the Music page.'}
-            action={<a className="soft" href="#music">{connected ? 'Manage' : 'Set up'}</a>} />
+            action={<a className="soft" href="/app/music">{connected ? 'Manage' : 'Set up'}</a>} />
           const canConnect = CONNECT[provider] && (provider !== 'github' || githubReady || connected)
           return <Fragment key={provider}>
             <SettingRow icon={ICONS[provider]} title={NAMES[provider]} on={connected}

@@ -28,6 +28,8 @@ type Holder = { owner: Owner; id: number; onLost?: () => void }
 let holder: Holder | null = null
 let switching = false // a handoff is in flight; a second click must not race it
 let music: MusicControl | null = null
+let recover: (() => Promise<void>) | null = null
+export const setAudioRecovery = (fn: (() => Promise<void>) | null) => { recover = fn }
 let nextId = 1
 let snap: { owner: Owner | null; switching: boolean } = { owner: null, switching: false }
 const listeners = new Set<() => void>()
@@ -55,19 +57,33 @@ export async function acquire(owner: Owner, onLost?: () => void): Promise<Releas
   switching = true
   changed()
   try {
-    if (voice && music && music.playing() !== false) {
-      const seen = await Promise.race([music.pause(), deadline(PAUSE_DEADLINE_MS)])
-      if (seen !== 'paused' || music.playing() !== false) throw new AudioBusy('music')
-    }
-    await takeCrossTab(owner, async () => {
+    const handoff = async () => {
       if (holder?.owner !== 'music' || !music) return false
       const paused = await Promise.race([music.pause(), deadline(PAUSE_DEADLINE_MS)])
       if (paused !== 'paused' || music.playing() !== false) return false
       const lost = holder; holder = null; lost.onLost?.(); changed()
       return true
-    })
+    }
+    await takeCrossTab(owner, handoff)
     if (voice) {
-      try { requireStoppedEvidence() } catch (error) { dropCrossTab(); throw error }
+      try {
+        if (music && music.playing() !== false) {
+          const seen = await Promise.race([music.pause(), deadline(PAUSE_DEADLINE_MS)])
+          if (seen !== 'paused' || music.playing() !== false) {
+            if (!recover) throw new AudioBusy('music')
+            await recover()
+            if (music && music.playing() !== false) throw new AudioBusy('music')
+          }
+        }
+        try { requireStoppedEvidence() } catch {
+          await recover?.()
+          requireStoppedEvidence()
+        }
+      } catch (error) {
+        if (holder?.owner === 'music') await takeCrossTab('music', handoff)
+        else dropCrossTab()
+        throw error
+      }
     }
     const lost = holder
     holder = { owner, id: nextId++, onLost }
@@ -96,6 +112,6 @@ export const voiceActive = () => switching || (!!holder && holder.owner !== 'mus
 export function interruptVoiceForMusic() { if (holder && holder.owner !== 'music') holder.onLost?.() }
 
 export function resetForTests() {
-  holder = null; switching = false; music = null; listeners.clear(); changed()
+  holder = null; switching = false; music = null; recover = null; listeners.clear(); changed()
   dropCrossTab()
 }

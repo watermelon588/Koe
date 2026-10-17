@@ -4,6 +4,7 @@ Example: python -m scripts.test_music_pipeline --node-modules <directory contain
 Never starts the normal backend or uses hosted storage/provider credentials.
 """
 import argparse
+from contextlib import contextmanager
 import os
 import shutil
 import subprocess
@@ -13,6 +14,24 @@ import time
 from pathlib import Path
 
 import httpx
+
+
+@contextmanager
+def pipeline_logs():
+    temporary = tempfile.TemporaryDirectory(prefix='koe-pipeline-logs-')
+    try:
+        yield temporary.name
+    finally:
+        # Windows can briefly retain inherited log handles after taskkill returns.
+        # Retry only that specific sharing violation, and still fail if it persists.
+        for attempt in range(20):
+            try:
+                temporary.cleanup()
+                break
+            except PermissionError as error:
+                if os.name != 'nt' or getattr(error, 'winerror', None) != 32 or attempt == 19:
+                    raise
+                time.sleep(.1)
 
 
 def wait_ready(url, process):
@@ -55,7 +74,7 @@ def main():
            'KOE_E2E_ORIGIN': origin, 'KOE_E2E_FIXTURE': fixture, 'KOE_E2E_NODE_MODULES': str(Path(args.node_modules).resolve())}
     flags = subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
     processes = []
-    with tempfile.TemporaryDirectory(prefix='koe-pipeline-logs-') as directory:
+    with pipeline_logs() as directory:
         with (Path(directory) / 'backend.log').open('w', encoding='utf-8') as server_log, (Path(directory) / 'frontend.log').open('w', encoding='utf-8') as web_log:
             try:
                 server = subprocess.Popen([sys.executable, 'tests/spotify_e2e_server.py', '--port', str(args.backend_port), '--origin', origin],

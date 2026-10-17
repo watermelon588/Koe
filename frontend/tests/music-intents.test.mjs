@@ -41,3 +41,28 @@ test('inspection can clear an intent proven not sent without retrying the origin
   assert.equal(reloaded.pending().length,0)
   assert.equal(writes,1)
 })
+
+test('an uncertain shuffle never replays and does not block independent play or playlist edits', async () => {
+  const sent = []
+  const intents = new MusicIntents('g', async (path, method, body) => {
+    if (method === 'GET') return {http:202,body:{state:'outcome_unknown'}}
+    sent.push(body)
+    return body.operation === 'shuffle' ? {http:202,body:{state:'outcome_unknown'}} : {http:200,body:{state:'confirmed',result:{accepted:true}}}
+  }, storage())
+  await assert.rejects(intents.write('/api/music/playback','POST',{operation:'shuffle',state:true}))
+  assert.equal(intents.pending().length,1)
+  assert.equal(intents.blocking().length,0)
+  await intents.write('/api/music/playback','POST',{operation:'play'})
+  await intents.write('/api/music/playlist/items','POST',{uri:'example'})
+  assert.equal(sent.filter(body => body.operation === 'shuffle').length,1)
+  assert.equal(sent.length,3)
+})
+
+test('malformed persisted action data fails closed without crashing status rendering or writing', async () => {
+  const saved = storage(); let writes = 0
+  saved.setItem('koe-music-intents:g', JSON.stringify([{id:'old',path:'/api/music/playback'}]))
+  const intents = new MusicIntents('g', async () => { writes++ }, saved)
+  assert.deepEqual(intents.blocking(), [])
+  await assert.rejects(intents.write('/api/music/playback','POST',{operation:'play'}), /remember/)
+  assert.equal(writes,0)
+})

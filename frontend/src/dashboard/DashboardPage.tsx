@@ -91,7 +91,7 @@ export function TodaySummary({ data, connected }: { data: DashboardState; connec
         <CalendarIcon size={18} /><h2 id="today-title">Today</h2>
         <span className="live-dot" data-on={connected} aria-hidden="true" />
         <span className="visually-hidden">{connected ? 'Live' : 'Offline'}</span>
-        <a className="today-link" href="#dashboard">Open dashboard<ArrowRight size={14} /></a>
+        <a className="today-link" href="/app/dashboard">Open dashboard<ArrowRight size={14} /></a>
       </header>
       <TodayList calendar={calendar} limit={3} />
       {(events.length > 3 || waiting) && <p className="today-foot">

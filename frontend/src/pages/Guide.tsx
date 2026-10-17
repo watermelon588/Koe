@@ -38,7 +38,7 @@ export function Guide() {
       <Section id="install" title="Install the app">
         <p>Koe is a web app you can install like a normal app. No app store is needed.</p>
         <ol>
-          <li>On your laptop, open <a href="/#install">the Install page</a>. It shows a QR code.</li>
+          <li>On your laptop, open <a href="/app/install">the Install page</a>. It shows a QR code.</li>
           <li>Scan the QR code with your phone’s camera.</li>
           <li><b>Android (Chrome):</b> tap <b>Install Koe</b>. If no button appears, open Chrome’s ⋮ menu → <b>Install app</b>.</li>
           <li><b>iPhone (Safari):</b> tap <b>Share</b> → <b>Add to Home Screen</b>, then open Koe from the home screen. Notifications only work from there.</li>
@@ -101,14 +101,14 @@ export function Guide() {
       </Section>
 
       <Section id="notion" title="Notion workspace">
-        <p>Open <a href="/#notion">Notion</a> from the app navigation to search your connected database, filter daily logs, tasks, meeting records and notes, and preview a record. You can also ask Koe to read or prepare changes from Chat or a call.</p>
+        <p>Open <a href="/app/notion">Notion</a> from the app navigation to search your connected database, filter daily logs, tasks, meeting records and notes, and preview a record. You can also ask Koe to read or prepare changes from Chat or a call.</p>
         <p>Choose <b>New record</b>, enter its details, then <b>Preview change</b>. Read the full preview and choose <b>Confirm change</b> or <b>Cancel</b>. Editing appends additional notes and preserves existing content. Moving a record to trash also asks for confirmation; you can restore it in Notion. The workspace works directly even when the AI service is busy.</p>
         <p><b>More properties</b> in the record form lists the other columns of your database (text, numbers, dates, links, checkboxes, choices). Only what you change is sent; everything else keeps its value. To add a new column, choose <b>Add property</b>, preview it and confirm; then fill it on records as a separate change. People, relations and formulas stay read-only.</p>
         <p>A meeting record stores notes and a date range. To reserve a slot or invite people, ask Koe to book it in <b>Google Calendar</b>. Saving a Notion record does not book time. Nested and non-text blocks are labeled in the preview; Notion pages can’t be shown inside Koe, so use <b>Open in Notion</b> for the full page.</p>
       </Section>
 
       <Section id="music" title="Music">
-        <p>Open <a href="/app#music">Music</a> for your private Spotify playlist. When the owner has enabled Spotify, connect your account, choose a playlist you own or create a private one, then press Play. Search by typing; Add immediately adds one copy with inline feedback. Moving, removing and creating playlists retain a confirmation. Removing a track removes every copy of it from that playlist.</p>
+        <p>Open <a href="/app/music">Music</a> for your private Spotify playlist. When the owner has enabled Spotify, connect your account, choose a playlist you own or create a private one, then press Play. Search by typing; Add immediately adds one copy with inline feedback. Moving, removing and creating playlists retain a confirmation. Removing a track removes every copy of it from that playlist.</p>
         <p>Koe pauses in-app music before a call, voice note or stored reply. If the pause cannot be verified, voice stays blocked. Ordinary hang-up never resumes music; press Play yourself. Another Koe tab can hand over music only after it confirms the pause. After a reload during playback, play in this browser and pause to verify its state.</p>
         <p>If approved voice controls are enabled, use <b>Call Koe</b> directly on Music. The page prepares its player and allows the selected playlist; no second window is required. Talk normally, ask to play an artist or named song from your playlist, pause, skip or change volume. A missing song opens a search suggestion; choose Add yourself. Koe finishes her reply and ends the call before music starts. Call again to pause and talk. Disable voice controls to revoke access.</p>
         <p>An unconfirmed action is never automatically repeated. Use <b>Check action status</b> and inspect Spotify before making another change. If in-app playback is unavailable, use the official Spotify app or web player. Koe cannot see or pause music played there; pause it yourself before using voice. Spotify music and metadata are never sent to Koe’s AI; approved voice controls return only generic transport outcomes.</p>

@@ -54,7 +54,8 @@ export function spotifyPlayer(Constructor: SDKConstructor, options: Options): Pl
   let device = ''
   let disposed = false
   let connected = false
-  let played = evidence?.has(connectionId) === true || intents.pending().some(i => i.path === '/api/music/playback')
+  let played = evidence?.has(connectionId) === true || intents.blocking().some(i => i.path === '/api/music/playback')
+  if (played) state.status = 'unknown'
   let disallows: Record<string, boolean> = {}
   let tail: Promise<unknown> = Promise.resolve()
   let localInFlight = 0
@@ -109,7 +110,7 @@ export function spotifyPlayer(Constructor: SDKConstructor, options: Options): Pl
     try {
       await intents.inspect()
       if (localInFlight || evidence?.localPending(connectionId)) { await bounded(raw.pause()); update({ status: 'unknown', error: 'A sent player command is still unresolved. Voice stays blocked.' }); return 'unknown' }
-      if (intents.pending().some(i => i.path === '/api/music/playback')) { await bounded(raw.pause()); update({ status: 'unknown', error: 'A sent playback action is unconfirmed. Voice stays blocked.' }); return 'unknown' }
+      if (intents.blocking().some(i => i.path === '/api/music/playback')) { await bounded(raw.pause()); update({ status: 'unknown', error: 'A sent playback action is unconfirmed. Voice stays blocked.' }); return 'unknown' }
       allowed('pausing'); await bounded(raw.pause())
       const until = performance.now() + 2000
       do {
@@ -136,6 +137,8 @@ export function spotifyPlayer(Constructor: SDKConstructor, options: Options): Pl
     subscribe: fn => { listeners.add(fn); return () => { listeners.delete(fn) } },
     activate: () => { void raw.activateElement().catch(() => fail('spotify_device_unavailable', 'Press Play again to allow audio.')) },
     prepare: () => queue(async () => { await prepare() }),
+    unsettled: () => localInFlight > 0 || state.status === 'starting',
+    recovered: () => { played = false; update({ status: state.index >= 0 ? 'paused' : 'idle', error: '' }) },
     async play(index, snapshot) {
       return queue(async () => {
         if (!options.tracks()[index]?.playable) throw new MusicFailure('spotify_invalid_request')

@@ -5,7 +5,7 @@ import { createPlayer } from './player'
 import type { createMascot, Mood } from '../mascot/mascot'
 import { wsUrl } from '../backend'
 import { emptyWork, reduceWork } from '../workspace/workState'
-import { acquire, AudioBusy } from '../audio/coordinator'
+import { acquire } from '../audio/coordinator'
 import { music as musicRequest } from '../music/api'
 
 // One live call over /ws/call: mic up, Koe's voice down, plus the chat transcript, typed messages,
@@ -93,7 +93,7 @@ export function useCall(mascot: { current: Mascot | null }) {
     } catch (err) {
       player.ctx.close()
       if (starting.current === id) { starting.current = 0; setState('idle') }
-      setError(err instanceof AudioBusy ? err.message : String(err))
+      setError(err instanceof Error ? err.message : String(err))
       return
     }
     if (starting.current !== id) { release(); player.ctx.close(); return } // ended while the music was pausing

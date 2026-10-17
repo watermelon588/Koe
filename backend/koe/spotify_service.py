@@ -244,6 +244,10 @@ async def http(method, url, *, access_token=None, **kwargs):
                     raise SpotifyError("spotify_unavailable", 503) from None
                 if not isinstance(result, dict):
                     raise SpotifyError("spotify_unavailable", 503)
+                # Only HTTP 204 means no active playback. A malformed 200 must
+                # never become proof that audio stopped during Call recovery.
+                if method == 'GET' and url == API_URL + '/me/player' and type(result.get('is_playing')) is not bool:
+                    raise SpotifyError("spotify_unavailable", 503)
                 return result
     except (httpx.HTTPError, TimeoutError):
         raise SpotifyError("spotify_unavailable", 503) from None

@@ -83,3 +83,16 @@ test('paused music is taken over without another pause', async () => {
   await acquire('call')
   assert.equal(m.pauses, 0)
 })
+
+// Recovery remains inside audio ownership; a rejection cannot begin microphone capture.
+test('verified recovery can unblock a lost player, but failed recovery leaves voice idle', async () => {
+  const { setAudioRecovery } = await import('../src/audio/coordinator.ts')
+  fakeMusic({ playing: null, result: 'unknown' })
+  setAudioRecovery(async () => { throw Error('Provider still playing') })
+  await assert.rejects(acquire('call'), /Provider still playing/)
+  assert.equal(current().owner, null)
+  setAudioRecovery(async () => { setMusic({ playing: () => false, pause: async () => 'paused' }) })
+  const release = await acquire('call')
+  assert.equal(current().owner, 'call')
+  release()
+})

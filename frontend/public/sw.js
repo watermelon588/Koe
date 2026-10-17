@@ -14,20 +14,20 @@ self.addEventListener('push', (event) => {
     const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
     windows.forEach((w) => w.postMessage({ type: 'koe-refresh' })) // an open chat loads the new message
     // Already reading the chat on screen: no notification needed, like WhatsApp.
-    if (windows.some((w) => w.visibilityState === 'visible' && w.url.includes('#chat'))) return
+    if (windows.some((w) => w.visibilityState === 'visible' && (new URL(w.url).pathname === '/app/chat' || w.url.includes('#chat')))) return
     await self.registration.showNotification(data.title || 'Koe', {
       body: data.body || '',
       icon: '/icons/icon-192.png',
       tag: data.tag || 'koe',
       renotify: true,
-      data: { url: data.url || '/#chat' },
+      data: { url: data.url || '/app/chat' },
     })
   })())
 })
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close()
-  const url = (event.notification.data && event.notification.data.url) || '/#chat'
+  const url = (event.notification.data && event.notification.data.url) || '/app/chat'
   event.waitUntil((async () => {
     const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
     const open = windows[0]

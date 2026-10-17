@@ -13,7 +13,7 @@ export function MiniPlayer({ music, hidden }: { music: Music; hidden: boolean })
   return (
     <aside className="mini-player" aria-label="Music">
       <Art src={track.art} size="sm" />
-      <a className="mini-meta" href="#music">
+      <a className="mini-meta" href="/app/music">
         <span><SpotifyIcon size={14} /> {track.name}</span>
         <small>{music.heldByVoice ? 'Paused while Koe uses audio' : play.status === 'unknown' ? 'Playback unknown' : track.artists}</small>
       </a>

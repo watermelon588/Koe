@@ -83,3 +83,21 @@ Verification later: visual review, computed style/overflow/focus checks, reduced
 - [ ] User reviews the final Music page before any deployment.
 
 The current implementation is being published at the user's request. Run the pending acceptance work only when requested; do not claim unchecked outcomes have passed.
+
+
+## 2026-10-17 Music repair verification
+
+This section updates the earlier pending implementation checklist. The user subsequently requested end-to-end repair and continuation; the previous no-test instruction no longer applies to this repair.
+
+- [x] Separate unconfirmed shuffle/repeat from play/transfer uncertainty; verify recovery without replay.
+- [x] Same-page Call and Home Call after reload verified through the simulated browser pipeline.
+- [x] One functioning Change playlist chooser with cancel/refresh/select and labelled Create form; creation pauses previous playback.
+- [x] Bounded debounced artist suggestions, keyboard selection, artwork fallback and direct Add feedback.
+- [x] Compact mute, volume steps, slider and percentage; responsive Music layout uses the existing palette/fonts.
+- [x] Canonical `/app/music` paths, legacy hash migration, browser back/reload and Vercel rewrite.
+- [x] Focused backend tests (71), frontend tests (69), 28 browser checks and production build pass; desktop/mobile screenshots reviewed.
+- [x] Real read-only playlist eligibility, artwork presence and artist-search checks pass; local backend/frontend HTTP 200.
+- [ ] Owner verifies real speech recognition, audible Spotify playback and phone behavior.
+- [ ] Verify hosted authenticated music and voice after the GitHub deployment completes.
+
+The unchecked items require real provider/audio acceptance; automated fixture checks do not stand in for those outcomes.

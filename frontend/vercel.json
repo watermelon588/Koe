@@ -7,6 +7,7 @@
   "rewrites": [
     { "source": "/api/:path*", "destination": "https://koe-backend-dt5m.onrender.com/api/:path*" },
     { "source": "/auth/:path*", "destination": "https://koe-backend-dt5m.onrender.com/auth/:path*" },
+    { "source": "/app/:path*", "destination": "/index.html" },
     { "source": "/(app|guide|privacy|terms)", "destination": "/index.html" }
   ],
   "headers": [

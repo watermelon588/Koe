@@ -45,7 +45,7 @@ async def connect(request: Request, current: str = Depends(sp.owner)):
 
 
 def back(marker):
-    response = RedirectResponse(f"/?spotify={marker}#music", status_code=303, headers=sp.HEADERS)
+    response = RedirectResponse(f"/app/music?spotify={marker}", status_code=303, headers=sp.HEADERS)
     response.delete_cookie(FLOW_COOKIE, path=CALLBACK)
     return response
 

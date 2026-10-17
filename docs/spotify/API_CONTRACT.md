@@ -43,7 +43,7 @@ type ErrorBody = { error: { code: string; message: string;
 |---|---|---|
 | `GET /api/music/status` | — | See below; no Spotify request |
 | `POST /auth/spotify/connect` | `{}` | `{authorize_url: string}`; navigate after explicit click |
-| `GET /auth/spotify/callback` | provider `code`, `state` or `error` | 303 to `/?spotify=connected#music`, `/?spotify=cancelled#music`, or `/?spotify=error#music`; code/state stripped |
+| `GET /auth/spotify/callback` | provider `code`, `state` or `error` | 303 to `/app/music?spotify=connected`, `/app/music?spotify=cancelled`, or `/app/music?spotify=error`; code/state stripped |
 | `POST /api/music/sdk-token` | `{connection_id: string}` | `{access_token: string, expires_at: number, connection_id: string}`; expiry Unix seconds |
 | `DELETE /api/connections/spotify` | — | 204; allowed while disabled/misconfigured |
 
@@ -72,7 +72,7 @@ Every write (except disconnect/selection) carries `connection_id` and a stable `
 | `PUT /api/music/playlist` | `{connection_id, playlist_id}` | `{playlist: Playlist}`; explicit selection, no creation/playback |
 | `POST /api/music/playlists` | `{connection_id, request_id, name}` (1–100 chars) | `Mutation`; create private playlist and select it after verified response |
 | `GET /api/music/playlist/items` | `offset=0&limit=50` | `Page<{position: number, track: Track}> & {playlist: Playlist}` |
-| `GET /api/music/search` | `q=...&offset=0&limit=10` (q 1–100 chars) | `Page<Track>`; typed track search only |
+| `GET /api/music/search` | `q=...&offset=0&limit=10&kind=track` (q 1–100 chars; kind `track` default or `artist`) | `Page<Track>` or `Page<{id, name, image_url, url}>`; artist suggestions use ordinary Spotify search, never AI recommendations |
 | `POST /api/music/playlist/items` | `{connection_id, request_id, snapshot_id, uri}` | `Mutation`; add one track at end |
 | `DELETE /api/music/playlist/items` | `{connection_id, request_id, snapshot_id, uri, remove_all_occurrences: true}` | `Mutation`; preview/confirm removal of ALL matching occurrences |
 | `PUT /api/music/playlist/items/order` | `{connection_id, request_id, snapshot_id, range_start, insert_before, range_length: 1}` | `Mutation`; move one occurrence, positions refer to pre-move order |
@@ -90,6 +90,7 @@ Use the latest playlist `snapshot_id` in previews. Stale selection/snapshot erro
 | same | `{connection_id, request_id, device_id, operation: 'shuffle', state: boolean}` | `Mutation` |
 | same | `{connection_id, request_id, device_id, operation: 'repeat', state: 'off'|'context'|'track'}` | `Mutation` |
 | `GET /api/music/playback` | `connection_id=...&device_id=...` | `{state: 'unknown'|'observed', is_playing: boolean|null, device_id: string|null}`; only registered target, no remote data |
+| `POST /api/music/recover-audio` | `{connection_id}`; explicit Call/Pause/playlist-change gesture while browser holds exclusive audio ownership | `{state: 'stopped', connection_id}` only after observing stopped/no active playback. May pause an exact device recorded in this generation's durable play/transfer evidence; never transfers, starts music or pauses an unrelated device. |
 
 Device registration validates against Spotify's current available devices and a Koe SDK player name, then binds to the session+generation; this is accidental-remote-control protection, not cryptographic attestation. Instantiate SDK with name `Koe Web Player`. Renew registration after expiry/readiness or foreground reconciliation. No arbitrary context URI, track URI, remote device list, or automatic takeover. Check local SDK state to confirm transfer/playback; accepted provider responses alone do not prove audible playback. Use SDK for pause/resume/seek/previous/next/volume and honor `disallows`.
 
@@ -98,6 +99,8 @@ Registration discovery may wait up to four seconds/eight read attempts for the e
 Transfer detail: Spotify documents `play:false` as preserving the current playback state, not as forcing pause. Acquire audio ownership before explicit transfer, treat an in-flight transfer as a possible start, and verify local SDK pause before voice. See [Transfer Playback](https://developer.spotify.com/documentation/web-api/reference/transfer-a-users-playback). Refresh retains an omitted replacement refresh token and handles invalid_grant without retry; the original authorization timestamp is preserved because refresh does not extend the provider's six-month grant lifetime ([refresh reference](https://developer.spotify.com/documentation/web-api/tutorials/refreshing-tokens)).
 
 Frontend owns serialization of all SDK/backend playback commands and the verified pause-before-voice barrier across calls, recordings and stored replies. An unresolved sent Play/transfer remains a barrier until settled; null/unknown is never paused. No automatic resume. Backend requests run independently of the existing voice/agent pipeline. External Spotify links open a destination and cannot prove playback/stop.
+
+Recovery added 2026-10-17: serialize with other owner API mutations, reject any unresolved sent/unknown play or transfer, then query current playback. Only confirmed stopped/no active playback clears persisted uncertainty. Unknown shuffle/repeat outcomes remain recorded and are never replayed, but do not block independent playlist/play actions or this pause check. A browser command still in flight remains a barrier. A 35-second client write deadline exceeds the backend's 30-second bound, reducing abandoned responses without adding retries.
 
 ## Errors and frontend integration
 

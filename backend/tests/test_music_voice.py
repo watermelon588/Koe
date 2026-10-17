@@ -192,3 +192,16 @@ def test_voice_ticket_carries_one_time_cookie_proof_without_exposing_cookie(allo
         assert auth.consume_ticket_session(ticket) is None
         assert auth.ws_owner(ticket) == settings.koe_owner_id
         assert auth.ws_owner(ticket) is None
+
+
+def test_artist_and_title_match_only_playable_playlist_tracks():
+    from koe.music_selection import choose
+    def song(n, title, artist, playable=True):
+        return (n, {'id': str(n)*22, 'uri': 'spotify:track:' + str(n)*22, 'type': 'track',
+                    'name': title, 'artists': [{'name': artist}], 'is_playable': playable})
+    tracks = [song(0, 'Tik Tok', 'Ke$ha'), song(1, 'Praying', 'Kesha'), song(2, 'Tik Tok', 'Another Artist')]
+    assert choose(tracks, artist='Kesha')['position'] in (0, 1)
+    assert choose(tracks, artist='kesha', title='tik tok') == {'state': 'matched', 'position': 0}
+    assert choose(tracks, title='Tik Tok')['state'] == 'ambiguous'
+    assert choose(tracks, title='Missing')['state'] == 'not_found'
+    assert choose([song(0, 'Praying', 'Kesha', False)], artist='Kesha')['state'] == 'unavailable'
