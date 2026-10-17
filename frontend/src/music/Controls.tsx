@@ -4,6 +4,7 @@ import { clock, positionAt } from './model'
 import type { Music } from './useMusic'
 import './music.css'
 import { SpotifyIcon } from '../components/BrandIcon'
+import { softwareVolumeSupported } from './capabilities'
 
 // Shared by the Music page and the mini player.
 
@@ -52,6 +53,7 @@ export function Volume({ music }: { music: Music }) {
   const v = drag ?? music.play.volume
   const Icon = v === 0 ? SpeakerX : v < 0.5 ? SpeakerLow : SpeakerHigh
   const commit = () => { if (drag !== null) { void music.setVolume(drag); setDrag(null) } }
+  if (!softwareVolumeSupported()) return <p className="music-volume"><SpeakerHigh aria-hidden="true" /> Use your device’s volume buttons</p>
   return (
     <div className="music-volume" role="group" aria-label="Volume controls" style={{ '--volume': `${v * 100}%` } as CSSProperties}>
       <button className="icon-btn" aria-label={v === 0 ? 'Unmute music' : 'Mute music'} onClick={() => { if (v > 0) previous.current = v; void music.setVolume(v === 0 ? previous.current : 0) }}><Icon /></button>

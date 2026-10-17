@@ -165,7 +165,9 @@ async def release(body: Release, current: str = Depends(sp.owner)):
     driver.pending[body.id] = future
     try:
         await driver.socket.send_json({'type': 'release', 'id': body.id, **permission})
-        result = await asyncio.wait_for(asyncio.shield(future), 8)
+        # Playback must register/transfer and then observe asynchronous SDK state.
+        # Leave room inside MusicRoute's 30s and the browser's 35s deadlines.
+        result = await asyncio.wait_for(asyncio.shield(future), 25)
         return result
     except (TimeoutError, RuntimeError):
         return {'state': 'outcome_unknown'}

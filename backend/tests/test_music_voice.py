@@ -1,6 +1,7 @@
 """Real owner auth/storage/socket bridge with a fake player; no Spotify account writes."""
 import asyncio
 import json
+import time
 
 import httpx
 import pytest
@@ -129,6 +130,23 @@ def test_lost_ack_is_unknown_even_after_player_reconnect(allowed):
             socket.send_json({'ticket': ticket}); socket.receive_json()
             assert allowed.portal.call(issue, 'volume_up') == first
             assert mv.drivers[settings.koe_owner_id].pending == {}
+
+
+def test_handoff_accepts_delayed_playback_confirmation_without_replaying(allowed):
+    with allowed:
+        ticket = open_player(allowed)
+        with allowed.websocket_connect('/ws/music-control', headers={'origin': SITE}) as socket:
+            socket.send_json({'ticket': ticket}); socket.receive_json()
+            future = allowed.portal.start_task_soon(issue, 'play')
+            command = socket.receive_json()
+            socket.send_json({'id': command['id'], 'state': 'queued'})
+            result = future.result(3)
+            release = allowed.portal.start_task_soon(mv.release, mv.Release(id=result['_handoff_id']), settings.koe_owner_id)
+            assert socket.receive_json()['type'] == 'release'
+            time.sleep(8.2)  # Previously discarded a legitimate acknowledgement at 8s.
+            socket.send_json({'id': command['id'], 'state': 'applied'})
+            assert release.result(3) == {'state': 'applied'}
+            assert allowed.post('/api/music/voice-release', json={'id': command['id']}).status_code == 409
 
 
 @pytest.mark.parametrize('args', [

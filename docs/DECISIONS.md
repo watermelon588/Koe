@@ -132,3 +132,14 @@ User confirmed Sheets with approval before every entry. Implement the five tools
 | 2026-10-17 | **Canonical app paths with history navigation and legacy hash migration.** `/app/music` survives reload and hosted SPA rewrites while player/call controllers remain mounted | User rejects visible hashes. Existing OAuth callbacks, links and push destinations must agree | Full reload for every page change, leaving hosted deep links to 404, breaking existing bookmarks |
 
 | 2026-10-17 | **Correct the example to keshi and expose secret-free Spotify setup diagnostics to the existing owner only.** | Live backend is current, but the user reports setup unavailable; distinguish deployment revision from missing environment configuration. Never return credentials or weaken music cookie authentication | Blaming stale deployment without checking; copying secrets into frontend or chat |
+
+
+## Spotify timing and mobile repair — 2026-10-17
+
+Treat accepted playback and observed playback separately. The SDK can temporarily report null, paused, or the previous track after a successful Web API write. Observe the requested URI playing for up to eight seconds without repeating writes. A queued explicit pause supersedes observation, then verifies silence; in-flight starts remain visible to audio recovery regardless of intermediate state events. Voice release waits up to 25 seconds inside the existing 30/35-second server/client bounds. No retry of uncertain writes or silent audio-barrier bypass.
+
+Replace a timed-out SDK script on explicit retry. Music Call preparation errors must reach the Call UI instead of being swallowed. Ignore late close events from retired voice bridges so they cannot clear a newer connection's ready state. iOS/iPadOS uses physical volume controls, per Spotify's SDK reference; hide ineffective sliders and reject false volume success. Preserve current visual design and do not change Render settings or deploy in this repair.
+
+Source: https://developer.spotify.com/documentation/web-playback-sdk/reference (getCurrentState, activateElement, setVolume).
+
+Saved-position restoration must not append Seek after a pending audio handoff. Check current music ownership, no active switch, and observed playing state before the follow-up seek. The existing browser voice-reply scenario with delayed SDK observations is the regression test.

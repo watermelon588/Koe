@@ -88,8 +88,9 @@ export function useMusicVoice(active: boolean, connectionId: string, playlistId:
           }).catch(() => setNotice('Music control was not confirmed.'))
         }
         socket.onclose = event => {
-          boundary.close(); ready.current = ''; setConnected(false)
+          boundary.close()
           if (stopped) return
+          ready.current = ''; setConnected(false)
           setNotice(event.reason || 'Reconnecting voice controls. Unconfirmed commands will not be repeated.')
           retry()
         }
@@ -102,7 +103,7 @@ export function useMusicVoice(active: boolean, connectionId: string, playlistId:
     const ping = setInterval(() => { if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'ping' })) }, 15000)
     addEventListener('online', wake); document.addEventListener('visibilitychange', wake)
     void connect()
-    return () => { stopped = true; ready.current = ''; if (reconnect.current === wake) reconnect.current = () => {}; closeBoundary(); clearTimeout(timer); clearInterval(ping); socket?.close(); removeEventListener('online', wake); document.removeEventListener('visibilitychange', wake) }
+    return () => { stopped = true; ready.current = ''; setConnected(false); if (reconnect.current === wake) reconnect.current = () => {}; closeBoundary(); clearTimeout(timer); clearInterval(ping); socket?.close(); removeEventListener('online', wake); document.removeEventListener('visibilitychange', wake) }
   }, [active, enabled, connectionId, playlistId])
   async function waitReady() {
     const key = `${connectionId}:${playlistId}`

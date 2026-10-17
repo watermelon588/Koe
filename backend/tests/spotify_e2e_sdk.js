@@ -20,6 +20,11 @@
     async getCurrentState() {
       const state = await get()
       if (state.device_id !== this.id || !state.track) return null
+      // Real SDK observations lag accepted Web API writes. Exercise that lag
+      // throughout the browser pipeline, rather than making every write instant.
+      const key = `${state.playing}:${state.track.uri}`
+      if (this.observedKey !== key) { this.observedKey = key; this.observedAt = performance.now() }
+      if (state.playing && performance.now() - this.observedAt < 450) return null
       return {paused:!state.playing,position:state.position,duration:state.track.duration_ms,disallows:{},track_window:{current_track:state.track}}
     }
     pause() { return this.action('pause') }

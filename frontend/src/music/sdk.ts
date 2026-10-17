@@ -23,17 +23,28 @@ export function loadSpotifySDK(): Promise<SDKConstructor> {
   if (window.Spotify?.Player) return Promise.resolve(window.Spotify.Player)
   if (loading) return loading
   loading = new Promise<SDKConstructor>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new MusicFailure('spotify_unavailable', 'Spotify’s player did not load. Try again.')), 15000)
     const previous = window.onSpotifyWebPlaybackSDKReady
-    window.onSpotifyWebPlaybackSDKReady = () => {
-      previous?.(); clearTimeout(timer)
+    const cleanup = () => {
+      clearTimeout(timer)
+      if (window.onSpotifyWebPlaybackSDKReady === onReady) window.onSpotifyWebPlaybackSDKReady = previous
+    }
+    const failed = () => {
+      cleanup()
+      document.querySelector('script[data-koe-spotify-sdk]')?.remove()
+      reject(new MusicFailure('spotify_unavailable', 'Spotify’s player did not load. Try again.'))
+    }
+    const timer = setTimeout(failed, 15000)
+    const onReady = () => {
+      cleanup()
       if (window.Spotify?.Player) resolve(window.Spotify.Player)
       else reject(new MusicFailure('spotify_unavailable'))
+      previous?.()
     }
+    window.onSpotifyWebPlaybackSDKReady = onReady
     if (!document.querySelector('script[data-koe-spotify-sdk]')) {
       const script = document.createElement('script')
       script.src = 'https://sdk.scdn.co/spotify-player.js'; script.async = true; script.dataset.koeSpotifySdk = 'true'
-      script.onerror = () => { clearTimeout(timer); script.remove(); reject(new MusicFailure('spotify_unavailable')) }
+      script.onerror = failed
       document.head.appendChild(script)
     }
   }).catch(error => { loading = null; throw error })
@@ -59,6 +70,8 @@ export function spotifyPlayer(Constructor: SDKConstructor, options: Options): Pl
   let disallows: Record<string, boolean> = {}
   let tail: Promise<unknown> = Promise.resolve()
   let localInFlight = 0
+  let startInFlight = false
+  let pauseVersion = 0
   let resolveReady: (id: string) => void = () => {}
   let ready = new Promise<string>(resolve => { resolveReady = resolve })
   const listeners = new Set<() => void>()
@@ -105,23 +118,26 @@ export function spotifyPlayer(Constructor: SDKConstructor, options: Options): Pl
     const sent = Promise.resolve().then(run).finally(() => { localInFlight--; if (!localInFlight) evidence?.local(connectionId, false) })
     await bounded(sent); await refresh()
   })
-  const pause = () => queue(async (): Promise<'paused' | 'unknown'> => {
-    if (!played) return 'paused'
-    try {
-      await intents.inspect()
-      if (localInFlight || evidence?.localPending(connectionId)) { await bounded(raw.pause()); update({ status: 'unknown', error: 'A sent player command is still unresolved. Voice stays blocked.' }); return 'unknown' }
-      if (intents.blocking().some(i => i.path === '/api/music/playback')) { await bounded(raw.pause()); update({ status: 'unknown', error: 'A sent playback action is unconfirmed. Voice stays blocked.' }); return 'unknown' }
-      allowed('pausing'); await bounded(raw.pause())
-      const until = performance.now() + 2000
-      do {
-        const seen = await refresh()
-        if (seen?.paused === true) { evidence?.clear(connectionId); return 'paused' }
-        await new Promise(resolve => setTimeout(resolve, 80))
-      } while (performance.now() < until)
-    } catch { /* A pause call or null state is never promoted to stopped. */ }
-    update({ status: 'unknown', error: 'Could not confirm music stopped. Try pausing again.' })
-    return 'unknown'
-  })
+  const pause = () => {
+    pauseVersion++ // Stop observing a start once an explicit pause is queued behind it.
+    return queue(async (): Promise<'paused' | 'unknown'> => {
+      if (!played) return 'paused'
+      try {
+        await intents.inspect()
+        if (localInFlight || evidence?.localPending(connectionId)) { await bounded(raw.pause()); update({ status: 'unknown', error: 'A sent player command is still unresolved. Voice stays blocked.' }); return 'unknown' }
+        if (intents.blocking().some(i => i.path === '/api/music/playback')) { await bounded(raw.pause()); update({ status: 'unknown', error: 'A sent playback action is unconfirmed. Voice stays blocked.' }); return 'unknown' }
+        allowed('pausing'); await bounded(raw.pause())
+        const until = performance.now() + 2000
+        do {
+          const seen = await refresh()
+          if (seen?.paused === true) { evidence?.clear(connectionId); return 'paused' }
+          await new Promise(resolve => setTimeout(resolve, 80))
+        } while (performance.now() < until)
+      } catch { /* A pause call or null state is never promoted to stopped. */ }
+      update({ status: 'unknown', error: 'Could not confirm music stopped. Try pausing again.' })
+      return 'unknown'
+    })
+  }
   const prepare = async () => {
     if (!connected) { connected = await bounded(raw.connect()); if (!connected) throw fail('spotify_device_unavailable', 'Spotify’s player did not connect. Press Play to retry.') }
     const id = device || await bounded(ready)
@@ -133,31 +149,46 @@ export function spotifyPlayer(Constructor: SDKConstructor, options: Options): Pl
     return id
   }
   return {
-    mock: false, state: () => state, playing: () => !played ? false : localInFlight || state.status === 'unknown' || state.status === 'starting' ? null : state.status === 'playing',
+    mock: false, state: () => state, playing: () => startInFlight ? null : !played ? false : localInFlight || state.status === 'unknown' || state.status === 'starting' ? null : state.status === 'playing',
     subscribe: fn => { listeners.add(fn); return () => { listeners.delete(fn) } },
     activate: () => { void raw.activateElement().catch(() => fail('spotify_device_unavailable', 'Press Play again to allow audio.')) },
     prepare: () => queue(async () => { await prepare() }),
-    unsettled: () => localInFlight > 0 || state.status === 'starting',
+    unsettled: () => startInFlight || localInFlight > 0 || state.status === 'starting',
     recovered: () => { played = false; update({ status: state.index >= 0 ? 'paused' : 'idle', error: '' }) },
     async play(index, snapshot) {
+      const beforePause = pauseVersion
       return queue(async () => {
         if (!options.tracks()[index]?.playable) throw new MusicFailure('spotify_invalid_request')
-        update({ status: 'starting', index, error: '' })
-        const id = await prepare()
-        evidence?.mark(connectionId)
-        played = true // Only sent transfer/play can leave uncertain playback behind.
-        await intents.write('/api/music/playback', 'POST', { device_id: id, operation: 'transfer' })
-        // Spotify transfer is asynchronous; confirm target before the start request.
-        const until = performance.now() + 4000
-        let targeted = false
-        do {
-          const result = await request(`/api/music/playback?connection_id=${encodeURIComponent(connectionId)}&device_id=${encodeURIComponent(id)}`)
-          if ((result.body as { device_id?: string })?.device_id === id) { targeted = true; break }
-          await new Promise(resolve => setTimeout(resolve, 100))
-        } while (performance.now() < until)
-        if (!targeted) throw fail('spotify_device_unavailable', 'Spotify has not confirmed this browser as the active player.')
-        await intents.write('/api/music/playback', 'POST', { device_id: id, operation: 'play', position: index, ...(snapshot ? { snapshot_id: snapshot } : {}) })
-        await refresh()
+        const requestedUri = options.tracks()[index].uri
+        startInFlight = true
+        try {
+          update({ status: 'starting', index, error: '' })
+          const id = await prepare()
+          evidence?.mark(connectionId)
+          played = true // Only sent transfer/play can leave uncertain playback behind.
+          await intents.write('/api/music/playback', 'POST', { device_id: id, operation: 'transfer' })
+          // Spotify transfer is asynchronous; confirm target before the start request.
+          const until = performance.now() + 4000
+          let targeted = false
+          do {
+            const result = await request(`/api/music/playback?connection_id=${encodeURIComponent(connectionId)}&device_id=${encodeURIComponent(id)}`)
+            if ((result.body as { device_id?: string })?.device_id === id) { targeted = true; break }
+            await new Promise(resolve => setTimeout(resolve, 100))
+          } while (performance.now() < until)
+          if (!targeted) throw fail('spotify_device_unavailable', 'Spotify has not confirmed this browser as the active player.')
+          await intents.write('/api/music/playback', 'POST', { device_id: id, operation: 'play', position: index, ...(snapshot ? { snapshot_id: snapshot } : {}) })
+          // Accepted Web API writes precede SDK state propagation. Observe only;
+          // never resend play, or accept the previous track as this request's result.
+          const confirmationDeadline = performance.now() + 8000
+          do {
+            if (pauseVersion !== beforePause) return // The queued pause still has to verify silence.
+            const seen = await bounded(raw.getCurrentState(), Math.max(1, confirmationDeadline - performance.now()))
+            observe(seen)
+            if (seen?.paused === false && seen.track_window?.current_track?.uri === requestedUri) return
+            await new Promise(resolve => setTimeout(resolve, 150))
+          } while (!disposed && performance.now() < confirmationDeadline)
+          throw new MusicFailure('spotify_outcome_unknown', 'Spotify accepted the request but playback is not confirmed. Check the player before trying again.')
+        } finally { startInFlight = false }
       }).catch(error => { update({ status: played ? 'unknown' : 'idle', error: error instanceof Error ? error.message : 'Spotify could not start.' }); throw error })
     },
     resume: () => local('resuming', () => raw.resume()), pause,

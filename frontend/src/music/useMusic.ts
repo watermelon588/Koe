@@ -5,6 +5,7 @@ import { crossTabSupported } from '../audio/crossTab'
 import { codeOf, music as call } from './api'
 import { MusicFailure, MusicIntents } from './intents'
 import { loadSpotifySDK, spotifyPlayer } from './sdk'
+import { softwareVolumeSupported } from './capabilities'
 import { useMusicVoice } from './useMusicVoice'
 import { createMockPlayer, IDLE, MOCK_PLAYLIST, MOCK_TRACKS, playlistFrom, say, statusFrom, trackFrom,
   type ApiPlaylist, type ApiTrack, type MusicStatus, type Player, type Playlist, type PlayState, type Track } from './model'
@@ -50,6 +51,13 @@ export function useMusic(musicWindow = false) {
   function report(error: unknown) {
     setNotice(error instanceof MusicFailure ? say(error.code, error.message) : error instanceof Error ? error.message : say(null))
     setPending(intents.current?.blocking().length ?? 0)
+  }
+  function requireVolume() {
+    if (!softwareVolumeSupported()) {
+      const message = 'Use your device’s volume buttons to adjust music on iPhone or iPad.'
+      setNotice(message)
+      throw Error(message)
+    }
   }
   async function loadChoices(offset = 0) {
     const reply = await call(`/api/music/playlists?offset=${offset}&limit=20`)
@@ -209,12 +217,27 @@ export function useMusic(musicWindow = false) {
   }
   const controls = {
     start: (index: number) => withAudio(p => p.play(index)),
-    resume: () => withAudio(async (p, fresh) => { if (fresh || play.status === 'idle') { await p.play(Math.max(0, play.index)); if (play.position) await p.seek(play.position) } else await p.resume() }),
-    pause: async () => { try { if (player.current && await player.current.pause() !== 'paused') throw new MusicFailure('spotify_outcome_unknown') } catch (error) { report(error) } },
+    resume: () => withAudio(async (p, fresh) => {
+      if (fresh || play.status === 'idle') {
+        await p.play(Math.max(0, play.index))
+        // A call/reply may have requested Pause while Play was being confirmed.
+        // Do not append a seek behind that pause and reopen the audio barrier.
+        if (play.position && !current().switching && current().owner === 'music' && p.state().status === 'playing') await p.seek(play.position)
+      } else await p.resume()
+    }),
+    pause: async () => {
+      try {
+        if (!player.current || await player.current.pause() !== 'paused') {
+          owned.current = await acquire('music', lostAudio)
+          await recoverAudio(true)
+          setPlay(old => ({ ...old, status: old.index >= 0 ? 'paused' : 'idle' }))
+        }
+      } catch (error) { report(error) }
+    },
     next: () => withAudio(async (p, fresh) => { if (fresh) await p.play(Math.min(tracks.length - 1, play.index + 1)); else await p.next() }),
     previous: () => withAudio(async (p, fresh) => { if (fresh) await p.play(Math.max(0, play.index - 1)); else await p.previous() }),
     seek: async (ms: number) => { try { await player.current?.seek(ms) } catch (error) { report(error) } },
-    setVolume: async (v: number) => { try { preferredVolume.current = v; await player.current?.setVolume(v); setPlay(old => ({ ...old, volume: v })) } catch (error) { report(error) } },
+    setVolume: async (v: number) => { try { requireVolume(); await player.current?.setVolume(v); preferredVolume.current = v; setPlay(old => ({ ...old, volume: v })) } catch (error) { report(error) } },
     toggleShuffle: () => withAudio(async p => { await p.shuffle?.(!shuffle); setShuffle(!shuffle) }),
     cycleRepeat: () => withAudio(async p => { const next = repeat === 'off' ? 'context' : repeat === 'context' ? 'track' : 'off'; await p.repeat?.(next); setRepeat(next) }),
   }
@@ -271,10 +294,11 @@ export function useMusic(musicWindow = false) {
     status.phase === 'connected' && !status.mock ? status.connectionId : '', playlist?.id ?? '', async command => {
       if (command.action === 'pause') { await stopPlayer(); return 'applied' }
       if (['set_volume', 'volume_up', 'volume_down'].includes(command.action)) {
+        requireVolume()
         const value = command.action === 'set_volume' ? (command.volume_percent ?? 60) / 100
           : Math.min(1, Math.max(0, preferredVolume.current + (command.action === 'volume_up' ? .1 : -.1)))
-        preferredVolume.current = value
         if (player.current) await player.current.setVolume(value)
+        preferredVolume.current = value
         setPlay(old => ({ ...old, volume: value }))
         return player.current ? 'applied' : 'deferred'
       }
@@ -299,7 +323,7 @@ export function useMusic(musicWindow = false) {
       p.activate?.()
       owned.current = await acquire('music', lostAudio)
       await p.play(index, command.snapshot_id)
-      if (command.action === 'play' && play.position > 0) await p.seek(play.position)
+      if (command.action === 'play' && play.position > 0 && !current().switching && current().owner === 'music' && p.state().status === 'playing') await p.seek(play.position)
       if (p.state().status !== 'playing') throw Error('Playback was not confirmed.')
       return 'applied'
     }, (query, state) => {
@@ -312,11 +336,11 @@ export function useMusic(musicWindow = false) {
     p?.activate?.() // Capture this Call click, before awaiting authentication/device discovery.
     const permission = await voice.refresh()
     if (permission?.available) {
+      if (!p) throw Error('Spotify’s player is still loading. Try Call again when it is ready.')
       if ((!permission.enabled || permission.grant?.playlist_id !== playlist?.id) && !await voice.allow(true)) throw Error('Could not allow this playlist for voice. Try again.')
-      try { await voice.waitReady() } catch (error) { report(error) }
-    }
-    if (p?.prepare) {
-      try { await p.prepare() } catch (error) { report(error) } // Normal conversation remains available if Spotify is unavailable.
+      // Do not silently start a music-capable call with an unusable player bridge.
+      await voice.waitReady()
+      await p.prepare?.()
     }
   }
   return { status, tracks, playlist, more, choices, picking, busy, play, track, notice, heldByVoice, pending, searchResults, searching, suggestion, added, shuffle, repeat,

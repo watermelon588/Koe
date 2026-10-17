@@ -3,8 +3,9 @@ import { test } from 'node:test'
 import { spotifyPlayer } from '../src/music/sdk.ts'
 import { MusicIntents } from '../src/music/intents.ts'
 
-function setup({ unknown = false, nullState = false, delayedResume = false, registrationDenied = false, registrationDeniedAfterPlay = false, firstConnectFails = false } = {}) {
+function setup({ unknown = false, nullState = false, delayedState = false, delayedResume = false, registrationDenied = false, registrationDeniedAfterPlay = false, firstConnectFails = false } = {}) {
   const events = {}; const trace = []; let playing = false
+  let readsAfterPlay = 0
   let settleResume
   const resumeWait = new Promise(resolve => { settleResume = resolve })
   class Fake {
@@ -14,7 +15,9 @@ function setup({ unknown = false, nullState = false, delayedResume = false, regi
     async connect() { trace.push('connect'); if (firstConnectFails && trace.filter(value => value === 'connect').length === 1) return false; events.ready({ device_id: 'browser' }); return true }
     disconnect() { trace.push('disconnect') }
     async activateElement() { trace.push('activate') }
-    async getCurrentState() { return nullState ? null : { paused: !playing, position: 0, duration: 1000, disallows: {}, track_window: { current_track: { uri: 'spotify:track:t' } } } }
+    async getCurrentState() {
+      if (delayedState && playing && ++readsAfterPlay <= 3) return readsAfterPlay === 1 ? null : { paused: readsAfterPlay === 2, position: 0, disallows: {}, track_window: { current_track: { uri: 'spotify:track:old' } } }
+      return nullState ? null : { paused: !playing, position: 0, duration: 1000, disallows: {}, track_window: { current_track: { uri: 'spotify:track:t' } } } }
     async pause() { trace.push('pause'); playing = false }
     async resume() { if (delayedResume) await resumeWait; playing = true }
     async seek() {} async nextTrack() {} async previousTrack() {} async setVolume() {}
@@ -29,6 +32,27 @@ function setup({ unknown = false, nullState = false, delayedResume = false, regi
   const intents = new MusicIntents('g', request, saved)
   return { player: spotifyPlayer(Fake, { connectionId: 'g', tracks: () => [{ uri: 'spotify:track:t', playable: true }], request, intents }), trace, events, settleResume }
 }
+
+test('play waits for the requested track after delayed null, paused and previous-track SDK state without replay', async () => {
+  const { player, trace } = setup({ delayedState: true })
+  await player.play(0)
+  assert.equal(player.state().status, 'playing')
+  assert.equal(player.state().index, 0)
+  assert.equal(trace.filter(value => value === 'play').length, 1)
+  assert.equal(trace.filter(value => value === 'transfer').length, 1)
+  player.dispose()
+})
+
+test('explicit pause supersedes a pending playback observation and verifies silence', async () => {
+  const { player, trace } = setup({ delayedState: true })
+  const start = player.play(0)
+  const pause = player.pause()
+  await start
+  assert.equal(await pause, 'paused')
+  assert.equal(player.playing(), false)
+  assert.equal(trace.filter(value => value === 'play').length, 1)
+  player.dispose()
+})
 test('device registration rejection before any sent playback remains idle and does not block voice', async () => {
   const { player, trace } = setup({ registrationDenied: true, nullState: true })
   await assert.rejects(player.play(0))
@@ -86,7 +110,7 @@ test('an uncertain sent transfer remains a voice barrier even when local pause r
 })
 test('null SDK state after playback is unknown and cannot be treated as paused', async () => {
   const { player } = setup({ nullState: true })
-  await player.play(0)
+  await assert.rejects(player.play(0))
   assert.equal(player.playing(), null)
   assert.equal(await player.pause(), 'unknown')
   player.dispose()

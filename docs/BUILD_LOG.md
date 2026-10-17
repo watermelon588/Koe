@@ -1420,3 +1420,22 @@ The user clarified the artist is keshi and that the unavailable message is on th
 Try it: inspect owner backend diagnostics for missing Spotify booleans, then configure Render and the matching developer callback. Interview line: “A successful code deployment does not deploy ignored local environment settings.”
 
 Verification: five backend reliability/authorization/redaction tests pass; frontend production build passes. Existing mascot chunk-size advisory remains.
+
+
+## Diagnose Spotify application timing rather than operate deployment — 2026-10-17
+
+**Trace:** Queried the existing Graphify graph and followed its live-call/audio edges. Its stored revision e746c25 predates Spotify and has no Spotify/music nodes, so verified the current SDK, hook, audio coordinator, socket bridge, backend release and browser tests directly. No graph rebuild or Render navigation.
+
+**Reproduction:** Added delayed null/paused/previous-track SDK observations. Before the fix, Play resolved with status unknown; this reproduced a false failure independently of environment configuration. The old voice-release acknowledgement limit was eight seconds even though browser preparation and Spotify state propagation could take longer. The browser pipeline with delayed observations also exposed switching to a voice reply during confirmation; explicit pause now supersedes that observation before verifying silence.
+
+**Changes:** sdk.ts observes the actual requested track, protects pending starts and repairs script-loader retry. music_voice.py budgets release acknowledgements within existing request limits. useMusic.ts recovers orphaned Pause controls, propagates preparation failures and avoids false volume updates. useMusicVoice.ts ignores retired socket close events. Controls.tsx/capabilities.ts provides physical-volume guidance on iOS and desktop-mode iPad. No new dependency or visual redesign.
+
+**Concept:** A provider accepting a command does not mean the browser has observed its result. Wait for evidence, avoid duplicate commands, and allow a deliberate Pause to complete safely.
+
+**Try it:** On Music, call Koe without manually playing first; request an artist or exact song in the granted playlist. Try switching to voice immediately after Play, reload, and pause. On iPhone/iPad use the device volume buttons; browser autoplay restrictions still require user activation where enforced.
+
+**Interview line:** “I reproduced asynchronous provider-state races using delayed SDK observations, then aligned confirmation, cancellation and server deadlines without replaying uncertain writes.”
+
+**Final root cause in the browser:** A fresh resume restored the saved seek position after Play resolved, even when voice had already queued Pause. That late seek reopened the audio barrier. Resume now checks current audio ownership/switching and observed playback before appending a seek. The delayed browser test failed repeatedly before this correction and passes afterward.
+
+**Verification:** 73 frontend tests; 72 backend Spotify/auth/voice tests; 19 manual browser checks plus 10 same-page voice checks, all passing. The SDK double now delays playing observations by 450ms. An acknowledgement arriving after 8.2 seconds is accepted without duplicate release. Production build passes; lint has only the four pre-existing warnings, and the existing mascot chunk-size advisory remains. Browser screenshots checked at 375px; iOS volume capability is emulated in Chromium, not verified on physical Safari. Spotify/provider audio and Gemini function selection remain simulated: no claim of live streaming, microphone recognition or physical mobile acceptance. No hosted configuration or deployment changes performed.
