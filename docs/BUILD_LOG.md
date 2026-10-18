@@ -1502,6 +1502,6 @@ Verification: five backend reliability/authorization/redaction tests pass; front
 
 **Try it yourself:** Open `README.md` on GitHub after committing the README and the linked `design/` assets. Follow the local setup commands or browse the linked PNGs. The Graphify CLI's uv launcher failed on this Windows host, so the existing `graphify-out/graph.json` was inspected directly and checked against source.
 
-**Gotchas:** The design folders are currently untracked; GitHub will show broken image links until those assets are committed and pushed alongside the README. No end-to-end or provider tests were run for this documentation-only step, as requested.
+**Gotchas:** Image links on GitHub require the design assets to be committed alongside the README; both were published together. No end-to-end or provider tests were run for this documentation-only step, as requested.
 
 **Interview line:** “I documented the product from its actual code paths and separated design concepts, implemented workflows and unverified live acceptance.”
