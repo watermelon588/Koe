@@ -83,7 +83,7 @@
 .set-main { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; min-height: 36px; min-width: 0; }
 .set-text { display: grid; flex: 1 1 140px; min-width: 0; font-size: 14px; line-height: 1.4; }
 .set-text small { color: var(--muted); font-size: 12px; margin-top: 2px; overflow-wrap: anywhere; }
-.set-action { display: flex; flex-shrink: 0; }
+.set-action { display: flex; flex-wrap: wrap; gap: 6px; flex-shrink: 0; max-width: 100%; }
 .set-action :is(.ghost, .soft) { height: 34px; padding: 0 14px; font-size: 13px; text-decoration: none; }
 .set-action a.soft { color: var(--text); }
 .set-below { flex-basis: 100%; min-width: 0; }
@@ -100,6 +100,13 @@
 .repo-list input { accent-color: var(--accent); width: 15px; height: 15px; flex-shrink: 0; }
 .repo-pick .pair { justify-content: flex-end; padding: 10px; border-top: 1px solid var(--line); }
 .repo-pick .pair button { height: 34px; padding: 0 14px; font-size: 13px; }
+.repo-pick > label { display: flex; align-items: center; gap: 8px; padding: 10px; font-size: 14px; }
+.repo-pick > label input { accent-color: var(--accent); }
+.repo-pick > p { padding: 0 10px 10px; color: var(--muted); font-size: 13px; }
+.github-token-form { display: grid; gap: 12px; }
+.github-token-form p { color: var(--muted); font-size: 13px; }
+.github-token-form label { display: grid; gap: 6px; font-size: 14px; }
+.github-token-form input { width: 100%; min-width: 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--text); }
 @media (hover: hover) and (pointer: fine) { .repo-list label:hover { background: var(--surface); } }
 
 @media (max-width: 899px) {

@@ -92,6 +92,7 @@ def test_connected_chat_creates_approved_doc_and_rereads_it(client, monkeypatch,
         types.Content(role='model', parts=[types.Part.from_text(text='Your document contains Hello world.')])]
     async def generate(**kwargs):
         assert 'docs_create' in str(kwargs['config']['tools'])
+        assert '"docs_permission_granted": true' in kwargs['config']['system_instruction']
         return SimpleNamespace(candidates=[SimpleNamespace(content=responses.pop(0))]), settings.gemini_text_model
     monkeypatch.setattr(gemini, 'generate', generate)
     reply = client.post('/api/app/messages', json={'text': 'Create a Google Doc called Weekly update saying Hello world.'})

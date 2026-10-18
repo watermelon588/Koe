@@ -1535,3 +1535,14 @@ Verification: five backend reliability/authorization/redaction tests pass; front
 **Try it yourself:** Read the About section near the top of the GitHub README.
 **Gotchas:** No application test is needed for this text-only edit.
 **Interview line:** “I wrote a concise project introduction that connects the companion experience to its practical workflow.”
+
+
+## Connection state and GitHub access repair — 2026-10-18
+**Files:** backend connections/auth, GitHub tools, agent text/voice paths; frontend Connections; focused backend and browser tests; GitHub/Docs setup guides.
+**What it does:** Detects an old backend instead of looping through ineffective Docs consent. Preserves granted scopes, records Docs-specific consent success, and supplies current service evidence to the agent. Exposes owner Notion/GitHub connections truthfully. Adds a verified encrypted personal-token connection and selected/all-accessible repository choices in Settings.
+**Core concept:** A frontend button, saved permission and registered agent tool are separate states. The UI and agent must use backend evidence rather than guess that they match. GitHub counts depend on the authenticated author and branch coverage; missing access is not a zero count.
+**How it connects:** Settings → authenticated connection endpoints → encrypted per-person credentials and preferences → shared GitHub/Docs tools → text and voice. GitHub scans default plus up to 20 named branches, deduplicates SHAs and discloses partial coverage.
+**Try it yourself:** Deploy the same revision to backend and frontend. Open Settings → Connections, enable Docs once if needed, connect your GitHub account, choose repositories and save. Ask Koe whether Docs is enabled and what you committed yesterday.
+**Verification:** 124 focused backend tests and 75 frontend tests passed; production build passed. Two browser runners passed desktop/mobile repository, token, Docs consent and approval flows with synthetic provider responses. No live Google/GitHub writes or Render deployment performed. Public live health observed an older pre-Docs backend revision (192407a); a subsequent authenticated diagnostic timed out, so live account correctness remains unverified.
+**Gotchas:** All-access activity is bounded to 100 recently pushed accessible repositories. Existing owner Notion workspace is supported; personal Notion OAuth is still not implemented. Existing mascot chunk-size warning and Starlette/httpx deprecation warning remain.
+**Interview line:** “I repaired capability reporting across OAuth, UI and agent tools, then tested account isolation and bounded GitHub activity evidence.”

@@ -1,13 +1,13 @@
 # GitHub in Koe
 
 ## Connect and use
-1. In Settings → Connections, connect GitHub with your own account.
-2. Choose up to 20 repositories. Load more to browse past the first page. Save an empty selection to stop activity tracking; it no longer restores environment defaults.
+1. In Settings → Connections, connect GitHub with your own account using OAuth or **Use a token**. A fine-grained token can restrict access at GitHub itself; grant Contents and Pull requests read access, and Pull requests write only if you want approved PR comments. The token is verified and encrypted on the backend; it is never kept in browser storage. **Change account** replaces the connection and resets repository selection.
+2. Choose up to 20 repositories or **All accessible repositories**, then save. Load more to browse past the first page. An empty selected list stops tracking and produces a selection prompt, not a zero-commit report. All-access mode remains limited by your credential's GitHub permissions; activity scans the 100 most recently pushed accessible repositories and reports truncated coverage explicitly.
 3. Open Dashboard. Yesterday's commit/merged-PR counts and source-linked commits load automatically. Refresh uses the existing shared dashboard refresh; provider failures show errors or partial coverage.
 4. Ask in chat or a live call: “What did I commit yesterday?”, “Summarize my work this week”, “What changed in commit [SHA] in owner/repo?”, “Which PRs need my review?”, or “What is my contribution streak?”
 
 ## What answers mean
-- Activity covers the selected repositories' default branches, matched to your GitHub author login, plus your merged PRs. It does not claim all-branch coverage. Counts overlap; commits and PRs must not be added as unique work.
+- Activity covers each repository's default branch and up to 20 named branches, matched to the authenticated GitHub author login, plus your merged PRs. Commit SHAs are deduplicated per repository. Branch/repository limits or failed reads are marked partial; this is not unlimited all-branch coverage. Counts overlap; commits and PRs must not be added as unique work.
 - Yesterday is midnight-to-midnight in Koe's configured timezone, Asia/Kolkata by default; the end is exclusive. GitHub search indexing may lag.
 - Commit detail reports message, author, file names and additions/deletions with a GitHub link. It does not analyze patches or certify code. Source text is untrusted.
 - Changed-line totals are opt-in, bounded and labeled; they are not repository LOC. Contribution streaks use GitHub's contribution calendar, not a commit-only calendar.
@@ -20,7 +20,7 @@ OAuth/account and selected repositories → github_work/github_stats → shared 
 Focused backend tests: test_github_connect, test_github_tools, test_phase4_github, test_github_stats, test_github_hooks, test_events, test_voice_call. Frontend tests include dashboard state. Build before running backend/tests/github_ui_browser.mjs with KOE_E2E_NODE_MODULES pointing to an existing Playwright installation. The browser runner starts/stops only its own preview server on 5187 and uses synthetic provider data.
 
 ## Later work
-Music latency is deferred. Google Docs creation/editing is the next chosen Google feature; standalone Drive file management is removed from the planned scope. Docs may still require Drive APIs for file discovery/permissions.
+Music latency is deferred. Google Docs creation/editing is implemented; standalone Drive file management remains outside the planned scope. Docs requires Drive APIs for file discovery/permissions.
 
 ## Sources
 - https://docs.github.com/en/rest/commits/commits

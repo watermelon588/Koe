@@ -36,8 +36,16 @@ def repositories() -> list[str]:
     return repos
 
 
+def require_repository(repo: str):
+    if not isinstance(repo, str) or not connections.github_repo_allowed(repo):
+        raise ValueError('Choose this repository in Settings → Connections → GitHub first.')
+
+
 async def request(method: str, path: str, **kwargs) -> httpx.Response:
-    token = (await asyncio.to_thread(connections.github_account))['token']
+    try:
+        token = (await asyncio.to_thread(connections.github_account))['token']
+    except connections.ConnectionError_ as exc:
+        raise GitHubError(str(exc)) from None
     if not token:
         raise GitHubError('GitHub is not connected: Settings → Connections → GitHub.')
     try:
@@ -81,6 +89,7 @@ async def _summarize(source: str) -> dict:
 async def github_pr_summary(repo: str, number: int) -> dict:
     try:
         target(repo, number)
+        await asyncio.to_thread(require_repository, repo)
         path = f'/repos/{repo}/pulls/{number}'
         pr = (await request('GET', path)).json()
         head = pr['head']['sha']
@@ -183,12 +192,22 @@ async def _github_shipped(since, now, until):
         now = now or datetime.now(timezone.utc)
         start, end = history_window(since, until, now)
         query_end = end - timedelta(microseconds=1)  # GitHub's range ends are inclusive; ours is exclusive.
-        repos = await asyncio.to_thread(repositories)
-        login = (await asyncio.to_thread(connections.github_account))['login'] or (await request('GET', '/user')).json()['login']
+        selection = await connections.github_scope()
+        repos = selection['repos']
+        if not repos:
+            return _error('github_scope', 'No repositories are selected or accessible.',
+                          'Open Settings → Connections → GitHub and choose repositories or all accessible repositories. This is not zero commits.')
+        if any(not _REPO.fullmatch(repo) for repo in repos):
+            raise ValueError('Invalid repository selection.')
+        account = await asyncio.to_thread(connections.github_account)
+        login = account['login']
+        if not login or account.get('source') == 'server':
+            login = (await request('GET', '/user')).json()['login']
         if not _LOGIN.fullmatch(login):
             raise ValueError('Invalid GITHUB_LOGIN.')
         # Fixed endpoint pagination; never follow an absolute Link URL with auth headers.
         semaphore = asyncio.Semaphore(4)
+        branch_coverage = {}
         async def read(repo):
             async with semaphore:
                 prs, commits, partial = [], [], False
@@ -205,22 +224,39 @@ async def _github_shipped(since, now, until):
                     if not more:
                         break
                 partial |= more
-                for page in range(1, 11):
-                    r = await request('GET', f'/repos/{repo}/commits', params={
-                        'author': login, 'since': start.isoformat(), 'until': query_end.isoformat(), 'per_page': 100, 'page': page})
-                    commits.extend({'repo': repo, 'sha': c['sha'], 'title': c['commit']['message'].split('\n')[0],
-                                    'url': c['html_url'], 'date': (c['commit'].get('committer') or
-                                                                            c['commit'].get('author') or {}).get('date')}
-                                   for c in r.json())
-                    more = 'next' in r.links
-                    if not more:
-                        break
+                branches, missing_branches = [], []
+                try:
+                    branch_reply = await request('GET', f'/repos/{repo}/branches', params={'per_page': 100})
+                    branches = [b['name'] for b in branch_reply.json()][:20]
+                    partial |= len(branch_reply.json()) > 20 or 'next' in branch_reply.links
+                except GitHubError:
+                    partial = True
+                    missing_branches.append('branch listing')
+                # Always include the default branch, then named branches; deduplicate SHAs below.
+                for branch in [None, *branches]:
+                    try:
+                        for page in range(1, 11):
+                            r = await request('GET', f'/repos/{repo}/commits', params={
+                                'author': login, 'since': start.isoformat(), 'until': query_end.isoformat(),
+                                'per_page': 100, 'page': page, **({'sha': branch} if branch else {})})
+                            commits.extend({'repo': repo, 'sha': c['sha'], 'title': c['commit']['message'].split('\n')[0],
+                                            'url': c['html_url'], 'date': (c['commit'].get('committer') or
+                                                                                    c['commit'].get('author') or {}).get('date')}
+                                           for c in r.json())
+                            more = 'next' in r.links
+                            if not more:
+                                break
+                        partial |= more
+                    except GitHubError:
+                        partial = True
+                        missing_branches.append(branch or 'default branch')
+                branch_coverage[repo] = {'named_branches_scanned': branches, 'unavailable': missing_branches}
                 # Defensive boundary filtering and identity deduplication; never count a page twice.
                 prs = list({p['number']: p for p in prs if _in_window(p['merged_at'], start, end)}.values())
                 commits = list({c['sha']: c for c in commits if _in_window(c['date'], start, end)}.values())
                 if any(not isinstance(c['sha'], str) or not re.fullmatch(r'[a-fA-F0-9]{1,64}', c['sha']) for c in commits):
                     raise ValueError('GitHub returned an invalid commit identifier.')
-                return prs, commits, partial or more
+                return prs, commits, partial
         results = await asyncio.gather(*(read(repo) for repo in repos), return_exceptions=True)
         unavailable = [repo for repo, result in zip(repos, results) if isinstance(result, Exception)]
         valid = [result for result in results if not isinstance(result, Exception)]
@@ -231,8 +267,11 @@ async def _github_shipped(since, now, until):
                 'as_of': datetime.now(timezone.utc).isoformat(), 'unavailable_repositories': unavailable,
                 'prs': sorted([p for ps, _, _ in valid for p in ps], key=lambda p: p['merged_at'], reverse=True),
                 'commits': sorted([c for _, cs, _ in valid for c in cs], key=lambda c: c['date'], reverse=True),
-                'partial': bool(unavailable) or any(p for _, _, p in valid), 'repositories': repos,
-                'scope': 'Author-matched merged PRs and default-branch commits; these can overlap. Search indexing can lag.'}
+                'partial': bool(unavailable) or selection['partial'] or any(p for _, _, p in valid), 'repositories': repos,
+                'repository_mode': selection['mode'], 'author_login': login, 'branch_coverage': branch_coverage,
+                'scope': 'Author-matched merged PRs and commits on the default and up to 20 named branches per repository, deduplicated by SHA; these can overlap. '
+                         'Only commits linked to this GitHub author are included; local/unpushed commits are unavailable. '
+                         + selection.get('note', '')}
     except (ValueError, TypeError) as exc:
         return _error('bad_args', str(exc), 'Use today, yesterday, this week, an ISO date or an offset timestamp; until is exclusive.')
     except (KeyError, AttributeError):
@@ -244,8 +283,7 @@ async def _github_shipped(since, now, until):
 async def github_commit_summary(repo: str, sha: str) -> dict:
     """Bounded source evidence for the conversational model; never execute source text."""
     try:
-        if repo.casefold() not in {r.casefold() for r in repositories()}:
-            raise ValueError('Choose this repository in Settings → Connections first.')
+        await asyncio.to_thread(require_repository, repo)
         if not isinstance(sha, str) or not re.fullmatch(r'[a-fA-F0-9]{7,40}', sha):
             raise ValueError('Use a commit SHA from github_activity or github_shipped (7–40 hex characters).')
         response = await request('GET', f'/repos/{repo}/commits/{sha}', params={'per_page': 100})
@@ -267,8 +305,7 @@ async def github_commit_summary(repo: str, sha: str) -> dict:
 
 def prepare_comment(repo: str, number: int, body: str) -> dict:
     target(repo, number)
-    if repo.casefold() not in {r.casefold() for r in repositories()}:
-        raise ValueError('Comments are limited to GITHUB_REPOS.')
+    require_repository(repo)
     if not isinstance(body, str) or not 1 <= len(body.strip()) <= 6000:
         raise ValueError('Comment must contain 1–6000 characters.')
     return {'repo': repo, 'number': number, 'body': body.strip()}

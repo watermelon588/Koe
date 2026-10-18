@@ -26,7 +26,8 @@ from cryptography.fernet import Fernet, InvalidToken
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from google.auth.transport.requests import Request as GoogleRequest
 from google.oauth2.credentials import Credentials
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, SecretStr
+from typing import Literal
 
 from koe import auth, identity
 from koe.config import settings
@@ -142,11 +143,23 @@ api = APIRouter(prefix="/api/connections", dependencies=[Depends(auth.http_owner
 
 
 @api.get("")
-async def list_connections():
+async def list_connections(response: Response):
+    response.headers['Cache-Control'] = 'no-store'
     rows = await sql("select provider, account, scopes from koe_connections where owner_id = %s", identity.owner_id())
     have = {r["provider"]: r["account"] for r in rows}
+    sources = {p: 'personal' for p in have}
+    if identity.is_owner():
+        if 'github' not in have and settings.github_token and await asyncio.to_thread(pref, 'github_disconnected') != 'true':
+            have['github'] = settings.github_login or 'Owner connection'
+            sources['github'] = 'server'
+        if settings.notion_token and (settings.notion_database_id or settings.notion_data_source_id):
+            have['notion'] = 'Owner workspace'
+            sources['notion'] = 'server'
     sheet = await asyncio.to_thread(pref, "google_sheets_id", identity.owner_id())
-    return {"ready": configured(), "github_ready": github_ready(), "timesheet": f"https://docs.google.com/spreadsheets/d/{sheet}/edit" if sheet else "",
+    return {"ready": configured(), "github_ready": github_ready(), "github_token_ready": configured(),
+            "sources": sources, "github_repo_mode": await asyncio.to_thread(github_repo_mode),
+            "features": {'docs': True, 'github_scope': True},
+            "timesheet": f"https://docs.google.com/spreadsheets/d/{sheet}/edit" if sheet else "",
             "docs_ready": any(r["provider"] == "google" and {DOCS_SCOPE, DRIVE_FILE_SCOPE} <= set(r["scopes"].split()) for r in rows),
             "connections": [{"provider": p, "connected": p in have, "account": have.get(p, "")} for p in PROVIDERS]}
 
@@ -186,12 +199,18 @@ async def disconnect(provider: str, request: Request):
     if rows and provider == "github":
         try:  # https://docs.github.com/en/rest/apps/oauth-applications#delete-an-app-authorization
             token = decrypt(rows[0]["token_enc"])
-            async with httpx.AsyncClient(timeout=10) as http:
-                await http.request("DELETE", f"{GITHUB_API}/applications/{settings.github_client_id}/grant",
-                                   auth=(settings.github_client_id, settings.github_client_secret),
-                                   json={"access_token": token["access_token"]}, headers={"Accept": "application/vnd.github+json"})
+            if token.get('kind') != 'personal_token':
+                async with httpx.AsyncClient(timeout=10) as http:
+                    await http.request("DELETE", f"{GITHUB_API}/applications/{settings.github_client_id}/grant",
+                                       auth=(settings.github_client_id, settings.github_client_secret),
+                                       json={"access_token": token["access_token"]}, headers={"Accept": "application/vnd.github+json"})
         except (ConnectionError_, httpx.HTTPError):
             pass
+        forget_github(owner)
+    if provider == 'github':
+        await set_pref('github_disconnected', 'true')
+        await set_pref('github_repos', '[]')
+        await set_pref('github_repo_mode', 'selected')
         forget_github(owner)
     if rows and provider == "google":
         try:  # best effort: also end Koe's access at Google (https://developers.google.com/identity/protocols/oauth2/web-server#tokenrevoke)
@@ -245,17 +264,19 @@ def github_account() -> dict:
     """{"token", "login"} for the person asking: their connection; the owner may still use GITHUB_TOKEN from .env;
     anyone else gets empty values, never the owner's."""
     owner = identity.owner_id()
+    if pref('github_disconnected') == 'true':
+        return {'token': '', 'login': '', 'source': 'disconnected'}
     if owner not in _github:
         row = None
         if configured():
             try:
                 row = load(owner, "github")
             except ConnectionError_:
-                row = None
+                raise ConnectionError_('Your GitHub connection needs to be reconnected in Settings.') from None
         if row:
-            _github[owner] = {"token": row["token"]["access_token"], "login": row["account"]}
+            _github[owner] = {"token": row["token"]["access_token"], "login": row["account"], 'source': 'personal'}
         elif identity.is_owner():
-            _github[owner] = {"token": settings.github_token, "login": settings.github_login}
+            _github[owner] = {"token": settings.github_token, "login": settings.github_login, 'source': 'server'}
         else:
             _github[owner] = {"token": "", "login": ""}
     return _github[owner]
@@ -278,6 +299,52 @@ def github_repos() -> list[str]:
     return list(dict.fromkeys(x.strip() for x in chosen.split(",") if x.strip()))
 
 
+def github_repo_mode() -> str:
+    return 'all' if pref('github_repo_mode') == 'all' else 'selected'
+
+
+def github_repo_allowed(repo: str) -> bool:
+    return bool(_REPO.fullmatch(repo)) and (github_repo_mode() == 'all' or repo.casefold() in {r.casefold() for r in github_repos()})
+
+
+async def github_scope() -> dict:
+    """Resolve account-wide selection at read time, bounded with explicit incomplete coverage."""
+    if await asyncio.to_thread(github_repo_mode) != 'all':
+        return {'repos': await asyncio.to_thread(github_repos), 'partial': False, 'mode': 'selected'}
+    from koe.tools.github_work import request
+    response = await request('GET', '/user/repos', params={'per_page': 100, 'page': 1, 'sort': 'pushed'})
+    repos = [r['full_name'] for r in response.json()]
+    return {'repos': list(dict.fromkeys(repos)), 'partial': 'next' in response.links, 'mode': 'all',
+            'note': 'Account-wide activity scans up to 100 recently pushed accessible repositories per request.'}
+
+
+class GitHubToken(BaseModel):
+    token: SecretStr = Field(min_length=10, max_length=500)
+
+
+@api.put('/github/token')
+async def connect_github_token(body: GitHubToken, request: Request):
+    auth.same_origin(request)
+    if not configured():
+        raise HTTPException(409, 'The server cannot securely store connections yet.')
+    token = body.token.get_secret_value().strip()
+    try:
+        async with httpx.AsyncClient(timeout=15) as http:
+            me = await http.get(f'{GITHUB_API}/user', headers={'Authorization': f'Bearer {token}', 'Accept': 'application/vnd.github+json'})
+            me.raise_for_status()
+            login = me.json()['login']
+        if not isinstance(login, str) or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9-]{0,38}', login):
+            raise ValueError()
+    except (httpx.HTTPError, KeyError, ValueError):
+        raise HTTPException(400, 'GitHub could not verify that token. Check its value and expiry.') from None
+    await asyncio.to_thread(save, identity.owner_id(), 'github', login, [], {'access_token': token, 'kind': 'personal_token'})
+    await set_pref('github_disconnected', 'false')
+    await set_pref('github_repos', '[]')
+    await set_pref('github_repo_mode', 'selected')
+    forget_github(identity.owner_id())
+    return {'account': login}
+
+
 @api.get("/github/repos")
 async def github_repo_list(page: int = Query(default=1, ge=1, le=1000)):
     """The person's repositories (most recently pushed first) and which ones Koe watches."""
@@ -290,11 +357,13 @@ async def github_repo_list(page: int = Query(default=1, ge=1, le=1000)):
     if r.status_code != 200:
         raise HTTPException(502, "GitHub didn't list your repositories. Try reconnecting.")
     return {"repos": [repo["full_name"] for repo in r.json()], "selected": await asyncio.to_thread(github_repos),
+            'mode': await asyncio.to_thread(github_repo_mode),
             "next_page": page + 1 if 'next' in r.links and page < 1000 else None}
 
 
 class RepoChoice(BaseModel):
     repos: list[str]
+    mode: Literal['selected', 'all'] = 'selected'
 
 
 @api.put("/github/repos", status_code=204)
@@ -303,4 +372,5 @@ async def choose_github_repos(body: RepoChoice):
     if len(repos) > 20 or any(not _REPO.fullmatch(r) for r in repos):
         raise HTTPException(400, "Choose up to 20 repositories (owner/name).")
     await set_pref("github_repos", json.dumps(repos))
+    await set_pref('github_repo_mode', body.mode)
     return Response(status_code=204)

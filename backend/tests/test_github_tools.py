@@ -7,10 +7,18 @@ os.environ.setdefault("GEMINI_API_KEY", "test")
 
 import httpx  # noqa: E402
 import respx  # noqa: E402
+import pytest
+from koe.config import settings
 
 from koe.tools import github  # noqa: E402
 
 NOW = datetime(2026, 10, 12, 12, 0, tzinfo=timezone.utc)
+
+
+@pytest.fixture(autouse=True)
+def account(monkeypatch):
+    monkeypatch.setattr(settings, 'github_repos', 'me/app,other/repo')
+    monkeypatch.setattr(settings, 'github_token', 'synthetic-token')
 
 
 def pr_node(**over):

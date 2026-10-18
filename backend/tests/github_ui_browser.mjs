@@ -24,7 +24,7 @@ try {
   assert.ok(ready)
   browser = await chromium.launch({ channel: 'msedge', headless: true })
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, serviceWorkers: 'block' })
-  let failRepos = true, saved = null
+  let failRepos = true, saved = null, savedMode = null, docsSupported = false, docsReady = false, ownAccount = false
   await context.route('**/*', async route => {
     const url = new URL(route.request().url())
     if (url.origin !== origin) return route.abort()
@@ -33,11 +33,20 @@ try {
     if (url.pathname === '/auth/status') body = { google: true, user: { name: 'Test owner', email: 'owner@example.test', is_admin: false } }
     else if (url.pathname === '/api/ws-ticket') body = { ticket: 'synthetic-ticket' }
     else if (url.pathname === '/api/people') return route.fulfill({ status: 403, json: { detail: 'Owner only' } })
-    else if (url.pathname === '/api/connections') body = { ready: true, github_ready: true, connections: [{ provider: 'github', connected: true, account: 'me' }] }
+    else if (url.pathname === '/api/connections') body = { ready: true, github_ready: false, github_token_ready: true,
+      features: { github_scope: true }, github_repo_mode: savedMode ?? 'selected',
+      ...(docsSupported ? { docs_ready: docsReady } : {}), sources: { github: ownAccount ? 'personal' : 'server', notion: 'server' },
+      connections: [{ provider: 'google', connected: true, account: 'owner@example.test' },
+        { provider: 'github', connected: true, account: ownAccount ? 'my-account' : 'me' }, { provider: 'notion', connected: true, account: 'Owner workspace' }] }
+    else if (url.pathname === '/api/connections/github/token') {
+      assert.equal(route.request().postDataJSON().token, 'synthetic-browser-token')
+      ownAccount = true
+      body = { account: 'my-account' }
+    }
     else if (url.pathname === '/api/connections/github/repos') {
-      if (route.request().method() === 'PUT') { saved = route.request().postDataJSON().repos; return route.fulfill({ status: 204 }) }
+      if (route.request().method() === 'PUT') { saved = route.request().postDataJSON().repos; savedMode = route.request().postDataJSON().mode; return route.fulfill({ status: 204 }) }
       if (failRepos) return route.fulfill({ status: 502, json: { detail: 'Synthetic provider error' } })
-      body = { repos: url.searchParams.get('page') === '2' ? ['me/notes'] : ['me/app'], selected: ['me/app'], next_page: url.searchParams.get('page') === '2' ? null : 2 }
+      body = { repos: url.searchParams.get('page') === '2' ? ['me/notes'] : ['me/app'], selected: ['me/app'], mode: savedMode ?? 'selected', next_page: url.searchParams.get('page') === '2' ? null : 2 }
     } else if (url.pathname === '/api/music/status') return route.fulfill({ status: 503, json: { error: { code: 'spotify_disabled' } } })
     return route.fulfill({ json: body })
   })
@@ -58,6 +67,11 @@ try {
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false)
   checks.push('Dashboard fits 375px mobile width')
   await page.goto(origin + '/app/settings')
+  await page.getByText('This backend version does not support Docs yet.', { exact: false }).waitFor()
+  assert.equal(await page.getByRole('link', { name: 'Enable Docs', exact: true }).count(), 0)
+  assert.equal(await page.getByText('Coming soon', { exact: true }).count(), 0)
+  await page.getByRole('link', { name: 'Open workspace', exact: true }).waitFor()
+  checks.push('Old backend cannot send the user through a broken Docs consent loop; Notion and server GitHub are visible')
   await page.getByRole('button', { name: 'Choose', exact: true }).click()
   await page.getByText('Could not load repositories. Check your GitHub connection and retry.').waitFor()
   failRepos = false
@@ -67,9 +81,35 @@ try {
   await page.locator('.repo-pick').getByRole('button', { name: 'Save 2', exact: true }).click()
   assert.deepEqual(saved, ['me/app', 'me/notes'])
   checks.push('Repository load error, explicit retry, pagination and saved selections work on mobile')
+  await page.getByRole('button', { name: 'Choose', exact: true }).click()
+  await page.getByRole('radio', { name: 'All accessible repositories' }).check()
+  await page.getByRole('button', { name: 'Save all repositories', exact: true }).click()
+  assert.equal(savedMode, 'all')
+  checks.push('Account-wide repository choice is saved explicitly')
+  await page.getByRole('button', { name: 'Change account', exact: true }).click()
+  await page.getByLabel('GitHub personal access token', { exact: true }).fill('synthetic-browser-token')
+  await page.getByRole('button', { name: 'Connect account', exact: true }).click()
+  await page.getByText('Connected as my-account', { exact: true }).waitFor()
+  assert.equal(await page.evaluate(() => JSON.stringify(localStorage).includes('synthetic-browser-token')), false)
+  checks.push('Personal token connection works without OAuth app configuration and is never persisted in browser storage')
+  docsSupported = true
+  await page.reload()
+  await page.getByRole('link', { name: 'Enable Docs', exact: true }).waitFor()
+  assert.match(await page.getByRole('link', { name: 'Enable Docs', exact: true }).getAttribute('href'), /docs=true/)
+  docsReady = true
+  await page.goto(origin + '/app/settings?connected=docs')
+  await page.getByText('Google Docs permissions saved.', { exact: false }).waitFor()
+  await page.getByRole('link', { name: 'Open chat', exact: true }).waitFor()
+  assert.equal(await page.getByRole('link', { name: 'Enable Docs', exact: true }).count(), 0)
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false)
+  checks.push('Docs permission upgrade replaces Enable Docs with Open chat and a success notice on mobile')
   assert.deepEqual(errors, [])
   const output = path.join(root, 'backend/data/github-ui-browser')
   await mkdir(output, { recursive: true })
+  await page.screenshot({ path: path.join(output, 'connections-mobile.png'), fullPage: true })
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  await page.screenshot({ path: path.join(output, 'connections-desktop.png'), fullPage: true })
+  await page.setViewportSize({ width: 375, height: 812 })
   await page.goto(origin + '/app/dashboard')
   await page.getByRole('heading', { name: 'Yesterday', exact: true }).waitFor()
   await page.screenshot({ path: path.join(output, 'dashboard-mobile.png'), fullPage: true })

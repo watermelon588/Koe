@@ -34,6 +34,10 @@ def account(monkeypatch):
     monkeypatch.setattr(settings, 'github_token', 'fake')
     monkeypatch.setattr(settings, 'github_repos', 'me/app')
     monkeypatch.setattr(settings, 'github_login', 'me')
+    with respx.mock(assert_all_called=False):
+        respx.get('https://api.github.com/user').respond(200, json={'login': 'me'})
+        respx.get('https://api.github.com/repos/me/app/branches').respond(200, json=[])
+        yield
 
 
 def pr(head='abc'):

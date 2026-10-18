@@ -54,6 +54,7 @@ async def chat(text: str, history: list, context: agent.Conversation, client: ge
         history.append(types.Content(role="model", parts=[types.Part.from_text(text=reply)]))
         return {"text": reply, "approval_result": result}
     try:
+        connection_state = await agent.connection_status()
         provider, model = 'gemini', None
         for round_index in range(MAX_TOOL_ROUNDS):
             if provider == 'openrouter':
@@ -65,7 +66,7 @@ async def chat(text: str, history: list, context: agent.Conversation, client: ge
                     # gemini-3.5-flash and gemini-3-flash-preview. Tools never re-run either way.
                     response, model = await gemini.generate(
                         contents=history, models=list(dict.fromkeys([model, *gemini.text_models()])) if model else None, only=client,
-                        config={"system_instruction": agent.system_prompt(),
+                        config={"system_instruction": agent.system_prompt(connection_state),
                                 "tools": [{"function_declarations": agent.declarations()}],
                                 "automatic_function_calling": {"disable": True}})
                     if round_index == 0 and model != settings.gemini_text_model:

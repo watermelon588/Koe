@@ -22,6 +22,7 @@ GRANTED = f"openid https://www.googleapis.com/auth/userinfo.email {connections.C
 @pytest.fixture(autouse=True)
 def secret(monkeypatch):
     monkeypatch.setattr(settings, "koe_secret_key", SECRET)
+    monkeypatch.setattr(settings, 'github_token', '')
 
 
 @pytest.fixture

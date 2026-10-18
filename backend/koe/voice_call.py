@@ -287,7 +287,7 @@ async def _relay_gemini(ws: WebSocket, mic: asyncio.Queue, state: CallState, cli
     quick_drops = 0
     while True:
         # handle=None on the first connection still switches on resumption updates.
-        config = {**CONFIG, "system_instruction": agent.system_prompt(),
+        config = {**CONFIG, "system_instruction": agent.system_prompt(await agent.connection_status()),
                   "session_resumption": types.SessionResumptionConfig(handle=state.resume_handle)}
         if settings.spotify_voice_approved:
             config['tools'] = [{'function_declarations': agent.declarations() + [music_voice.declaration()]}]

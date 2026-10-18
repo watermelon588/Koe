@@ -12,6 +12,7 @@ const NAMES = { google: 'Google Calendar & Sheets', github: 'GitHub', notion: 'N
 const ICONS = { google: CalendarIcon, github: GitHubIcon, notion: NotionIcon, gemini: GeminiIcon, spotify: SpotifyIcon }
 const NOTICES: Record<string, string> = {
   'connected=google': 'Google connected. Your enabled services are shown below.',
+  'connected=docs': 'Google Docs permissions saved. You can create and edit documents with Koe.',
   'connect=missing-scopes': 'A requested Google permission was not granted. Enable the service again and review its permission boxes.',
   'connected=github': 'GitHub connected. Choose which repositories Koe should watch.',
   'connect=github-failed': 'GitHub didn’t finish connecting. Try again.',
@@ -51,6 +52,15 @@ export function ConnectionsSection() {
   const [list, setList] = useState<Connection[] | null>(null)
   const [ready, setReady] = useState(true)
   const [docsReady, setDocsReady] = useState(false)
+  const [docsSupported, setDocsSupported] = useState(false)
+  const [sources, setSources] = useState<Record<string, string>>({})
+  const [tokenReady, setTokenReady] = useState(false)
+  const [scopeReady, setScopeReady] = useState(false)
+  const [repoMode, setRepoMode] = useState<'selected' | 'all'>('selected')
+  const [githubToken, setGithubToken] = useState('')
+  const [showGitHubToken, setShowGitHubToken] = useState(false)
+  const [githubError, setGithubError] = useState('')
+  const [loadError, setLoadError] = useState('')
   const [githubReady, setGithubReady] = useState(false)
   const [repos, setRepos] = useState<{ all: string[]; chosen: string[]; next: number | null } | null>(null)
   const [repoError, setRepoError] = useState('')
@@ -62,14 +72,22 @@ export function ConnectionsSection() {
   const [notice] = useState(() => NOTICES[location.search.slice(1)] ?? '')
 
   async function load() {
-    const r = await fetch(httpUrl('/api/connections'))
-    if (!r.ok) return setList([])
+    try {
+    const r = await fetch(httpUrl('/api/connections'), { cache: 'no-store' })
+    if (!r.ok) throw Error('Could not load your connections. Retry below.')
     const body = await r.json()
+    setLoadError('')
     setReady(body.ready)
+    setSources(body.sources ?? {})
+    setTokenReady(Boolean(body.github_token_ready))
+    setScopeReady(Boolean(body.features?.github_scope))
+    setRepoMode(body.github_repo_mode === 'all' ? 'all' : 'selected')
     setGithubReady(Boolean(body.github_ready))
+    setDocsSupported(typeof body.docs_ready === 'boolean')
     setDocsReady(Boolean(body.docs_ready))
     setTimesheet(body.timesheet ?? '')
     setList(body.connections)
+    } catch { setLoadError('Could not load your connections. Retry below.') }
   }
   useEffect(() => {
     if (location.search) history.replaceState(null, '', location.pathname + location.hash) // a notice shows once
@@ -109,6 +127,7 @@ export function ConnectionsSection() {
       const r = await fetch(httpUrl(`/api/connections/github/repos?page=${page}`))
       if (!r.ok) throw Error('Could not load repositories. Check your GitHub connection and retry.')
       const body = await r.json()
+      if (page === 1) setRepoMode(body.mode === 'all' ? 'all' : 'selected')
       setRepos(old => ({ all: [...new Set([...(page > 1 ? old?.all ?? [] : []), ...body.repos, ...body.selected])] as string[], chosen: page > 1 ? old?.chosen ?? body.selected : body.selected, next: body.next_page ?? null }))
     } catch (error) { setRepoError(error instanceof Error ? error.message : 'Could not load repositories.')
     } finally {
@@ -120,13 +139,25 @@ export function ConnectionsSection() {
     if (!repos) return
     setBusy('repos')
     try {
-      const r = await fetch(httpUrl('/api/connections/github/repos'), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ repos: repos.chosen }) })
+      const r = await fetch(httpUrl('/api/connections/github/repos'), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ repos: repos.chosen, mode: repoMode }) })
       if (!r.ok) throw Error('Could not save repositories. Choose up to 20 and try again.')
       setRepos(null); setRepoError('')
     } catch (error) { setRepoError(error instanceof Error ? error.message : 'Could not save repositories.')
     } finally {
       setBusy('')
     }
+  }
+
+  async function connectGitHubToken() {
+    setBusy('github-token'); setGithubError('')
+    try {
+      const r = await fetch(httpUrl('/api/connections/github/token'), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: githubToken.trim() }) })
+      if (!r.ok) throw Error((await r.json().catch(() => ({}))).detail ?? 'GitHub could not verify that token.')
+      setGithubToken(''); setShowGitHubToken(false); setRepos(null)
+      await load()
+      await openRepos()
+    } catch (error) { setGithubError(error instanceof Error ? error.message : 'Could not connect GitHub.') }
+    finally { setBusy('') }
   }
 
   async function disconnect(provider: string) {
@@ -143,6 +174,7 @@ export function ConnectionsSection() {
   return <>
     <SettingSection id="set-connections" title="Connections" intro="Koe sees a service only after you connect it. You can disconnect at any time.">
       {notice && <p className="set-notice" role="status">{notice}</p>}
+      {loadError && <p role="alert">{loadError} <button className="ghost" onClick={() => void load()}>Retry connections</button></p>}
       {!signedIn ? <p className="set-empty">Sign in with Google to connect your own accounts.</p>
         : !ready ? <p className="set-empty">The server needs KOE_SECRET_KEY before it can store connections.</p>
         : list === null ? <p className="set-empty">Loading your connections…</p>
@@ -150,35 +182,51 @@ export function ConnectionsSection() {
           if (provider === 'spotify') return <SettingRow key={provider} icon={SpotifyIcon} title="Spotify" on={connected}
             status={connected ? 'Connected. Music only: Koe never hears or sees it.' : 'Optional. For your playlist on the Music page.'}
             action={<a className="soft" href="/app/music">{connected ? 'Manage' : 'Set up'}</a>} />
+          if (provider === 'notion') return <SettingRow key={provider} icon={NotionIcon} title="Notion" on={connected}
+            status={connected ? 'Owner workspace connected. Tasks, notes and daily logs are available.' : 'The owner workspace needs a Notion integration and database connection.'}
+            action={<a className="soft" href="/app/notion">Open workspace</a>} />
           const canConnect = CONNECT[provider] && (provider !== 'github' || githubReady || connected)
           return <Fragment key={provider}>
             <SettingRow icon={ICONS[provider]} title={NAMES[provider]} on={connected}
-              status={connected ? `Connected as ${account}` : CONNECT[provider] && (provider !== 'github' || githubReady) ? 'Not connected' : 'Coming soon'}
-              action={canConnect && (connected
+              status={connected ? (sources[provider] === 'server' ? 'Owner connection available. Choose repositories below or connect your own account.' : `Connected as ${account}`) : provider === 'github' && !githubReady ? 'Connect your GitHub account with a personal access token.' : 'Not connected'}
+              action={<>{canConnect && (connected
                 ? <button className="ghost" disabled={busy === provider} onClick={() => void disconnect(provider)}>{busy === provider ? 'Disconnecting…' : 'Disconnect'}</button>
-                : <a className="soft" href={httpUrl(CONNECT[provider])}>Connect</a>)} />
+                : <a className="soft" href={httpUrl(CONNECT[provider])}>Connect</a>)}
+                {provider === 'github' && tokenReady && <button className="soft" onClick={() => setShowGitHubToken(!showGitHubToken)}>{connected ? 'Change account' : 'Use a token'}</button>}</>}>
+              {provider === 'github' && !githubReady && !tokenReady && <p role="status">The deployed backend does not offer account setup here yet. Update the backend to enable GitHub connections.</p>}
+              {provider === 'github' && githubError && <p role="alert">{githubError}</p>}
+              {provider === 'github' && showGitHubToken && <form className="github-token-form" onSubmit={e => { e.preventDefault(); void connectGitHubToken() }}>
+                <p>Create a fine-grained GitHub token for selected repositories or all repositories. Give Contents and Pull requests read access; allow Pull requests write only if you want approved comments. Koe stores the token encrypted on the server.</p>
+                <p><a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">Create a GitHub token</a></p>
+                <label>GitHub personal access token<input type="password" autoComplete="off" value={githubToken} onChange={e => setGithubToken(e.target.value)} /></label>
+                <div className="pair"><button className="ghost" type="button" onClick={() => { setShowGitHubToken(false); setGithubToken('') }}>Cancel</button><button className="soft" disabled={!githubToken.trim() || busy === 'github-token'}>{busy === 'github-token' ? 'Connecting…' : 'Connect account'}</button></div>
+              </form>}
+            </SettingRow>
             {provider === 'google' && <SettingRow sub icon={DocsIcon} title="Google Docs" on={connected && docsReady}
-              status={connected && docsReady ? 'Ready. Ask Koe to create a Doc, or paste a Doc link in chat. Edits need your confirmation.' : 'Create and edit documents with Koe. Enable additional Google permissions.'}
-              action={connected && docsReady ? <a className="soft" href="/app/chat">Open chat</a>
+              status={!docsSupported ? 'This backend version does not support Docs yet. Update the backend; reconnecting Google cannot enable it.' : connected && docsReady ? 'Ready. Ask Koe to create a Doc, or paste a Doc link in chat. Edits need your confirmation.' : 'Create and edit documents with Koe. Enable additional Google permissions.'}
+              action={!docsSupported ? <button className="ghost" onClick={() => void load()}>Refresh status</button> : connected && docsReady ? <a className="soft" href="/app/chat">Open chat</a>
                 : <a className="soft" href={httpUrl('/auth/google/connect?docs=true&next=%2Fapp%2Fsettings')}>Enable Docs</a>} />}
             {provider === 'google' && connected && <SettingRow sub icon={SheetsIcon} title="Timesheet"
               status={sheetError || (timesheet ? 'Koe logs your hours here (each row needs your OK).' : 'A Google Sheet for logging hours, made for you.')}
               action={timesheet
                 ? <a className="soft" href={timesheet} target="_blank" rel="noopener">Open</a>
                 : <button className="soft" disabled={busy === 'timesheet'} onClick={() => void createTimesheet()}>{busy === 'timesheet' ? 'Creating…' : 'Create my timesheet'}</button>} />}
-            {provider === 'github' && connected && <SettingRow sub icon={GitHubIcon} title="Repositories" status="Which repositories Koe reads (up to 20)."
+            {provider === 'github' && connected && <SettingRow sub icon={GitHubIcon} title="Repositories" status={repoMode === 'all' ? 'All repositories accessible to your connection.' : 'Choose which repositories Koe may use.'}
               action={!repos && <button className="soft" disabled={busy === 'repos'} onClick={() => void openRepos()}>{busy === 'repos' ? 'Loading…' : 'Choose'}</button>}>
               {repoError && <p role="status">{repoError}</p>}
               {repos && <fieldset className="repo-pick">
                 <legend className="visually-hidden">Repositories Koe reads</legend>
-                <div className="repo-list">{repos.all.map((name) => <label key={name}>
+                {scopeReady && <><label><input type="radio" name="github-scope" checked={repoMode === 'selected'} onChange={() => setRepoMode('selected')} /> Selected repositories</label>
+                  <label><input type="radio" name="github-scope" checked={repoMode === 'all'} onChange={() => setRepoMode('all')} /> All accessible repositories</label>
+                  <p>Your GitHub token or OAuth grant sets the maximum access. Koe follows the choice you save here. Large activity reads report any coverage limits.</p></>}
+                {repoMode === 'selected' && <div className="repo-list">{repos.all.map((name) => <label key={name}>
                   <input type="checkbox" checked={repos.chosen.includes(name)} disabled={!repos.chosen.includes(name) && repos.chosen.length >= 20}
                     onChange={(e) => setRepos({ ...repos, chosen: e.target.checked ? [...repos.chosen, name] : repos.chosen.filter((r) => r !== name) })} />
                   <span>{name}</span>
-                </label>)}</div>
+                </label>)}</div>}
                 {repos.next && <button type="button" className="ghost" disabled={busy === 'repos'} onClick={() => void openRepos(repos.next!)}>Load more repositories</button>}
                 <div className="pair"><button type="button" className="ghost" onClick={() => setRepos(null)}>Cancel</button>
-                  <button type="button" className="soft" disabled={busy === 'repos'} onClick={() => void saveRepos()}>Save {repos.chosen.length}</button></div>
+                  <button type="button" className="soft" disabled={busy === 'repos'} onClick={() => void saveRepos()}>Save {repoMode === 'all' ? 'all repositories' : repos.chosen.length}</button></div>
               </fieldset>}
             </SettingRow>}
           </Fragment>

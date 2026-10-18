@@ -126,6 +126,7 @@ def test_connected_account_selection_drives_agent_activity_and_commit_evidence(c
               'files': [{'filename': 'player.ts', 'status': 'modified', 'additions': 3, 'deletions': 1}]}
     with respx.mock:
         respx.get('https://api.github.com/search/issues').respond(200, json={'items': [], 'total_count': 0})
+        respx.get('https://api.github.com/repos/rohit/koe/branches').respond(200, json=[])
         history = respx.get('https://api.github.com/repos/rohit/koe/commits').respond(200, json=[commit])
         detail = respx.get(f'https://api.github.com/repos/rohit/koe/commits/{sha}').respond(200, json=commit)
         async def scenario():

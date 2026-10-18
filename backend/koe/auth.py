@@ -135,6 +135,12 @@ async def connect(request: Request, next: str = "/#settings", docs: bool = False
     _owner_only(user)
     extra = {"access_type": "offline", "prompt": "consent", "include_granted_scopes": "true", "login_hint": user["email"]}
     scopes = connections.GOOGLE_SCOPES + ([connections.DOCS_SCOPE, connections.DRIVE_FILE_SCOPE] if docs else [])
+    try:
+        previous = await asyncio.to_thread(connections.load, user['id'], 'google')
+    except connections.ConnectionError_:
+        previous = None
+    if previous:
+        scopes = list(dict.fromkeys(scopes + previous['scopes']))
     return _to_google(request, next, scopes, extra, purpose="connect", owner=user["id"], docs=docs)
 
 
@@ -181,7 +187,7 @@ async def callback(request: Request, code: str = "", state: str = "", error: str
         return response
 
     if error:  # e.g. the person pressed Cancel on Google's page
-        return back("/?signin=cancelled")
+        return back(_with_query(flow['next'], 'connect=cancelled') if flow and flow.get('purpose') == 'connect' else '/?signin=cancelled')
     if not flow or not state or not code or not hmac.compare_digest(state, flow.get("state", "")):
         raise HTTPException(400, "This sign-in link expired or was opened twice. Please try again.")
     async with httpx.AsyncClient(timeout=15) as http:
@@ -224,9 +230,8 @@ async def _finish_connect(request: Request, flow: dict, tokens: dict, account: s
     if not user or user["id"] != flow.get("owner"):  # the person who started connecting must be the one finishing
         raise HTTPException(400, "Sign in to Koe again, then connect Google.")
     granted = str(tokens.get("scope", "")).split()
-    required = {connections.CALENDAR_SCOPE, connections.SHEETS_SCOPE}
-    if flow.get("docs"):
-        required.update((connections.DOCS_SCOPE, connections.DRIVE_FILE_SCOPE))
+    required = ({connections.DOCS_SCOPE, connections.DRIVE_FILE_SCOPE} if flow.get('docs')
+                else {connections.CALENDAR_SCOPE, connections.SHEETS_SCOPE})
     if not required <= set(granted):
         return back(_with_query(flow["next"], "connect=missing-scopes"))  # the person unticked a permission
     previous = None
@@ -239,7 +244,7 @@ async def _finish_connect(request: Request, flow: dict, tokens: dict, account: s
     expiry = _now() + timedelta(seconds=int(tokens.get("expires_in", 3600)))
     await asyncio.to_thread(connections.save, user["id"], "google", account, granted, {
         "access_token": tokens["access_token"], "refresh_token": refresh, "expiry": expiry.isoformat()})
-    return back(_with_query(flow["next"], "connected=google"))
+    return back(_with_query(flow["next"], 'connected=docs' if flow.get('docs') else 'connected=google'))
 
 
 def _with_query(path: str, query: str) -> str:
@@ -408,6 +413,14 @@ async def github_callback(request: Request, code: str = "", state: str = "", err
     if me.status_code != 200:
         return back(_with_query(flow["next"], "connect=github-failed"))
     scopes = [x.strip() for x in str(reply.json().get("scope", "")).split(",") if x.strip()]
+    try:
+        old = await asyncio.to_thread(connections.load, user['id'], 'github')
+    except connections.ConnectionError_:
+        old = None
+    if not old or old['account'] != me.json()['login']:
+        await connections.set_pref('github_repos', '[]', user['id'])
+        await connections.set_pref('github_repo_mode', 'selected', user['id'])
     await asyncio.to_thread(connections.save, user["id"], "github", me.json()["login"], scopes, {"access_token": token})
+    await connections.set_pref('github_disconnected', 'false', user['id'])
     connections.forget_github(user["id"])
     return back(_with_query(flow["next"], "connected=github"))

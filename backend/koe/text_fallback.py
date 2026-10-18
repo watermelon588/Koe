@@ -17,8 +17,8 @@ class FallbackError(Exception):
     pass
 
 
-def messages(history):
-    result = [{'role': 'system', 'content': agent.system_prompt()}]
+def messages(history, connection_state=None):
+    result = [{'role': 'system', 'content': agent.system_prompt(connection_state)}]
     pending = []
     for i, content in enumerate(history):
         parts = content.parts or []
@@ -51,10 +51,11 @@ async def generate(history):
     tools = [{'type': 'function', 'function': {'name': name, 'description': tool.description, 'parameters': tool.parameters}}
              for name, tool in agent.TOOLS.items()]
     try:
+        connection_state = await agent.connection_status()
         async with httpx.AsyncClient(timeout=35, trust_env=False) as api:
             response = await api.post('https://openrouter.ai/api/v1/chat/completions',
                 headers={'Authorization': 'Bearer ' + settings.openrouter_api_key},
-                json={'model': model, 'messages': messages(history), 'tools': tools, 'max_tokens': 1800})
+                json={'model': model, 'messages': messages(history, connection_state), 'tools': tools, 'max_tokens': 1800})
             response.raise_for_status()
             data = response.json()
         message = data['choices'][0]['message']

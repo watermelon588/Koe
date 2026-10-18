@@ -6,6 +6,8 @@ Enable Google Docs API and Google Drive API in the same Google Cloud project as 
 In Koe, open Settings → Connections → Google Docs → Enable Docs. Consent to the additional permissions. Reconnecting upgrades the encrypted Google connection for the signed-in person; it does not change the app's sign-in scopes. Calendar and Sheets continue to work with their existing grants. Existing users must explicitly grant Docs permission; deployment cannot grant it for them. The optional local CLI supports `python -m scripts.google_auth --with-sheets --with-docs --reauthorize`.
 
 ## Agent workflow
+The frontend and backend must both include Docs support. Settings detects a backend that omits `docs_ready` and asks for a backend update instead of repeatedly offering consent that the old server cannot process. Successful Docs consent returns `connected=docs`; the saved grant determines the button state. Reconnecting preserves previously granted scopes. Text, fallback and live voice sessions receive current connection metadata, and the agent can refresh it with `connection_status`.
+
 - Ask “Create a Google Doc called Weekly update with this text …”. Review and confirm the exact title/content.
 - Ask “Find my Koe documents” or search by title. This lists app-accessible Docs, not all Drive files. Paste a `https://docs.google.com/document/d/.../edit` link to work with another document you can access.
 - Ask Koe to read a document. It returns tab names/IDs, plain-text body content and a revision. Headers, footers, drawings and comments are outside this text view. Pending suggestions are disclosed and must be resolved in Google Docs before editing through Koe. Large reads are marked truncated.
