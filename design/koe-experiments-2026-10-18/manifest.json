@@ -1,0 +1,57 @@
+[
+  {
+    "slug": "11-open-window-laptop",
+    "title": "Open window",
+    "direction": "Sculptural laptop campaign",
+    "aspectRatio": "16:9",
+    "width": 1672,
+    "height": 941,
+    "mascot": "Kami",
+    "poses": "4-kami(2).png",
+    "png": "mockups/11-open-window-laptop.png"
+  },
+  {
+    "slug": "12-say-less-poster",
+    "title": "Say less",
+    "direction": "Chrome, halftone and oversized typography",
+    "aspectRatio": "1:2",
+    "width": 887,
+    "height": 1774,
+    "mascot": "Mei",
+    "poses": "26-Oct-16-01-01-23-00.png",
+    "png": "mockups/12-say-less-poster.png"
+  },
+  {
+    "slug": "13-your-little-world",
+    "title": "Your little world",
+    "direction": "Collectible keycap and acrylic voice interface",
+    "aspectRatio": "1:1",
+    "width": 1254,
+    "height": 1254,
+    "mascot": "Kobashi",
+    "poses": "26-Oct-16-01-01-21-06.png",
+    "png": "mockups/13-your-little-world.png"
+  },
+  {
+    "slug": "14-a-voice-a-feeling",
+    "title": "A voice, a feeling",
+    "direction": "Optical-glass editorial cover",
+    "aspectRatio": "3:4",
+    "width": 1086,
+    "height": 1448,
+    "mascot": "Kami",
+    "poses": "3-kami.png",
+    "png": "mockups/14-a-voice-a-feeling.png"
+  },
+  {
+    "slug": "15-signal-garden",
+    "title": "Signal garden",
+    "direction": "Cinematic companion ensemble",
+    "aspectRatio": "21:9",
+    "width": 1916,
+    "height": 821,
+    "mascot": "All three",
+    "poses": "4-kami(2).png; 26-Oct-16-01-01-22-01.png; 26-Oct-16-01-01-19-32.png",
+    "png": "mockups/15-signal-garden.png"
+  }
+]

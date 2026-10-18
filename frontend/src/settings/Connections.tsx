@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useState, type ComponentType, type ReactNode } from 'react'
-import { CalendarIcon, GeminiIcon, GitHubIcon, NotionIcon, SheetsIcon, SpotifyIcon } from '../components/BrandIcon'
+import { CalendarIcon, DocsIcon, GeminiIcon, GitHubIcon, NotionIcon, SheetsIcon, SpotifyIcon } from '../components/BrandIcon'
 import { httpUrl } from '../backend'
 import { savedToken } from '../chat/api'
 import { SESSION } from '../session'
@@ -11,13 +11,13 @@ type Connection = { provider: 'google' | 'github' | 'notion' | 'gemini' | 'spoti
 const NAMES = { google: 'Google Calendar & Sheets', github: 'GitHub', notion: 'Notion', gemini: 'Your Gemini key', spotify: 'Spotify' }
 const ICONS = { google: CalendarIcon, github: GitHubIcon, notion: NotionIcon, gemini: GeminiIcon, spotify: SpotifyIcon }
 const NOTICES: Record<string, string> = {
-  'connected=google': 'Google connected. Koe now uses your calendar and timesheet.',
-  'connect=missing-scopes': 'Koe needs both Calendar and Sheets. Connect again and leave both boxes ticked.',
+  'connected=google': 'Google connected. Your enabled services are shown below.',
+  'connect=missing-scopes': 'A requested Google permission was not granted. Enable the service again and review its permission boxes.',
   'connected=github': 'GitHub connected. Choose which repositories Koe should watch.',
   'connect=github-failed': 'GitHub didn’t finish connecting. Try again.',
   'connect=cancelled': 'Connecting was cancelled.',
 }
-const CONNECT: Record<string, string> = { google: '/auth/google/connect?next=%2F%23settings', github: '/auth/github/connect?next=%2F%23settings' }
+const CONNECT: Record<string, string> = { google: '/auth/google/connect?next=%2Fapp%2Fsettings', github: '/auth/github/connect?next=%2Fapp%2Fsettings' }
 
 // One settings section: its title and a line of context on the left (above, on phones), its rows on the right.
 export function SettingSection({ id, title, intro, children }: { id: string; title: string; intro: string; children: ReactNode }) {
@@ -50,6 +50,7 @@ export function ConnectionsSection() {
   const signedIn = savedToken() === SESSION
   const [list, setList] = useState<Connection[] | null>(null)
   const [ready, setReady] = useState(true)
+  const [docsReady, setDocsReady] = useState(false)
   const [githubReady, setGithubReady] = useState(false)
   const [repos, setRepos] = useState<{ all: string[]; chosen: string[]; next: number | null } | null>(null)
   const [repoError, setRepoError] = useState('')
@@ -66,6 +67,7 @@ export function ConnectionsSection() {
     const body = await r.json()
     setReady(body.ready)
     setGithubReady(Boolean(body.github_ready))
+    setDocsReady(Boolean(body.docs_ready))
     setTimesheet(body.timesheet ?? '')
     setList(body.connections)
   }
@@ -155,6 +157,10 @@ export function ConnectionsSection() {
               action={canConnect && (connected
                 ? <button className="ghost" disabled={busy === provider} onClick={() => void disconnect(provider)}>{busy === provider ? 'Disconnecting…' : 'Disconnect'}</button>
                 : <a className="soft" href={httpUrl(CONNECT[provider])}>Connect</a>)} />
+            {provider === 'google' && <SettingRow sub icon={DocsIcon} title="Google Docs" on={connected && docsReady}
+              status={connected && docsReady ? 'Ready. Ask Koe to create a Doc, or paste a Doc link in chat. Edits need your confirmation.' : 'Create and edit documents with Koe. Enable additional Google permissions.'}
+              action={connected && docsReady ? <a className="soft" href="/app/chat">Open chat</a>
+                : <a className="soft" href={httpUrl('/auth/google/connect?docs=true&next=%2Fapp%2Fsettings')}>Enable Docs</a>} />}
             {provider === 'google' && connected && <SettingRow sub icon={SheetsIcon} title="Timesheet"
               status={sheetError || (timesheet ? 'Koe logs your hours here (each row needs your OK).' : 'A Google Sheet for logging hours, made for you.')}
               action={timesheet

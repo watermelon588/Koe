@@ -1,0 +1,101 @@
+{
+  "capturedAt": "2026-10-17T18:32:56.827Z",
+  "revision": "06fb643",
+  "captures": [
+    {
+      "file": "01-landing.png",
+      "route": "/",
+      "width": 1440,
+      "syntheticData": true
+    },
+    {
+      "file": "02-home.png",
+      "route": "/app",
+      "width": 1440,
+      "syntheticData": true
+    },
+    {
+      "file": "03-dashboard.png",
+      "route": "/app/dashboard",
+      "width": 1440,
+      "syntheticData": true
+    },
+    {
+      "file": "04-chat.png",
+      "route": "/app/chat",
+      "width": 1440,
+      "syntheticData": true
+    },
+    {
+      "file": "05-notion.png",
+      "route": "/app/notion",
+      "width": 1440,
+      "syntheticData": true
+    },
+    {
+      "file": "06-music.png",
+      "route": "/app/music",
+      "width": 1440,
+      "syntheticData": true
+    },
+    {
+      "file": "07-settings.png",
+      "route": "/app/settings",
+      "width": 1440,
+      "syntheticData": true
+    },
+    {
+      "file": "08-install.png",
+      "route": "/app/install",
+      "width": 1440,
+      "syntheticData": true
+    },
+    {
+      "file": "09-guide.png",
+      "route": "/guide",
+      "width": 1440,
+      "syntheticData": true
+    },
+    {
+      "file": "10-privacy.png",
+      "route": "/privacy",
+      "width": 1440,
+      "syntheticData": true
+    },
+    {
+      "file": "11-terms.png",
+      "route": "/terms",
+      "width": 1440,
+      "syntheticData": true
+    },
+    {
+      "file": "12-live-call.png",
+      "route": "/app",
+      "state": "synthetic call",
+      "width": 1440
+    },
+    {
+      "file": "13-home-mobile.png",
+      "route": "/app",
+      "width": 390,
+      "syntheticData": true
+    },
+    {
+      "file": "14-chat-mobile.png",
+      "route": "/app/chat",
+      "width": 390,
+      "syntheticData": true
+    },
+    {
+      "file": "15-music-mobile.png",
+      "route": "/app/music",
+      "width": 390,
+      "syntheticData": true
+    }
+  ],
+  "errors": [],
+  "externalOriginsBlocked": [
+    "https://fonts.googleapis.com"
+  ],
+  "note": "Current frontend code with synthetic API/socket data. No real sign-in or provider writes."
+}

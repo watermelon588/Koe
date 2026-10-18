@@ -73,6 +73,13 @@ def describe(tool, args):
         if args.get('create_meet'): lines.append('Request a Google Meet · link available after Google confirms')
         else: lines.append('Guest notifications requested · Calendar: ' + text(args.get('expected_calendar', 'primary')))
         url = safe_link(source.get('url'))
+    elif tool in ('docs_create', 'docs_edit'):
+        title = ('Create ' if tool == 'docs_create' else 'Edit ') + text(args.get('title', 'Google Doc'), 140)
+        lines = ['Google Docs' + (' · Tab: ' + text(args['tab_title']) if args.get('tab_title') else ''),
+                 text(args.get('body', '(empty document)')), 'Exact text and destination in Details']
+        identifier = args.get('document', '')
+        if isinstance(identifier, str) and re.fullmatch(r'[A-Za-z0-9_-]+', identifier):
+            url = f'https://docs.google.com/document/d/{identifier}/edit'
     elif tool.startswith('sheets_'):
         tab = text(args.get('sheet_name', settings.google_sheets_tab))
         if tool == 'sheets_add_columns':

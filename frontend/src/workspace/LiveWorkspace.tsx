@@ -2,10 +2,10 @@ import { useEffect, useRef, useState, type KeyboardEvent, type RefObject } from 
 import gsap from 'gsap'
 import { useGSAP } from '@gsap/react'
 import { ArrowSquareOut, CheckCircle, X } from '@phosphor-icons/react'
-import { CalendarIcon, NotionIcon, SheetsIcon } from '../components/BrandIcon'
+import { CalendarIcon, DocsIcon, NotionIcon, SheetsIcon } from '../components/BrandIcon'
 import { httpUrl } from '../backend'
 import { savedToken } from '../chat/api'
-import { CalendarWork, NotionWork, SheetsWork } from './WorkViews'
+import { CalendarWork, DocsWork, NotionWork, SheetsWork } from './WorkViews'
 import { announce, clockTime, LABEL, liveUrl, SERVICES, serviceLink, type Account, type Phase, type Service, type WorkCard, type WorkState } from './workState'
 import './workspace.css'
 
@@ -16,10 +16,11 @@ import './workspace.css'
 gsap.registerPlugin(useGSAP)
 const REDUCE = '(prefers-reduced-motion: reduce)'
 const WIDE = '(min-width: 900px)'
-const ICON = { calendar: CalendarIcon, sheets: SheetsIcon, notion: NotionIcon }
+const ICON = { docs: DocsIcon, calendar: CalendarIcon, sheets: SheetsIcon, notion: NotionIcon }
 const PHASE: Record<Phase, string> = { working: 'Checking', preparing: 'Preparing preview', ready: 'Checked',
   waiting: 'Waiting for your confirmation', saving: 'Confirming and saving', saved: 'Saved', cancelled: 'Cancelled', error: 'Needs attention' }
 const EMPTY: Record<Service, string> = {
+  docs: 'Ask Koe to create a Google Doc or paste an existing Doc link in chat. Review exact text before confirming changes.',
   calendar: 'Ask Koe to check your calendar, find a free slot or book a meeting. The exact slot appears here before you confirm.',
   sheets: 'Ask Koe to log hours for a client. The exact row appears here before you confirm.',
   notion: 'Ask Koe to save a task, note or meeting record, or to log what you shipped. The record appears here.',
@@ -62,7 +63,7 @@ export function LiveWorkspace({ work, inline = false, open = true, onClose, deci
   const view = (card?.phase === 'waiting' || card?.phase === 'error') && pick.revision !== work.revision ? 'koe' : pick.view
   const setView = (v: 'koe' | 'live') => setPick({ view: v, revision: work.revision })
   const visible = inline || open
-  const canFrame = service !== 'notion'
+  const canFrame = service === 'calendar' || service === 'sheets'
   const live = view === 'live' && canFrame && visible
   useEffect(() => { if (live && !acct) void loadAccount().then(setAcct) }, [live, acct])
 
@@ -139,7 +140,7 @@ export function LiveWorkspace({ work, inline = false, open = true, onClose, deci
           {SERVICES.map(s => {
             const S = ICON[s]
             return <button key={s} aria-pressed={s === service} onClick={() => setChosen({ service: s, revision: work.revision })}>
-              <S size={14} />{s === 'calendar' ? 'Calendar' : s === 'sheets' ? 'Sheets' : 'Notion'}{work[s] && <i className="lw-dot" data-phase={work[s]!.phase} aria-hidden="true" />}</button>
+              <S size={14} />{s === 'calendar' ? 'Calendar' : s === 'sheets' ? 'Sheets' : s === 'docs' ? 'Docs' : 'Notion'}{work[s] && <i className="lw-dot" data-phase={work[s]!.phase} aria-hidden="true" />}</button>
           })}
         </div>
         <div className="seg" role="group" aria-label="View">
@@ -160,7 +161,7 @@ export function LiveWorkspace({ work, inline = false, open = true, onClose, deci
           : <>
             {card.work.error && <div className="work-error" role="alert"><p>{card.work.error.message}</p>{card.work.error.hint && <p>{card.work.error.hint}</p>}</div>}
             {card.phase === 'saved' && <Receipt card={card} service={service} url={url} />}
-            {service === 'calendar' ? <CalendarWork card={card} /> : service === 'sheets' ? <SheetsWork card={card} /> : <NotionWork card={card} />}
+            {service === 'calendar' ? <CalendarWork card={card} /> : service === 'sheets' ? <SheetsWork card={card} /> : service === 'docs' ? <DocsWork card={card} /> : <NotionWork card={card} />}
           </>}
       </div>
 
@@ -180,7 +181,7 @@ export function LiveWorkspace({ work, inline = false, open = true, onClose, deci
 function Receipt({ card, service, url }: { card: WorkCard; service: Service; url: string }) {
   const { work } = card
   const d = work.details
-  const lines = service === 'sheets' ? [['Row', String(work.row ?? '—')], ['Range', work.range ?? '—'], ['Tab', d.sheet_name ?? '—']]
+  const lines = service === 'docs' ? [['Document', work.title || d.title || '—'], ['Tab', d.tab_title || 'First tab'], ['Result', work.message || 'Saved']] : service === 'sheets' ? [['Row', String(work.row ?? '—')], ['Range', work.range ?? '—'], ['Tab', d.sheet_name ?? '—']]
     : service === 'calendar' ? [['Event', work.title || d.title || '—'], ['When', d.start && d.end ? `${d.start.slice(0, 10)} · ${clockTime(d.start, work.timezone)} – ${clockTime(d.end, work.timezone)}` : '—'],
       ['Time zone', work.timezone ?? '—']]
       : [['Page', work.title || d.title || `Daily log · ${d.date}`], ['Type', work.kind || d.kind || (work.operation === 'notion_log' ? 'Daily log' : '—')],
@@ -188,7 +189,7 @@ function Receipt({ card, service, url }: { card: WorkCard; service: Service; url
   return <section className="lw-receipt" aria-label="Saved">
     <CheckCircle className="lw-check" size={26} weight="light" />
     <div>
-      <h3>{service === 'sheets' ? 'Row appended' : service === 'calendar' ? (d.event_id ? 'Event moved' : 'Event booked') : work.operation === 'notion_archive' ? 'Moved to trash' : 'Saved in Notion'}</h3>
+      <h3>{service === 'docs' ? 'Saved in Google Docs' : service === 'sheets' ? 'Row appended' : service === 'calendar' ? (d.event_id ? 'Event moved' : 'Event booked') : work.operation === 'notion_archive' ? 'Moved to trash' : 'Saved in Notion'}</h3>
       <dl>{lines.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}</dl>
       {url ? <a href={url} target="_blank" rel="noreferrer">Open in {LABEL[service]} <ArrowSquareOut size={13} /></a>
         : <small>{LABEL[service]} returned no link.</small>}
@@ -197,6 +198,7 @@ function Receipt({ card, service, url }: { card: WorkCard; service: Service; url
 }
 
 function LiveView({ service, frame, loading, url, revision }: { service: Service; frame: string; loading: boolean; url: string; revision: number }) {
+  if (service === 'docs') return <div className="lw-empty"><DocsIcon size={30} /><p>Koe’s view shows the text and changes. Open Google Docs for the full editor.</p>{url && <a className="soft" href={url} target="_blank" rel="noreferrer">Open in Google Docs</a>}</div>
   if (service === 'notion') return <div className="lw-empty"><NotionIcon size={30} />
     <p>Notion doesn’t allow its pages inside other sites (it sends X-Frame-Options: SAMEORIGIN), so there’s no live view. Koe’s view shows the record as Notion returned it.</p>
     {url && <a className="soft" href={url} target="_blank" rel="noreferrer"><ArrowSquareOut size={16} />Open in Notion</a>}</div>

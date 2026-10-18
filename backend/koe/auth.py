@@ -122,7 +122,7 @@ def start(request: Request, next: str = "/"):
 
 
 @router.get("/auth/google/connect")
-async def connect(request: Request, next: str = "/#settings"):
+async def connect(request: Request, next: str = "/#settings", docs: bool = False):
     """Connect the signed-in person's Google Calendar + Sheets. `prompt=consent` + offline access makes Google send
     a refresh token, so Koe keeps working after the 1-hour access token expires.
     https://developers.google.com/identity/protocols/oauth2/web-server#offline"""
@@ -134,7 +134,8 @@ async def connect(request: Request, next: str = "/#settings"):
         raise HTTPException(401, "Sign in to Koe first.")
     _owner_only(user)
     extra = {"access_type": "offline", "prompt": "consent", "include_granted_scopes": "true", "login_hint": user["email"]}
-    return _to_google(request, next, connections.GOOGLE_SCOPES, extra, purpose="connect", owner=user["id"])
+    scopes = connections.GOOGLE_SCOPES + ([connections.DOCS_SCOPE, connections.DRIVE_FILE_SCOPE] if docs else [])
+    return _to_google(request, next, scopes, extra, purpose="connect", owner=user["id"], docs=docs)
 
 
 def verify_id_token(token: str) -> dict:
@@ -223,11 +224,21 @@ async def _finish_connect(request: Request, flow: dict, tokens: dict, account: s
     if not user or user["id"] != flow.get("owner"):  # the person who started connecting must be the one finishing
         raise HTTPException(400, "Sign in to Koe again, then connect Google.")
     granted = str(tokens.get("scope", "")).split()
-    if not {connections.CALENDAR_SCOPE, connections.SHEETS_SCOPE} <= set(granted):
+    required = {connections.CALENDAR_SCOPE, connections.SHEETS_SCOPE}
+    if flow.get("docs"):
+        required.update((connections.DOCS_SCOPE, connections.DRIVE_FILE_SCOPE))
+    if not required <= set(granted):
         return back(_with_query(flow["next"], "connect=missing-scopes"))  # the person unticked a permission
+    previous = None
+    if not tokens.get('refresh_token'):
+        try:
+            previous = await asyncio.to_thread(connections.load, user["id"], "google")
+        except connections.ConnectionError_:
+            pass  # reconnect must also repair a connection encrypted under an old key
+    refresh = tokens.get("refresh_token") or (previous["token"].get("refresh_token") if previous and previous["account"] == account else None)
     expiry = _now() + timedelta(seconds=int(tokens.get("expires_in", 3600)))
     await asyncio.to_thread(connections.save, user["id"], "google", account, granted, {
-        "access_token": tokens["access_token"], "refresh_token": tokens.get("refresh_token"), "expiry": expiry.isoformat()})
+        "access_token": tokens["access_token"], "refresh_token": refresh, "expiry": expiry.isoformat()})
     return back(_with_query(flow["next"], "connected=google"))
 
 

@@ -1,7 +1,7 @@
 // The live workspace's state (SPEC §2 'Live workspace'): one card per service, fed by /ws/call events in a call and by
 // the chat API's `workspace` list in the app chat (same event shape, built by backend/koe/call_work.py).
-export type Service = 'calendar' | 'sheets' | 'notion'
-export const SERVICES: Service[] = ['calendar', 'sheets', 'notion']
+export type Service = 'calendar' | 'sheets' | 'notion' | 'docs'
+export const SERVICES: Service[] = ['calendar', 'sheets', 'notion', 'docs']
 export type Phase = 'working' | 'preparing' | 'ready' | 'waiting' | 'saving' | 'saved' | 'cancelled' | 'error'
 type When = { dateTime?: string; date?: string; timeZone?: string }
 export type Conference = { status: 'none' | 'pending' | 'success' | 'failure' | 'unavailable'; url: string }
@@ -11,21 +11,25 @@ export type Work = {
   service: Service; operation: string; action_id?: string; timezone?: string; date?: string
   details: { date?: string; title?: string; start?: string; end?: string; attendees?: string[]; event_id?: string;
     duration_min?: number; client?: string; hours?: number; note?: string; sheet_name?: string
+    document?: string; tab_id?: string; tab_title?: string; mode?: string; old_text?: string
     kind?: string; status?: string; body?: string; page_id?: string; entries?: string[]
     // Calendar extensions (docs/CALENDAR_EXTENSIONS.md): what the proposal asks for, as projected by call_work.py
     all_day?: boolean; create_meet?: boolean; scope?: 'single' | 'instance' | 'series'; description?: string; location?: string
     reminders?: { method?: string; minutes?: number }[]; recurrence?: { frequency?: string; interval?: number; count?: number } }
+  document_id?: string; revision_id?: string; partial?: boolean; scope?: string; has_suggestions?: boolean; next_page_token?: string
+  tabs?: { tab_id: string; title: string; text: string; truncated?: boolean }[]
+  documents?: { document_id: string; title: string; url: string; modified?: string }[]
   events?: CalendarEvent[]
   // Calendar results: what Google returned (verified means Google echoed the approved fields back)
   event?: CalendarEvent; occurrences?: { start: string; end: string }[]; conference?: Conference
-  cancelled?: boolean; verified?: boolean; all_day?: boolean; recurrence?: string | null; id?: string; scope?: string
+  cancelled?: boolean; verified?: boolean; all_day?: boolean; recurrence?: string | null; id?: string
   slots?: { start: string; end: string }[]; total?: number; truncated?: boolean
   row?: number; range?: string; url?: string; title?: string; start?: string; end?: string
   page_id?: string; kind?: string; record_status?: string; added?: number; message?: string
   error?: { message: string; hint?: string }
 }
 export type WorkCard = { work: Work; phase: Phase; operationId?: string }
-export type WorkState = { active: Service | null; revision: number; calendar?: WorkCard; sheets?: WorkCard; notion?: WorkCard }
+export type WorkState = { active: Service | null; revision: number; calendar?: WorkCard; sheets?: WorkCard; notion?: WorkCard; docs?: WorkCard }
 export const emptyWork: WorkState = { active: null, revision: 0 }
 export type WorkEvent = { type: string; phase?: string; status?: string; operation_id?: string; work?: Work }
 const dateOf = (w: Work) => w.date || w.details.date || w.details.start?.slice(0, 10) || ''
@@ -36,7 +40,7 @@ export function reduceWork(state: WorkState, event: WorkEvent): WorkState {
   const old = state[w.service]
   if (event.type === 'tool' && event.phase === 'end' && old?.operationId && event.operation_id !== old.operationId) return state
   if (event.type === 'approval_result' && old?.work.action_id && w.action_id !== old.work.action_id) return state
-  const reading = ['calendar_list', 'calendar_find_free'].includes(w.operation)
+  const reading = ['calendar_list', 'calendar_find_free', 'docs_read', 'docs_find'].includes(w.operation)
   const sameDay = old && dateOf(old.work) === dateOf(w)
   const keepContext = sameDay && !(event.type === 'tool' && event.phase === 'start' && reading)
   const work = { ...(keepContext ? { events: old.work.events, slots: old.work.slots } : {}), ...w }
@@ -53,7 +57,7 @@ export function reduceWork(state: WorkState, event: WorkEvent): WorkState {
     [w.service]: { work, phase, operationId: event.operation_id ?? old?.operationId } }
 }
 
-const HOSTS: Record<Service | 'meet', string[]> = { calendar: ['calendar.google.com', 'www.google.com'], sheets: ['docs.google.com'],
+const HOSTS: Record<Service | 'meet', string[]> = { docs: ['docs.google.com'], calendar: ['calendar.google.com', 'www.google.com'], sheets: ['docs.google.com'],
   notion: ['notion.so', 'www.notion.so', 'app.notion.com'], meet: ['meet.google.com'] }
 // Only https links to the service's own hosts are ever rendered or framed (the backend checks the same list).
 export function serviceLink(value: string | undefined, service: Service | 'meet'): string {
@@ -79,7 +83,7 @@ export function liveUrl(service: Service, work: Work | undefined, account: Accou
   return ''
 }
 
-export const LABEL: Record<Service, string> = { calendar: 'Google Calendar', sheets: 'Google Sheets', notion: 'Notion' }
+export const LABEL: Record<Service, string> = { docs: 'Google Docs', calendar: 'Google Calendar', sheets: 'Google Sheets', notion: 'Notion' }
 
 // One polite sentence for screen readers when a card changes; '' for in-between states.
 export function announce(service: Service, card?: WorkCard): string {

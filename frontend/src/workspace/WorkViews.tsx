@@ -5,6 +5,35 @@ import { savedToken } from '../chat/api'
 import './work.css'
 import { CalendarIcon, MeetIcon } from '../components/BrandIcon'
 
+export function DocsWork({ card }: { card: WorkCard }) {
+  const { work, phase } = card
+  const d = work.details
+  return <section className="lw-docs" aria-label="Document content">
+    {work.scope && <p className="work-help">{work.scope}</p>}
+    {work.has_suggestions && <p className="work-help">This document has pending suggestions. Resolve them in Google Docs before asking Koe to edit.</p>}
+    {work.documents && <>
+      <ul className="lw-entries">{work.documents.map(doc => <li key={doc.document_id}>
+        <a href={serviceLink(doc.url, 'docs')} target="_blank" rel="noreferrer">{doc.title}</a>
+      </li>)}</ul>
+      {!work.documents.length && <p className="work-help">No matching app-accessible Docs. Paste an existing Google Docs link in chat, or ask Koe to create one.</p>}
+      {work.next_page_token && <p className="work-help">More results available. Ask Koe for the next page.</p>}
+    </>}
+    {work.tabs?.map(tab => <article className="lw-record" key={tab.tab_id}>
+      <h3>{tab.title}</h3><p className="lw-doc-text">{tab.text || '(Empty tab)'}</p>
+      {tab.truncated && <p className="work-help">Preview shortened. Open Google Docs to read the full tab.</p>}
+    </article>)}
+    {['docs_create', 'docs_edit'].includes(work.operation) && <article className="lw-record lw-target" data-phase={phase}>
+      <h3>{work.title || d.title || 'Google Doc'}</h3>
+      {d.tab_title && <p className="work-help">Tab: {d.tab_title}</p>}
+      {d.mode === 'replace' && <><h4>Replace this passage</h4><p className="lw-doc-text">{d.old_text}</p><h4>With</h4></>}
+      {d.mode === 'append' && <h4>Append</h4>}
+      <p className="lw-doc-text">{d.body || (d.mode === 'replace' ? '(Delete this passage)' : '(Empty document)')}</p>
+      {phase === 'waiting' && <p className="work-help">Preview only. Nothing saved yet.</p>}
+    </article>}
+    {work.partial && <p className="work-help">The result is incomplete. Check the document before trying again.</p>}
+  </section>
+}
+
 // "Koe's view": Koe's own rendering of exactly what it read, proposed or wrote. `.lw-target` marks the one item
 // the GSAP timeline in LiveWorkspace animates (the proposed/saved slot, row or record).
 

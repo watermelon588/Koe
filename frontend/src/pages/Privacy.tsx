@@ -24,7 +24,7 @@ export function Privacy() {
           <dt>Activity log</dt>
           <dd>A record of what you asked, which tools Koe used, what it proposed, what you approved or rejected, and how long each step took. It powers the dashboard and keeps an audit trail of every change.</dd>
           <dt>Connected services</dt>
-          <dd>Only after you connect them: calendar events and free/busy times (Google Calendar); timesheet rows (Google Sheets); pull requests, reviews, CI status and commits in the repositories you choose (GitHub); daily logs, tasks, notes and meeting records in your configured Notion database. Service credentials currently live in server configuration or local OAuth files; encrypted per-user connection storage is planned with accounts.</dd>
+          <dd>Only after you connect them: calendar events and free/busy times (Google Calendar); timesheet rows (Google Sheets); document titles and text you ask Koe to read or edit, and app-accessible document listings (Google Docs, after optional Docs consent); pull requests, reviews, CI status and commits in the repositories you choose (GitHub); daily logs, tasks, notes and meeting records in your configured Notion database. Connected account tokens are encrypted on the backend. Owner-only local OAuth files may also be used for local development.</dd>
           <dt>Notifications</dt>
           <dd>If you turn them on, a push address for your device from your browser’s push service (Google or Apple). Koe uses it only to notify you.</dd>
           <dt>On your device</dt>
@@ -34,7 +34,7 @@ export function Privacy() {
 
       <Section id="google" title="Google user data">
         <p>Koe’s use and transfer of information received from Google APIs adheres to the <a href="https://developers.google.com/terms/api-services-user-data-policy" rel="noopener">Google API Services User Data Policy</a>, including the Limited Use requirements.</p>
-        <p>Calendar and Sheets data are used only to answer your requests and carry out actions you approve. They are not used for advertising, not sold, and not used to train AI models. People can’t read them, except where you ask for help or the law requires it.</p>
+        <p>Koe uses Calendar, Sheets and Docs data to answer your requests and carry out approved actions. Relevant text and tool results are included in the conversation sent to the configured AI providers described below. Koe does not sell this data, use it for advertising, or train its own models on it. Provider processing and retention follow their applicable terms.</p>
       </Section>
 
       <Section id="spotify" title="Optional Spotify music">

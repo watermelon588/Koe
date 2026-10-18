@@ -6,11 +6,11 @@ from urllib.parse import urlparse
 from koe.config import settings
 from koe.tools import sheets
 
-TOOLS = {'calendar_list': 'calendar', 'calendar_find_free': 'calendar',
+TOOLS = {'docs_find': 'docs', 'docs_read': 'docs', 'docs_create': 'docs', 'docs_edit': 'docs', 'calendar_list': 'calendar', 'calendar_find_free': 'calendar',
          'calendar_upsert_event': 'calendar', 'calendar_get_event': 'calendar',
          'calendar_cancel_event': 'calendar', 'sheets_log_hours': 'sheets',
          'notion_save': 'notion', 'notion_archive': 'notion', 'notion_log': 'notion'}
-HOSTS = {'calendar': {'calendar.google.com', 'www.google.com'}, 'sheets': {'docs.google.com'},
+HOSTS = {'docs': {'docs.google.com'}, 'calendar': {'calendar.google.com', 'www.google.com'}, 'sheets': {'docs.google.com'},
          'notion': {'notion.so', 'www.notion.so', 'app.notion.com'}, 'meet': {'meet.google.com'}}
 
 
@@ -61,6 +61,7 @@ def project(name, args, result=None, action_id=None):
     details = fields(source, {'calendar': ('date', 'title', 'start', 'end', 'event_id', 'duration_min', 'between', 'scope', 'all_day',
                                            'create_meet', 'description', 'location'),
                               'sheets': ('date', 'client', 'hours', 'note', 'sheet_name'),
+                              'docs': ('title', 'body', 'old_text', 'mode', 'document', 'tab_id', 'tab_title'),
                               'notion': ('date', 'title', 'kind', 'status', 'end', 'body', 'page_id')}[service])
     if isinstance(source.get('attendees'), list):
         details['attendees'] = [v[:254] for v in source['attendees'][:50] if isinstance(v, str)]
@@ -78,7 +79,18 @@ def project(name, args, result=None, action_id=None):
     if isinstance(result.get('error'), dict):
         data['error'] = fields(result['error'], ('code', 'message', 'hint'))
     data.update(fields(result, ('date', 'timezone', 'duration_min', 'title', 'start', 'end', 'row', 'range', 'status')))
-    if service == 'notion':
+    if service == 'docs':
+        for key in ('body', 'old_text'):
+            if isinstance(args.get(key), str): details[key] = args[key][:12000]
+        data.update(fields(result, ('document_id', 'revision_id', 'message', 'truncated', 'scope', 'partial', 'has_suggestions', 'next_page_token')))
+        data['url'] = link(result.get('url'), service)
+        if isinstance(result.get('tabs'), list):
+            data['tabs'] = [fields(t, ('tab_id', 'title', 'text', 'truncated')) for t in result['tabs'][:100]]
+            for shown, raw in zip(data['tabs'], result['tabs']):
+                shown['truncated'] = bool(shown.get('truncated')) or len(raw.get('text', '')) > 2000
+        if isinstance(result.get('documents'), list):
+            data['documents'] = [{**fields(d, ('document_id', 'title', 'modified')), 'url': link(d.get('url'), 'docs')} for d in result['documents'][:20]]
+    elif service == 'notion':
         if isinstance(args.get('entries'), list):  # notion_log: the exact bullets appended to the daily page
             details['entries'] = [v[:2000] for v in args['entries'][:50] if isinstance(v, str)]
         data.update(fields(result, ('kind', 'record_status', 'added', 'message')))

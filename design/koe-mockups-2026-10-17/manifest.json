@@ -1,0 +1,112 @@
+[
+  {
+    "slug": "01-veranda-home",
+    "title": "Veranda",
+    "screen": "Home",
+    "palette": "Charcoal · Kami",
+    "rationale": "An open companion stage, one primary action, a small glimpse of the day.",
+    "width": 2880,
+    "height": 2000,
+    "html": "source/01-veranda-home.html",
+    "png": "mockups/01-veranda-home.png"
+  },
+  {
+    "slug": "02-daylight-dashboard",
+    "title": "Daylight",
+    "screen": "Dashboard",
+    "palette": "Paper · Kami",
+    "rationale": "A visual week, two meaningful work cards, and a quiet companion presence.",
+    "width": 2880,
+    "height": 2000,
+    "html": "source/02-daylight-dashboard.html",
+    "png": "mockups/02-daylight-dashboard.png"
+  },
+  {
+    "slug": "03-quiet-conversation",
+    "title": "Quiet conversation",
+    "screen": "Live call",
+    "palette": "Charcoal · Kami",
+    "rationale": "The voice and character take centre stage; controls stay within reach.",
+    "width": 2880,
+    "height": 2000,
+    "html": "source/03-quiet-conversation.html",
+    "png": "mockups/03-quiet-conversation.png"
+  },
+  {
+    "slug": "04-just-say-it",
+    "title": "Just say it",
+    "screen": "Chat",
+    "palette": "Paper · Kami",
+    "rationale": "Short exchanges, one calm composer, and a familiar face at the edge.",
+    "width": 2880,
+    "height": 2000,
+    "html": "source/04-just-say-it.html",
+    "png": "mockups/04-just-say-it.png"
+  },
+  {
+    "slug": "05-make-room",
+    "title": "Make room",
+    "screen": "Calendar concept",
+    "palette": "Paper · Kobashi",
+    "rationale": "A spacious week timeline and visible free time, with almost no explanation.",
+    "width": 2880,
+    "height": 2000,
+    "html": "source/05-make-room.html",
+    "png": "mockups/05-make-room.png"
+  },
+  {
+    "slug": "06-thoughts-kept-close",
+    "title": "Thoughts, kept close",
+    "screen": "Notion",
+    "palette": "Charcoal · Kobashi",
+    "rationale": "One note with breathing room, a small checklist, and a gentle companion.",
+    "width": 2880,
+    "height": 2000,
+    "html": "source/06-thoughts-kept-close.html",
+    "png": "mockups/06-thoughts-kept-close.png"
+  },
+  {
+    "slug": "07-quiet-hours",
+    "title": "Quiet hours",
+    "screen": "Music",
+    "palette": "Charcoal · Mei",
+    "rationale": "A graphic record sleeve, clear manual controls and a little company.",
+    "width": 2880,
+    "height": 2000,
+    "html": "source/07-quiet-hours.html",
+    "png": "mockups/07-quiet-hours.png"
+  },
+  {
+    "slug": "08-your-kind-of-company",
+    "title": "Your kind of company",
+    "screen": "Companions",
+    "palette": "Paper · All three",
+    "rationale": "The original characters become the main visual choices.",
+    "width": 2880,
+    "height": 2000,
+    "html": "source/08-your-kind-of-company.html",
+    "png": "mockups/08-your-kind-of-company.png"
+  },
+  {
+    "slug": "09-good-company",
+    "title": "Good company",
+    "screen": "Connections",
+    "palette": "Charcoal · Kobashi",
+    "rationale": "Original service marks arranged as a simple visual system.",
+    "width": 2880,
+    "height": 2000,
+    "html": "source/09-good-company.html",
+    "png": "mockups/09-good-company.png"
+  },
+  {
+    "slug": "10-pocket-companion",
+    "title": "Pocket companion",
+    "screen": "Mobile Home + Call",
+    "palette": "Paper / Charcoal · Kami",
+    "rationale": "Two small-screen compositions keep the same visual language.",
+    "width": 2880,
+    "height": 2000,
+    "html": "source/10-pocket-companion.html",
+    "png": "mockups/10-pocket-companion.png"
+  }
+]

@@ -13,6 +13,10 @@
 .lw-open { height: 34px; padding: 0 14px; font-size: 13px; gap: 6px; color: var(--text); text-decoration: none; }
 .lw-bar { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; padding: 0 18px; }
 .lw-bar .seg button { height: 28px; }
+.lw-bar .seg { max-width: 100%; flex-wrap: wrap; }
+.lw-docs { min-width: 0; overflow-wrap: anywhere; }
+.lw-doc-text { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; line-height: 1.65; margin: 8px 0; }
+.lw-docs h4 { font-size: 13px; font-weight: 500; color: var(--muted); margin-top: 12px; }
 .lw-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--muted); margin-left: 2px; }
 .lw-dot:is([data-phase='waiting'], [data-phase='saved']) { background: var(--accent); }
 .lw-phase { margin: 12px 18px 0; }

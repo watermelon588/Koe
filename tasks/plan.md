@@ -56,3 +56,6 @@ Implementation is now authorized. Same-page Call deliberately completes its repl
 1. GitHub workflow completion: implemented locally with shared agent tools, automatic yesterday dashboard, commit evidence, partial failure handling and repository picker repairs. See docs/GITHUB_WORKFLOW.md.
 2. Music latency: explicitly deferred; measure load/device preparation/search/call/handoff stages before optimizing.
 3. Google Docs: user chose document creation/editing. Replace standalone Drive roadmap scope with Docs; Drive may support document lookup/permissions internally. No Google feature implementation in the GitHub task.
+
+## Google Docs implementation — 2026-10-18
+GitHub implementation audit passed before Docs work. Docs now reuses Google OAuth, encrypted account storage, shared agent tools, persisted approval gate and live workspace. Setup and acceptance: docs/GOOGLE_DOCS.md. No standalone Drive manager, no new hosting changes or credentials, no Music latency work. Real-provider consent and acceptance remain separate from the passing synthetic pipeline.

@@ -4,16 +4,19 @@ from pathlib import Path
 
 from google_auth_oauthlib.flow import InstalledAppFlow
 
-from koe import google_auth
+from koe import google_auth, connections
 from koe.config import settings
 
 
 def main():
     parser = argparse.ArgumentParser(description="Connect your Google Calendar (and optionally Sheets) to Koe.")
     parser.add_argument("--with-sheets", action="store_true")
+    parser.add_argument("--with-docs", action="store_true")
     parser.add_argument("--reauthorize", action="store_true")
     args = parser.parse_args()
     scopes = google_auth.CALENDAR_SCOPES + ([google_auth.SHEETS_SCOPE] if args.with_sheets else [])
+    if args.with_docs:
+        scopes += [connections.DOCS_SCOPE, connections.DRIVE_FILE_SCOPE]
     if not args.reauthorize:
         try:
             creds = google_auth.credentials()

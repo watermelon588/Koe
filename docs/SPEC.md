@@ -1,5 +1,8 @@
 # Spec: Koe (声)
 
+## Google Docs integration — 2026-10-18
+Use the existing per-person Google OAuth connection, with an explicit optional Docs consent upgrade (documents + drive.file). Existing Calendar/Sheets grants remain usable. Docs supports bounded app-accessible document discovery through Drive, reading any user-accessible Doc by exact link/ID, approved creation with plain text, appending and exact single-passage replacement in a selected tab. No standalone Drive manager, sharing, deletion or arbitrary batch API is exposed. All writes use the shared persisted approval gate. Edits freeze the read revision and tab and send requiredRevisionId to Google; stale changes must be reread and proposed again. Never retry uncertain writes. If creation succeeds but content insertion fails, return the created document link with an explicit partial failure. Tokens stay encrypted server-side; caller identity and Google account are checked again at execution. Read data is untrusted and bounded. Chat and live calls share tools and the existing workspace/approval UI, with original Docs artwork. Docs list covers files accessible through drive.file, not the user's entire Drive; a pasted Docs link supports other documents via documents permission. Setup, limitations and verification live in GOOGLE_DOCS.md.
+
 > **Status:** v0.1, 2026-10-12. This file is the contract. Change it before changing behavior, and log the change in [DECISIONS.md](DECISIONS.md).
 
 ## 1. Objective

@@ -105,7 +105,15 @@ The unchecked items require real provider/audio acceptance; automated fixture ch
 
 ## 2026-10-18 priorities
 - [ ] Deferred: profile and reduce Music-page latency (load, SDK readiness, search, call preparation, voice-to-playback). Measure each stage first; preserve verified audio handoff. Do not implement in the GitHub task.
-- [ ] Next Google integration: Google Docs creation/editing, selected by Rohit. Drop standalone Google Drive from the planned feature list; keep only any Drive API support needed by Docs. No removal of working Google Calendar/Sheets integration.
+- [x] Google Docs creation/editing implemented locally, selected by Rohit. Standalone Google Drive removed from the advertised feature list; keep only any Drive API support needed by Docs. No removal of working Google Calendar/Sheets integration.
 - [x] Implemented locally: GitHub connection/repository selection, yesterday's local-time authored commits and merged PRs, evidence-linked commit summaries, honest scoped statistics, dashboard visibility and agent read tools across chat/voice. Verify authorization, partial provider failures, pagination and UI/API integration. No automatic comments, merges or account changes.
 
 - [ ] GitHub live acceptance after deployment: connect the real account, choose repositories, ask about yesterday and a specific commit in chat and voice; compare source links. Automated tests simulate provider responses and model tool selection.
+
+## Google Docs verification — 2026-10-18
+- [x] GitHub planned implementation audited first: 80 focused checks pass; real-account/voice acceptance remains distinct.
+- [x] Optional Google Docs OAuth upgrade and per-person encrypted credentials; existing Calendar/Sheets preserved.
+- [x] Find app-accessible Docs, read by link/ID, approved create/append/exact-passage editing, revision/account safeguards.
+- [x] Shared chat/voice tools and desktop/mobile live workspace with original Docs logo and exact previews.
+- [x] Automated OAuth → chat tool → confirmation → provider → receipt/readback, voice, failure/replay and responsive browser checks.
+- [ ] Operator enables Google Docs/Drive APIs and consent scopes; user grants Docs permission, then verifies a real document and speech on desktop/phone. See docs/GOOGLE_DOCS.md.

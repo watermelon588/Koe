@@ -27,6 +27,7 @@ export function Guide() {
       <Section id="what" title="What Koe is">
         <p>Koe (声, “voice”) is a voice-first personal assistant for developers. You talk to an anime mascot in a live call, or send text and voice notes from the Koe app on your phone. Koe can:</p>
         <ul>
+          <li><b>Google Docs:</b> choose <b>Enable Docs</b> in Connections and approve the additional permissions. Ask Koe to create a document, paste a Doc link to read or edit it, or search for Docs created through Koe. Every create/edit shows an exact preview and waits for your confirmation. If someone changes the Doc meanwhile, read it again before proposing a fresh edit.</li>
           <li><b>GitHub:</b> list PRs waiting for your review, your open PRs and their CI, summarise a PR, post a PR comment, and count what you shipped: commits and merged PRs for a day or range, your contribution streak, and (only when you ask) changed lines in the commits it analysed.</li>
           <li><b>Google Calendar:</b> find free slots; create, move or cancel events, including all-day and repeating events, with a Google Meet link and Calendar reminders if you want them.</li>
           <li><b>Google Sheets:</b> log hours to a timesheet, find an entry, correct its values, and add new columns.</li>
@@ -56,7 +57,7 @@ export function Guide() {
         <p>The bar at the top of the app has five pages, plus the <b>?</b> button for this guide and the sun or moon button for the light and dark theme. On a phone the pages show as icons only.</p>
         <ul>
           <li><b>Home:</b> your companion, the <b>Call Koe</b> button and a short <b>Today</b> summary: your next events and anything waiting on you. <b>Open dashboard</b> takes you to the full view.</li>
-          <li><b>Dashboard:</b> your whole day in panels: Today’s calendar, Approvals, pull requests waiting for your review, your own pull requests with their CI, GitHub stats (the numbers from the last time you asked Koe about your activity or streak), and Activity (what Koe did, and how fast it answered). It updates live.</li>
+          <li><b>Dashboard:</b> your whole day in panels: Today’s calendar, Approvals, pull requests waiting for your review, your own pull requests with their CI, GitHub stats (yesterday’s activity loads automatically; ask Koe for other date ranges or contribution streaks), and Activity (what Koe did, and how fast it answered). It updates live.</li>
           <li><b>Chat:</b> text and voice notes with Koe.</li>
           <li><b>Notion:</b> your Notion workspace (see below).</li>
           <li><b>Settings:</b> choose your companion at the top. Below it: <b>Account</b> (sign out), <b>Connections</b> (Google, GitHub, Notion, plus your timesheet and repositories), <b>Your Gemini key</b>, <b>People</b> (only the owner sees it: who may sign in), and <b>This device</b> (install the app, notifications).</li>
@@ -80,7 +81,7 @@ export function Guide() {
           <li><b>Call:</b> on Home, press the call button and just speak. You can interrupt Koe at any time; it stops and listens. Type in the call panel if you can’t talk.</li>
           <li><b>Chat:</b> type a message, or tap the mic to record a voice note (up to 90 s). Koe answers a voice note with a voice note, plus the text.</li>
           <li><b>Try:</b> “What’s on my plate today?”, “Any PRs waiting for my review?”, “Find me an hour tomorrow afternoon”, “Log 2 hours for Acme: API work”, “How much did I ship yesterday?”, “Book a weekly sync every Monday for 4 weeks with a Meet link”.</li>
-          <li><b>Live workspace:</b> while Koe works on your Calendar, Sheets or Notion, the panel beside the chat (or the call’s <b>Workspace</b> tab) shows the slot, row or record it’s looking at, and what it proposes to change.</li>
+          <li><b>Live workspace:</b> while Koe works on your Calendar, Sheets, Docs or Notion, the panel beside the chat (or the call’s <b>Workspace</b> tab) shows the slot, row or record it’s looking at, and what it proposes to change.</li>
         </ul>
       </Section>
 

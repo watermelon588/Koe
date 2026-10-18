@@ -1,0 +1,79 @@
+{
+  "renderedAt": "2026-10-17T18:38:57.621Z",
+  "renderer": "Headless Microsoft Edge / Playwright",
+  "mockups": [
+    {
+      "slug": "01-veranda-home",
+      "words": 62,
+      "width": 2880,
+      "height": 2000,
+      "imagesLoaded": true
+    },
+    {
+      "slug": "02-daylight-dashboard",
+      "words": 96,
+      "width": 2880,
+      "height": 2000,
+      "imagesLoaded": true
+    },
+    {
+      "slug": "03-quiet-conversation",
+      "words": 53,
+      "width": 2880,
+      "height": 2000,
+      "imagesLoaded": true
+    },
+    {
+      "slug": "04-just-say-it",
+      "words": 86,
+      "width": 2880,
+      "height": 2000,
+      "imagesLoaded": true
+    },
+    {
+      "slug": "05-make-room",
+      "words": 112,
+      "width": 2880,
+      "height": 2000,
+      "imagesLoaded": true
+    },
+    {
+      "slug": "06-thoughts-kept-close",
+      "words": 80,
+      "width": 2880,
+      "height": 2000,
+      "imagesLoaded": true
+    },
+    {
+      "slug": "07-quiet-hours",
+      "words": 69,
+      "width": 2880,
+      "height": 2000,
+      "imagesLoaded": true
+    },
+    {
+      "slug": "08-your-kind-of-company",
+      "words": 56,
+      "width": 2880,
+      "height": 2000,
+      "imagesLoaded": true
+    },
+    {
+      "slug": "09-good-company",
+      "words": 56,
+      "width": 2880,
+      "height": 2000,
+      "imagesLoaded": true
+    },
+    {
+      "slug": "10-pocket-companion",
+      "words": 56,
+      "width": 2880,
+      "height": 2000,
+      "imagesLoaded": true
+    }
+  ],
+  "errors": [],
+  "productionFilesModified": false,
+  "method": "Native HTML/CSS with original artwork; no generated or retouched mascot images."
+}

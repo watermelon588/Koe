@@ -1440,6 +1440,21 @@ Verification: five backend reliability/authorization/redaction tests pass; front
 
 **Verification:** 73 frontend tests; 72 backend Spotify/auth/voice tests; 19 manual browser checks plus 10 same-page voice checks, all passing. The SDK double now delays playing observations by 450ms. An acknowledgement arriving after 8.2 seconds is accepted without duplicate release. Production build passes; lint has only the four pre-existing warnings, and the existing mascot chunk-size advisory remains. Browser screenshots checked at 375px; iOS volume capability is emulated in Chromium, not verified on physical Safari. Spotify/provider audio and Gemini function selection remain simulated: no claim of live streaming, microphone recognition or physical mobile acceptance. No hosted configuration or deployment changes performed.
 
+## Ten mascot-led design mockups — 2026-10-18
+
+**Request:** Explore minimal, visual-first designs using Koe's existing palette and mascot artwork. Applied frontend UI engineering, Emil design engineering and design-taste guidance. Work began October 17 and is saved in `design/koe-mockups-2026-10-17/`.
+
+**Delivered:** Ten PNG mockups at 2880 × 2000 covering Home, Dashboard, live Call, Chat, a proposed Calendar view, Notion, Music, Companions, Connections and a two-phone mobile board. Includes a linked HTML gallery, a 1600 × 3293 overview, editable HTML/CSS, a manifest and repeatable capture scripts. Preserves supplied Kami, Mei and Kobashi artwork and original provider assets. No raster generation or retouching.
+
+**Reference:** Captured 15 full-page current-app desktop/mobile screenshots in an isolated browser with synthetic account/API/socket data. No real provider messages or mutations. References include public pages, signed-in routes and the live-call surface.
+
+**Verification:** All ten pages rendered in headless Edge; original assets loaded, artboards measured 1440 × 1000 CSS pixels, no horizontal overflow or page errors. Visually inspected the contact sheet and full-size compositions; corrected mascot clipping and collisions with headings/controls. Concepts contain illustrative content; a separate Calendar page is exploratory. No production application source was changed by this design task; unrelated concurrent edits are retained.
+
+**Try it:** Open `design/koe-mockups-2026-10-17/index.html`. Click a thumbnail for its full-size PNG or the title for its editable HTML composition. Reference captures are in `screenshots/current/`.
+
+**Interview line:** “I made an existing mascot identity usable across a restrained workspace system, captured the original product for comparison, and delivered reproducible browser-rendered design artifacts.”
+
+
 ## Complete GitHub activity wiring — 2026-10-18
 
 **Request:** Defer Music latency, choose Docs versus Drive, then finish GitHub awareness of yesterday's commits, summaries and statistics. User selected Docs creation/editing.
@@ -1455,3 +1470,38 @@ Verification: five backend reliability/authorization/redaction tests pass; front
 **Try it:** Connect GitHub and choose repositories in Settings; open Dashboard; ask Koe “What did I commit yesterday?”, then request details of a returned commit. Summary content is source evidence, never instructions or proof of correctness.
 
 **Interview line:** “I connected authenticated provider evidence through shared agent tools and a live dashboard, preserving time boundaries, ownership and partial-data semantics.”
+
+
+## Google Docs across chat and voice — 2026-10-18
+
+**Request:** Check GitHub completion first, then implement Google Docs creation/editing end to end with connection instructions and agent access. Music latency remains deferred; preserve unrelated design work.
+
+**Audit:** Queried the existing Graphify graph vocabulary/edges, then checked current source because the graph predates recent integrations. The CLI trampoline was unavailable, so the graph was inspected directly. GitHub's planned connection, repository selection, history, metrics, summaries, dashboard, shared voice tools and approved comments are implemented. All 80 focused GitHub/voice/events checks passed. Real-account speech and hosted acceptance remain explicitly unverified.
+
+**Files and flow:** `koe/tools/docs.py` implements bounded discovery, tab-aware reads, approved creation and revision-locked edits. `connections.py`, `auth.py`, `google_auth.py` and the local OAuth script add optional Docs consent without replacing existing Calendar/Sheets grants. `agent.py` registers docs_find, docs_read, docs_create and docs_edit for both text and live audio. The existing persisted approval gate remains the only writer entry point. `action_display.py` and `call_work.py` project exact previews and receipts into the shared frontend workspace. Connections shows the original Docs logo and Enable Docs/Open chat controls. Guide/privacy/setup content reflects the feature; the landing page retains its design while replacing the planned Docs/Drive entries with implemented Docs and calculated counts.
+
+**Core concept:** A document revision is a version label. Koe freezes the version, account, tab and exact body-text range before asking for approval. Google rejects the batch if that version changed, so an approval cannot silently overwrite a collaborator's newer work. Text ranges use UTF-16 indices, including emoji. Replacement cannot spill into matching headers, footers or non-contiguous table cells; ambiguous passages and unresolved suggestions are refused. Creation needs a blank-document request followed by text insertion: a partial failure preserves the created link and never automatically creates another copy.
+
+**Verification:** 167 related backend tests passed (Docs, OAuth, approval, chat, voice, GitHub connection), then all 41 Docs/Google tests passed after the last account-switch and overlapping-match fixes. Earlier GitHub audit: 80 passing checks. All 74 existing frontend tests passed; the expanded 14-test workspace suite passed including the new Docs state case (75 distinct frontend checks). Production build passes. Lint retains the four pre-existing warnings; the existing mascot chunk-size advisory remains. The production-bundle Edge runner passes desktop consent/preview/confirm/receipt and 375px phone cancel/overflow checks with no uncaught errors. Screenshots reviewed after animation settles. All provider/model responses and approval storage in these Docs pipeline tests are synthetic; OAuth connection storage uses isolated encrypted test records. No real document was created or edited, no Google account configuration was changed, and no deployment or push was performed.
+
+**Try it:** Follow `docs/GOOGLE_DOCS.md`: enable Docs/Drive APIs in the existing Google project, add the two consent scopes, then Settings → Connections → Google Docs → Enable Docs. Ask “Create a Google Doc called Weekly update with this text …”, review the exact preview and confirm. Paste an existing Doc link to read it; ask to append text or replace a unique passage. Multiple tabs require an explicit choice. No new secret, runtime dependency or database migration.
+
+**Limits:** Plain-text body operations, not a full rich-text editor. Discovery lists app-accessible Docs rather than the entire Drive. Reads and previews have stated bounds; final Google consent, actual document mutation and microphone/model-selection acceptance on physical phones remain outstanding. Music latency and unrelated design mockups are untouched.
+
+**Interview line:** “I built a voice-capable document workflow that binds consent, precise previews and atomic revision checks across OAuth, agent tools and a responsive workspace.”
+
+## Public README and feature inventory — 2026-10-18
+
+**Files:** `README.md` (rewritten); `docs/BUILD_LOG.md` (this entry).
+
+**What it does:** Presents the running Koe application with clearly labelled synthetic UI screenshots, links to the ten interface concepts and five separate brand explorations, and a feature-by-feature status table. Documents prerequisites, local startup, connection setup, architecture, dependencies and repository layout without claiming that unverified provider flows have passed live acceptance.
+
+**Core concept:** Implementation and acceptance are different states. A tool can be wired through the agent and UI while still needing real consent, account data, device behavior and deployment checks.
+
+**How it connects:** The README points to the existing setup guides and contract. Graphify's existing graph identified earlier GitHub, Calendar, Notion, Sheets, voice and WhatsApp relationships; current source confirmed newer Music and Docs paths because the graph predates them.
+
+**Try it yourself:** Open `README.md` on GitHub after committing the README and the linked `design/` assets. Follow the local setup commands or browse the linked PNGs. The Graphify CLI's uv launcher failed on this Windows host, so the existing `graphify-out/graph.json` was inspected directly and checked against source.
+
+**Gotchas:** The design folders are currently untracked; GitHub will show broken image links until those assets are committed and pushed alongside the README. No end-to-end or provider tests were run for this documentation-only step, as requested.
+
+**Interview line:** “I documented the product from its actual code paths and separated design concepts, implemented workflows and unverified live acceptance.”

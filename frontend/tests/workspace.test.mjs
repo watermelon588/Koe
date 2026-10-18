@@ -122,3 +122,21 @@ test('a confirmed cancellation removes the event from the day view', () => {
   assert.equal(s.calendar.phase, 'saved')
   assert.deepEqual(s.calendar.work.events, [])
 })
+
+
+test('Docs reads, approval, failure and save retain distinct states and safe links', () => {
+  const work = { service: 'docs', operation: 'docs_read', details: {}, tabs: [{tab_id:'t1',title:'Notes',text:'Hello'}] }
+  let state = reduceWork(emptyWork, {type:'tool',phase:'end',work})
+  assert.equal(state.docs.phase, 'ready')
+  const proposal = {...work, operation:'docs_edit', action_id:'doc-action', details:{title:'Notes',body:'New text'}}
+  state = reduceWork(state, {type:'approval_pending',work:proposal})
+  assert.equal(state.docs.phase, 'waiting')
+  assert.match(announce('docs', state.docs), /Not saved yet/)
+  state = reduceWork(state, {type:'approval_result',status:'failed',work:{...proposal,error:{message:'Stale revision'}}})
+  assert.equal(state.docs.phase, 'error')
+  state = reduceWork(state, {type:'approval_result',status:'executed',work:proposal})
+  assert.equal(state.docs.phase, 'saved')
+  assert.equal(serviceLink('https://evil.test/doc', 'docs'), '')
+  assert.equal(serviceLink('https://docs.google.com/document/d/123/edit', 'docs'), 'https://docs.google.com/document/d/123/edit')
+  assert.equal(liveUrl('docs', proposal, {google:'a@example.test', timesheet:''}), '')
+})

@@ -50,6 +50,8 @@ def credentials(required_scopes: list[str] | None = None) -> Credentials:
             # Read granted scopes; don't overwrite them by passing a larger scopes list.
             creds = Credentials.from_authorized_user_file(str(path))
             if not creds.has_scopes(required):
+                if connections.DOCS_SCOPE in required or connections.DRIVE_FILE_SCOPE in required:
+                    raise GoogleAuthError("Docs permission is missing. Run: python -m scripts.google_auth --with-docs --reauthorize")
                 if SHEETS_SCOPE in required:
                     raise GoogleAuthError("Sheets permission is missing. Run: python -m scripts.google_auth --with-sheets --reauthorize")
                 raise GoogleAuthError("Calendar permission is missing. Run: python -m scripts.google_auth --reauthorize")

@@ -37,6 +37,8 @@ GOOGLE_TOKEN = "https://oauth2.googleapis.com/token"
 GOOGLE_REVOKE = "https://oauth2.googleapis.com/revoke"
 CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar.events"
 SHEETS_SCOPE = "https://www.googleapis.com/auth/spreadsheets"
+DOCS_SCOPE = "https://www.googleapis.com/auth/documents"
+DRIVE_FILE_SCOPE = "https://www.googleapis.com/auth/drive.file"
 GOOGLE_SCOPES = ["openid", "email", CALENDAR_SCOPE, SHEETS_SCOPE]
 SHEETS_API = "https://sheets.googleapis.com/v4/spreadsheets"
 GEMINI_MODELS = "https://generativelanguage.googleapis.com/v1beta/models"
@@ -108,13 +110,15 @@ async def set_pref(name: str, value: str, owner: str | None = None) -> None:
     _prefs[(owner, name)] = value
 
 
-def google_credentials(required_scopes: list[str]) -> Credentials | None:
+def google_credentials(required_scopes: list[str], expected_account: str | None = None) -> Credentials | None:
     """The calling person's Google credentials, refreshed when expired, or None if they haven't connected Google.
     Runs in a worker thread (the tools call google_auth.credentials via asyncio.to_thread)."""
     owner = identity.owner_id()
     row = load(owner, "google")
     if not row:
         return None
+    if expected_account is not None and row['account'] != expected_account:
+        raise ConnectionError_('The connected Google account changed. Try again.')
     if not set(required_scopes) <= set(row["scopes"]):
         raise ConnectionError_("Koe needs more Google permissions. Reconnect Google in Settings → Connections.")
     token = row["token"]
@@ -139,10 +143,11 @@ api = APIRouter(prefix="/api/connections", dependencies=[Depends(auth.http_owner
 
 @api.get("")
 async def list_connections():
-    rows = await sql("select provider, account from koe_connections where owner_id = %s", identity.owner_id())
+    rows = await sql("select provider, account, scopes from koe_connections where owner_id = %s", identity.owner_id())
     have = {r["provider"]: r["account"] for r in rows}
     sheet = await asyncio.to_thread(pref, "google_sheets_id", identity.owner_id())
     return {"ready": configured(), "github_ready": github_ready(), "timesheet": f"https://docs.google.com/spreadsheets/d/{sheet}/edit" if sheet else "",
+            "docs_ready": any(r["provider"] == "google" and {DOCS_SCOPE, DRIVE_FILE_SCOPE} <= set(r["scopes"].split()) for r in rows),
             "connections": [{"provider": p, "connected": p in have, "account": have.get(p, "")} for p in PROVIDERS]}
 
 

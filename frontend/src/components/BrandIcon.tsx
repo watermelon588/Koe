@@ -33,3 +33,5 @@ export const MeetIcon = (props: BrandIconProps) => <BrandIcon brand="meet" {...p
 export const SheetsIcon = (props: BrandIconProps) => <BrandIcon brand="sheets" {...props} />
 export const SpotifyIcon = (props: BrandIconProps) => <BrandIcon brand="spotify" {...props} />
 export const GeminiIcon = (props: BrandIconProps) => <BrandIcon brand="gemini" {...props} />
+
+export const DocsIcon = (props: BrandIconProps) => <BrandIcon brand="docs" {...props} />
