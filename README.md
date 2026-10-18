@@ -24,18 +24,6 @@ The Calendar page is a **proposal**, not a current app route. [Editable HTML/CSS
 
 **11 · Open window** — Kami and the laptop, shown at the top of this README.
 
-**12 · Say less** — Mei poster.
-
-<img src="design/koe-experiments-2026-10-18/mockups/12-say-less-poster.png" alt="Say less poster with Mei" width="420">
-
-**13 · Your little world** — Kobashi collectible.
-
-<img src="design/koe-experiments-2026-10-18/mockups/13-your-little-world.png" alt="Your little world composition with Kobashi" width="560">
-
-**14 · A voice, a feeling** — Kami editorial cover.
-
-<img src="design/koe-experiments-2026-10-18/mockups/14-a-voice-a-feeling.png" alt="A voice, a feeling editorial cover with Kami" width="420">
-
 **15 · Signal garden** — all three companions.
 
 ![Signal garden panorama with Kami, Mei and Kobashi](design/koe-experiments-2026-10-18/mockups/15-signal-garden.png)
