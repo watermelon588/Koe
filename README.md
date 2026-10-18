@@ -6,6 +6,42 @@
 
 > Brand artwork, not the running application. [Actual application captures](#application-screenshots) appear below.
 
+## The mockups
+
+All **10 interface concepts** are shown here, in matching 2880 × 2000 frames so each row stays balanced. Select any image for its full-size version. These are explorations, not screenshots of shipped pages.
+
+|  |  |
+| --- | --- |
+| **01 · Home — Veranda**<br>![Home concept with Kami](design/koe-mockups-2026-10-17/mockups/01-veranda-home.png) | **02 · Dashboard — Daylight**<br>![Dashboard concept with Kami](design/koe-mockups-2026-10-17/mockups/02-daylight-dashboard.png) |
+| **03 · Live call — Quiet conversation**<br>![Live call concept with Kami](design/koe-mockups-2026-10-17/mockups/03-quiet-conversation.png) | **04 · Chat — Just say it**<br>![Chat concept with Kami](design/koe-mockups-2026-10-17/mockups/04-just-say-it.png) |
+| **05 · Calendar — Make room**<br>![Proposed Calendar page with Kobashi](design/koe-mockups-2026-10-17/mockups/05-make-room.png) | **06 · Notion — Thoughts, kept close**<br>![Notion concept with Kobashi](design/koe-mockups-2026-10-17/mockups/06-thoughts-kept-close.png) |
+| **07 · Music — Quiet hours**<br>![Music concept with Mei](design/koe-mockups-2026-10-17/mockups/07-quiet-hours.png) | **08 · Companions — Your kind of company**<br>![Companion selection concept](design/koe-mockups-2026-10-17/mockups/08-your-kind-of-company.png) |
+| **09 · Connections — Good company**<br>![Connections concept with provider logos](design/koe-mockups-2026-10-17/mockups/09-good-company.png) | **10 · Mobile — Pocket companion**<br>![Mobile home and call concepts](design/koe-mockups-2026-10-17/mockups/10-pocket-companion.png) |
+
+The Calendar page is a **proposal**, not a current app route. [Editable HTML/CSS and capture notes](design/koe-mockups-2026-10-17/README.md) · [All ten in one contact sheet](design/koe-mockups-2026-10-17/contact-sheet.png).
+
+### Five companion-art explorations
+
+**11 · Open window** — Kami and the laptop, shown at the top of this README.
+
+**12 · Say less** — Mei poster.
+
+<img src="design/koe-experiments-2026-10-18/mockups/12-say-less-poster.png" alt="Say less poster with Mei" width="420">
+
+**13 · Your little world** — Kobashi collectible.
+
+<img src="design/koe-experiments-2026-10-18/mockups/13-your-little-world.png" alt="Your little world composition with Kobashi" width="560">
+
+**14 · A voice, a feeling** — Kami editorial cover.
+
+<img src="design/koe-experiments-2026-10-18/mockups/14-a-voice-a-feeling.png" alt="A voice, a feeling editorial cover with Kami" width="420">
+
+**15 · Signal garden** — all three companions.
+
+![Signal garden panorama with Kami, Mei and Kobashi](design/koe-experiments-2026-10-18/mockups/15-signal-garden.png)
+
+[Brand-art notes and full-size files](design/koe-experiments-2026-10-18/README.md). These images are concept art, not product screenshots or proposed hardware.
+
 ## Feature status
 
 Source/Graphify inventory on **18 October 2026**. “Implemented” means the code and UI path exist; it does not assert fresh end-to-end or live-provider acceptance.
@@ -36,10 +72,6 @@ These are captures of the **running UI** with isolated, synthetic account/API re
 ![Koe music page showing the player and assistant](design/koe-mockups-2026-10-17/screenshots/current/06-music.png)
 
 [Home](design/koe-mockups-2026-10-17/screenshots/current/02-home.png) · [Chat](design/koe-mockups-2026-10-17/screenshots/current/04-chat.png) · [Notion](design/koe-mockups-2026-10-17/screenshots/current/05-notion.png) · [Live call](design/koe-mockups-2026-10-17/screenshots/current/12-live-call.png) · [Mobile Home](design/koe-mockups-2026-10-17/screenshots/current/13-home-mobile.png) · [All 15 captures](design/koe-mockups-2026-10-17/screenshots/current/)
-
-### Design explorations
-
-The [10-screen mockup gallery](design/koe-mockups-2026-10-17/README.md) contains full-resolution PNGs and editable HTML/CSS. Its separate Calendar page is a **concept**, not an existing app route. [Five experimental brand images](design/koe-experiments-2026-10-18/README.md) explore the mascot identity; they are not shipped UI or hardware. [View the full concept contact sheet](design/koe-mockups-2026-10-17/contact-sheet.png).
 
 ## Install and run locally
 

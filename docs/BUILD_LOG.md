@@ -1515,3 +1515,13 @@ Verification: five backend reliability/authorization/redaction tests pass; front
 **Try it yourself:** Open the repository README on GitHub. The Dashboard and Music captures should each sit on their own row at readable width.
 **Gotchas:** The hero is labelled as brand artwork, and the app screenshots are labelled as synthetic data. No end-to-end application tests were run for this documentation layout change.
 **Interview line:** “I corrected a GitHub Markdown image gallery by matching image aspect ratios to the presentation layout and separating concepts from product captures.”
+
+## Restore the full README mockup gallery — 2026-10-18
+
+**Files:** `README.md` and `docs/BUILD_LOG.md`.
+**What it does:** Displays all ten equal-aspect interface mockups in a two-column gallery and all five companion-art explorations in a separate image sequence. Keeps the running-app screenshots labelled and separate.
+**Core concept:** Fixing a layout must preserve the content the user asked to showcase. The earlier README correction replaced the gallery with links; that removed the mockups from view even though the files remained in Git.
+**How it connects:** Uses only existing, committed PNG files; the application and design assets are unchanged.
+**Try it yourself:** Open the GitHub README. Check that mockups 01–10 form five balanced rows and images 11–15 are visible without opening another page.
+**Gotchas:** The Calendar mockup remains clearly marked as a concept, and brand art is separate from running-app screenshots.
+**Interview line:** “I repaired a project gallery without sacrificing discoverability of the full visual work.”
