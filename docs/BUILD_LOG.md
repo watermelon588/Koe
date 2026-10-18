@@ -1505,3 +1505,13 @@ Verification: five backend reliability/authorization/redaction tests pass; front
 **Gotchas:** Image links on GitHub require the design assets to be committed alongside the README; both were published together. No end-to-end or provider tests were run for this documentation-only step, as requested.
 
 **Interview line:** “I documented the product from its actual code paths and separated design concepts, implemented workflows and unverified live acceptance.”
+
+## README gallery layout correction — 2026-10-18
+
+**Files:** `README.md` and `docs/BUILD_LOG.md`.
+**What it does:** Replaces the tall contact-sheet lead and mismatched screenshot table with a wide brand image, two full-width application captures and direct links to the remaining screenshots and concepts.
+**Core concept:** Images in a Markdown table share row height. A 5,550-pixel landing-page capture made the adjacent 1,000-pixel screens tiny and left a large empty row.
+**How it connects:** Reuses existing images; no application UI or assets were changed.
+**Try it yourself:** Open the repository README on GitHub. The Dashboard and Music captures should each sit on their own row at readable width.
+**Gotchas:** The hero is labelled as brand artwork, and the app screenshots are labelled as synthetic data. No end-to-end application tests were run for this documentation layout change.
+**Interview line:** “I corrected a GitHub Markdown image gallery by matching image aspect ratios to the presentation layout and separating concepts from product captures.”

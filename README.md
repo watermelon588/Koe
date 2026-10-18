@@ -2,9 +2,9 @@
 
 **A voice-first companion for your workday.** Talk to Kami, Mei, or Kobashi in a live call, send a message or voice note, and bring GitHub, Google Calendar, Google Docs, Google Sheets, Notion, and your music into one place. Koe previews consequential changes and waits for your approval.
 
-![Ten Koe interface concepts, including home, dashboard, music and mobile](design/koe-mockups-2026-10-17/contact-sheet.png)
+![Koe companion brand artwork: Kami beside a laptop in daylight](design/koe-experiments-2026-10-18/mockups/11-open-window-laptop.png)
 
-> This contact sheet shows **design concepts**, not the running application. Events, accounts and playback shown in the concepts and screenshots are illustrative. [Actual application captures](#application-screenshots) appear below.
+> Brand artwork, not the running application. [Actual application captures](#application-screenshots) appear below.
 
 ## Feature status
 
@@ -27,11 +27,19 @@ Every provider is optional during initial local setup. The server holds provider
 
 These are captures of the **running UI** with isolated, synthetic account/API responses. They demonstrate the layout, not a live provider transaction.
 
-| Landing | Dashboard | Music |
-| --- | --- | --- |
-| ![Koe landing page](design/koe-mockups-2026-10-17/screenshots/current/01-landing.png) | ![Koe dashboard](design/koe-mockups-2026-10-17/screenshots/current/03-dashboard.png) | ![Koe music page](design/koe-mockups-2026-10-17/screenshots/current/06-music.png) |
+**Dashboard** — the day, review queue, PRs and activity in one view.
 
-[See all 15 application captures](design/koe-mockups-2026-10-17/screenshots/current/) for Home, Chat, Notion, Settings, Call and mobile views. The [10-screen mockup gallery](design/koe-mockups-2026-10-17/README.md) contains full-resolution PNGs and editable HTML/CSS. Its separate Calendar page is a **concept**, not an existing app route. [Five experimental brand images](design/koe-experiments-2026-10-18/README.md) explore the mascot identity; they are not shipped UI or hardware.
+![Koe dashboard showing daily panels](design/koe-mockups-2026-10-17/screenshots/current/03-dashboard.png)
+
+**Music** — playlist and playback beside the compact Koe assistant.
+
+![Koe music page showing the player and assistant](design/koe-mockups-2026-10-17/screenshots/current/06-music.png)
+
+[Home](design/koe-mockups-2026-10-17/screenshots/current/02-home.png) · [Chat](design/koe-mockups-2026-10-17/screenshots/current/04-chat.png) · [Notion](design/koe-mockups-2026-10-17/screenshots/current/05-notion.png) · [Live call](design/koe-mockups-2026-10-17/screenshots/current/12-live-call.png) · [Mobile Home](design/koe-mockups-2026-10-17/screenshots/current/13-home-mobile.png) · [All 15 captures](design/koe-mockups-2026-10-17/screenshots/current/)
+
+### Design explorations
+
+The [10-screen mockup gallery](design/koe-mockups-2026-10-17/README.md) contains full-resolution PNGs and editable HTML/CSS. Its separate Calendar page is a **concept**, not an existing app route. [Five experimental brand images](design/koe-experiments-2026-10-18/README.md) explore the mascot identity; they are not shipped UI or hardware. [View the full concept contact sheet](design/koe-mockups-2026-10-17/contact-sheet.png).
 
 ## Install and run locally
 
