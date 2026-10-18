@@ -6,6 +6,10 @@
 
 > Brand artwork, not the running application. [Actual application captures](#application-screenshots) appear below.
 
+## About
+
+Koe (声) is a voice-first personal workspace for developers. Its anime companion helps you follow your work across connected tools, turn a spoken thought into an action, and review important changes before they happen. It runs in the browser and can be installed on your phone.
+
 ## The mockups
 
 All **10 interface concepts** are shown here, in matching 2880 × 2000 frames so each row stays balanced. Select any image for its full-size version. These are explorations, not screenshots of shipped pages.

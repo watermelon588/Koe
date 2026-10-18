@@ -1525,3 +1525,13 @@ Verification: five backend reliability/authorization/redaction tests pass; front
 **Try it yourself:** Open the GitHub README. Check that mockups 01–10 form five balanced rows and images 11–15 are visible without opening another page.
 **Gotchas:** The Calendar mockup remains clearly marked as a concept, and brand art is separate from running-app screenshots.
 **Interview line:** “I repaired a project gallery without sacrificing discoverability of the full visual work.”
+
+## Short project introduction — 2026-10-18
+
+**Files:** `README.md` and `docs/BUILD_LOG.md`.
+**What it does:** Adds a short About paragraph above the mockup gallery that explains Koe's purpose and approval-first workflow in plain language.
+**Core concept:** A project page should tell readers what the product does before presenting its visuals.
+**How it connects:** Summarizes the existing features without changing the app or claiming new provider acceptance.
+**Try it yourself:** Read the About section near the top of the GitHub README.
+**Gotchas:** No application test is needed for this text-only edit.
+**Interview line:** “I wrote a concise project introduction that connects the companion experience to its practical workflow.”
