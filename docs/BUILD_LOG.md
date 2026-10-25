@@ -1536,6 +1536,34 @@ Verification: five backend reliability/authorization/redaction tests pass; front
 **Gotchas:** No application test is needed for this text-only edit.
 **Interview line:** “I wrote a concise project introduction that connects the companion experience to its practical workflow.”
 
+## Two minimal laptop mockups — 2026-10-18
+
+**Request:** Match the supplied Neuron laptop presentation with a consistent Koe brand color and almost no screen content. Built two 4:3 PNGs in `design/koe-minimal-laptop-2026-10-18/`: a centered 声 / Koe mark and a centered Kami face.
+
+**Approach:** Used the built-in image generator with the supplied laptop reference, mint studio wall and matching fluted platform. Generated the mascot variation as an edit of the logo image to preserve camera, laptop and lighting. Used the existing Kami portrait as the identity reference. No added interface, props or outside typography.
+
+**Verification:** Visually inspected both generated outputs. Logo version contains only the mark/name; mascot version contains only the portrait. Original PNGs copied without retouching; prompts and a local two-image gallery included. No production source, integration or hosting changes.
+
+**Try it:** Open `design/koe-minimal-laptop-2026-10-18/index.html`, then click either image for the full PNG.
+
+**Interview line:** “I used a controlled image edit to keep a product mockup consistent while changing only the screen identity.”
+
+## Copy minimal mockups into Portfolio 2 — 2026-10-18
+
+**Request:** Retain the two Koe laptop mockups and place copies in Portfolio 2 for application imports.
+
+**Files:** Originals remain in `design/koe-minimal-laptop-2026-10-18/`. Byte-identical copies are in Portfolio 2 `site-assets/mockups/koe/01-koe-logo.png` and `02-kami-face.png`, with a provenance README. Existing home thumbnail was backed up there as `previous-thumbnail.webp`. An optimized logo copy replaces Portfolio 2 `site-assets/thumbnails/koe.webp` (1200 × 900, 42,564 bytes); its existing loader automatically exposes it to all five themes. The face variation remains available for import. No page, content or loader code edits.
+
+**Concept:** Edit source assets rather than hashed build outputs. Vite emits the final application URL; shared project-slug naming selects the same preview across themes.
+
+**Verification:** Compared SHA-256 hashes for both PNG copies and decoded the resulting WebP dimensions with the existing Sharp dependency. Copy script is saved next to the originals for reproducibility. Portfolio build verification is recorded separately in the task result.
+
+**Try it:** Run Portfolio 2 and open any theme home page; Koe uses the mint logo laptop preview.
+
+**Interview line:** “I integrated a new project preview through the existing source asset convention, preserved both masters and kept a reversible backup.”
+
+Portfolio handoff verification: `npm run build` in Portfolio 2 passed (187 modules); the new shared Koe image is included in the emitted application assets. Both source masters remain byte-identical to the Koe originals.
+
 
 ## Connection state and GitHub access repair — 2026-10-18
 **Files:** backend connections/auth, GitHub tools, agent text/voice paths; frontend Connections; focused backend and browser tests; GitHub/Docs setup guides.
