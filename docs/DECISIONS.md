@@ -160,3 +160,10 @@ Use the existing Google connection with an optional Docs consent upgrade: docume
 
 ## Connection evidence and user-controlled GitHub access — 2026-10-18
 Keep credentials encrypted on the backend while users choose account and repository scope in Settings. Offer verified personal-token connection alongside existing OAuth, including fine-grained repository permissions. Account changes reset selection; disconnect does not silently restore owner environment credentials. Apply repository selection to activity, PR reads and comment proposals. Read the authenticated author for legacy credentials; scan bounded named branches and deduplicate SHAs. Distinguish unsupported backend, missing grants and provider failures. Expose a read-only connection_status tool and current metadata to text/voice. Existing owner Notion is displayed honestly; no personal Notion OAuth claim. No new dependency, migration, hosting change or live provider mutation.
+
+
+## GitHub OAuth setup and invited-user access — 2026-10-27
+
+Remove the obsolete Google/GitHub OAuth admin-only start guard. Preserve invite-based sign-in, callback user binding, encrypted per-person connections, quotas and write approvals. Support the expiring token pairs enabled by default for new OAuth Apps: refresh once per user under a lock, verify account identity, persist rotation encrypted and require reconnect on failure or ambiguity. Never substitute owner credentials for a failed personal connection. No new dependency, tool, OAuth scope or migration.
+
+The user explicitly authorized registering Koe under watermelon588, generating its client secret and storing the Client ID/Secret only in the existing Render backend. Keep exact callback matching, expiration enabled and the existing encryption key. The owner-authorized selection now includes Walkthru and Koe. Publish only this isolated repair; unrelated concurrent storage, Google recovery and frontend changes remain in the primary checkout. Setup and acceptance limits: GITHUB_OAUTH_SETUP.md.

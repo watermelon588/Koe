@@ -19,7 +19,9 @@ import base64
 import hashlib
 import json
 import re
-from datetime import datetime, timezone
+import threading
+from contextlib import nullcontext
+from datetime import datetime, timedelta, timezone
 
 import httpx
 from cryptography.fernet import Fernet, InvalidToken
@@ -75,10 +77,13 @@ def decrypt(token_enc: str) -> dict:
 def save(owner: str, provider: str, account: str, scopes: list[str], token: dict) -> None:
     """Sync: called from the OAuth callback (via asyncio.to_thread) and from tool threads after a refresh."""
     now = datetime.now(timezone.utc).isoformat()
-    _run("insert into koe_connections (owner_id, provider, account, scopes, token_enc, created, updated) "
-         "values (%s, %s, %s, %s, %s, %s, %s) on conflict (owner_id, provider) do update set "
-         "account = excluded.account, scopes = excluded.scopes, token_enc = excluded.token_enc, updated = excluded.updated",
-         (owner, provider, account, " ".join(scopes), encrypt(token), now, now))
+    with _github_locks.setdefault(owner, threading.RLock()) if provider == 'github' else nullcontext():
+        _run("insert into koe_connections (owner_id, provider, account, scopes, token_enc, created, updated) "
+             "values (%s, %s, %s, %s, %s, %s, %s) on conflict (owner_id, provider) do update set "
+             "account = excluded.account, scopes = excluded.scopes, token_enc = excluded.token_enc, updated = excluded.updated",
+             (owner, provider, account, " ".join(scopes), encrypt(token), now, now))
+        if provider == 'github':
+            forget_github(owner)
 
 
 def load(owner: str, provider: str) -> dict | None:
@@ -254,36 +259,106 @@ async def save_gemini_key(body: GeminiKey):
 GITHUB_API = "https://api.github.com"
 _REPO = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
 _github: dict[str, dict] = {}  # ponytail: per-process cache, like _prefs (tools read it outside threads)
+_github_locks: dict[str, threading.RLock] = {}
+_github_refresh_failed: set[str] = set()
 
 
 def github_ready() -> bool:
     return configured() and bool(settings.github_client_id and settings.github_client_secret)
 
 
+def github_token_data(payload: dict) -> dict:
+    """Keep provider credentials encrypted, including the rotating pair for expiring OAuth apps.
+    https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps#expiring-access-tokens
+    """
+    access = payload.get('access_token')
+    if not isinstance(access, str) or not access:
+        raise ConnectionError_('GitHub did not return usable credentials. Reconnect GitHub in Settings.')
+    token = {'access_token': access}
+    now = datetime.now(timezone.utc)
+    if 'expires_in' in payload:
+        seconds = payload['expires_in']
+        refresh = payload.get('refresh_token')
+        if type(seconds) is not int or not 0 < seconds <= 366 * 86400 or not isinstance(refresh, str) or not refresh:
+            raise ConnectionError_('GitHub did not return a complete expiring token pair. Reconnect GitHub in Settings.')
+        token.update(refresh_token=refresh, expiry=(now + timedelta(seconds=seconds)).isoformat())
+        if 'refresh_token_expires_in' in payload:
+            seconds = payload['refresh_token_expires_in']
+            if type(seconds) is not int or not 0 < seconds <= 366 * 86400:
+                raise ConnectionError_('GitHub returned an invalid refresh expiry. Reconnect GitHub in Settings.')
+            token['refresh_expiry'] = (now + timedelta(seconds=seconds)).isoformat()
+    return token
+
+
+def _github_expired(value: str, margin=0) -> bool:
+    expiry = datetime.fromisoformat(value)
+    if expiry.utcoffset() is None:
+        raise ValueError('GitHub expiry needs a timezone.')
+    return expiry <= datetime.now(timezone.utc) + timedelta(seconds=margin)
+
+
+def _refresh_github(owner: str, row: dict) -> dict:
+    """Single attempt under the user's lock: a refresh token rotates and must not be replayed.
+    https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps#refreshing-an-access-token-with-a-refresh-token
+    """
+    token = row['token']
+    try:
+        if not github_ready() or not token.get('refresh_token') or (token.get('refresh_expiry') and _github_expired(token['refresh_expiry'])):
+            raise ValueError('Refresh unavailable.')
+        with httpx.Client(timeout=15) as http:
+            reply = http.post(auth.GITHUB_TOKEN, headers={'Accept': 'application/json'}, data={
+                'client_id': settings.github_client_id, 'client_secret': settings.github_client_secret,
+                'grant_type': 'refresh_token', 'refresh_token': token['refresh_token']})
+            reply.raise_for_status()
+            rotated = github_token_data(reply.json())
+            if not rotated.get('refresh_token'):
+                raise ValueError('Missing rotated refresh token.')
+            me = http.get(f'{GITHUB_API}/user', headers={'Authorization': f"Bearer {rotated['access_token']}",
+                                                       'Accept': 'application/vnd.github+json'})
+            me.raise_for_status()
+            if me.json()['login'].casefold() != row['account'].casefold():
+                raise ValueError('The GitHub identity changed.')
+        save(owner, 'github', row['account'], row['scopes'], rotated)
+        return {**row, 'token': rotated}
+    except Exception:
+        # The old pair may already be invalid; do not keep replaying it or use the owner's environment token.
+        _github_refresh_failed.add(owner)
+        _github.pop(owner, None)
+        raise ConnectionError_('GitHub access could not be refreshed. Reconnect GitHub in Settings → Connections.') from None
+
+
 def github_account() -> dict:
     """{"token", "login"} for the person asking: their connection; the owner may still use GITHUB_TOKEN from .env;
     anyone else gets empty values, never the owner's."""
     owner = identity.owner_id()
-    if pref('github_disconnected') == 'true':
-        return {'token': '', 'login': '', 'source': 'disconnected'}
-    if owner not in _github:
-        row = None
-        if configured():
-            try:
-                row = load(owner, "github")
-            except ConnectionError_:
-                raise ConnectionError_('Your GitHub connection needs to be reconnected in Settings.') from None
+    with _github_locks.setdefault(owner, threading.RLock()):
+        if pref('github_disconnected') == 'true':
+            return {'token': '', 'login': '', 'source': 'disconnected'}
+        if owner in _github_refresh_failed:
+            raise ConnectionError_('GitHub access could not be refreshed. Reconnect GitHub in Settings → Connections.')
+        cached = _github.get(owner)
+        if cached and (not cached.get('expiry') or not _github_expired(cached['expiry'], margin=60)):
+            return cached
+        row = load(owner, 'github') if configured() else None
         if row:
-            _github[owner] = {"token": row["token"]["access_token"], "login": row["account"], 'source': 'personal'}
+            try:
+                if row['token'].get('expiry') and _github_expired(row['token']['expiry'], margin=60):
+                    row = _refresh_github(owner, row)
+            except (TypeError, ValueError):
+                raise ConnectionError_('GitHub credentials have an invalid expiry. Reconnect GitHub in Settings.') from None
+            _github[owner] = {'token': row['token']['access_token'], 'login': row['account'], 'source': 'personal',
+                              'expiry': row['token'].get('expiry')}
         elif identity.is_owner():
-            _github[owner] = {"token": settings.github_token, "login": settings.github_login, 'source': 'server'}
+            _github[owner] = {'token': settings.github_token, 'login': settings.github_login, 'source': 'server'}
         else:
-            _github[owner] = {"token": "", "login": ""}
-    return _github[owner]
+            _github[owner] = {'token': '', 'login': ''}
+        return _github[owner]
 
 
 def forget_github(owner: str) -> None:
-    _github.pop(owner, None)
+    with _github_locks.setdefault(owner, threading.RLock()):
+        _github.pop(owner, None)
+        _github_refresh_failed.discard(owner)
 
 
 def github_repos() -> list[str]:

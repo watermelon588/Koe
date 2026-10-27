@@ -1574,3 +1574,26 @@ Portfolio handoff verification: `npm run build` in Portfolio 2 passed (187 modul
 **Verification:** 124 focused backend tests and 75 frontend tests passed; production build passed. Two browser runners passed desktop/mobile repository, token, Docs consent and approval flows with synthetic provider responses. No live Google/GitHub writes or Render deployment performed. Public live health observed an older pre-Docs backend revision (192407a); a subsequent authenticated diagnostic timed out, so live account correctness remains unverified.
 **Gotchas:** All-access activity is bounded to 100 recently pushed accessible repositories. Existing owner Notion workspace is supported; personal Notion OAuth is still not implemented. Existing mascot chunk-size warning and Starlette/httpx deprecation warning remain.
 **Interview line:** “I repaired capability reporting across OAuth, UI and agent tools, then tested account isolation and bounded GitHub activity evidence.”
+
+
+## GitHub OAuth connection repair — 2026-10-27
+
+**Files:** backend/koe/auth.py and connections.py; new invited-user and GitHub refresh regressions; test cache isolation and Calendar SDK contract check; SPEC, DECISIONS, GITHUB_WORKFLOW and GITHUB_OAUTH_SETUP documentation.
+
+**What it does:** Invited people can connect their own Google/GitHub accounts without admin status. GitHub callback credentials now retain encrypted expiry/refresh metadata, and expired OAuth access rotates once per person with account verification. Personal/legacy tokens remain supported. Failure requires reconnect, never owner fallback.
+
+**Core concept:** A personal token, an OAuth App, user consent and tracked repositories are separate things. Login alone does not grant tool access. A short-lived access token needs a rotating refresh token to stay usable.
+
+**How it connects:** Koe session → provider consent → callback bound to that session → encrypted credentials → per-user tool reads and approved writes. A server-side per-user lock prevents concurrent dashboard/chat reads from consuming the same refresh token twice.
+
+**Try it yourself:** Follow docs/GITHUB_OAUTH_SETUP.md. Connect from Koe Settings, select repositories, then ask about an explicit date and inspect the GitHub source links.
+
+**Measured:** Before repair, four invited-provider cases failed with admin-only 403s; ten refresh regressions also failed. The focused combined account/refresh suite subsequently passed 33 tests. The full isolated backend result is recorded below after verification.
+
+**Gotchas:** A token with no repository permissions can still read some public GitHub evidence; that is not proof of private access. Render variables must reach a new deployment. Changing to a new personal connection resets repository selection, so choose repositories afterward. Notion/Music remain owner-only. No real GitHub comments or other provider business writes were sent.
+
+**Interview line:** “I separated OAuth configuration, per-user consent, repository scope and token rotation, then verified each layer without sharing the owner’s credentials.”
+
+**Final verification (isolated checkout):** Full backend run: 636 passed and 3 Spotify device-discovery timing failures under the existing four-second deadline. The same three tests passed separately (3 passed in 16.14 seconds); no Spotify runtime or deadline was changed. All GitHub/invited-account regressions passed in the full run. The repaired GitHub history tool, using the actual saved owner scope without overrides, returned Koe commit 3355795 for October 25 with both Walkthru and Koe selected and complete reported branch coverage. Live configuration reports github_ready=true and both selected repositories. Render is configured for main / On Commit.
+
+**Review:** Verified invite/session requirements, callback identity binding, encryption, per-person token selection and refresh serialization. Credentials remain outside Git and source; no provider business writes were sent. git diff --check passed. The primary checkout and its unrelated work were not reset or included in this release.

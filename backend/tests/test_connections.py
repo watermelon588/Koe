@@ -60,7 +60,7 @@ def test_tokens_are_encrypted_and_a_changed_key_is_refused(monkeypatch):
     assert not connections.configured()
 
 
-def test_connecting_needs_a_signed_in_owner_and_asks_google_for_offline_calendar_and_sheets(client, monkeypatch):
+def test_connecting_needs_sign_in_and_asks_google_for_offline_calendar_and_sheets(client, monkeypatch):
     assert client.get("/auth/google/connect").status_code == 401
     sign_in(client, monkeypatch, ADMIN)
     q, _ = connect(client, monkeypatch)

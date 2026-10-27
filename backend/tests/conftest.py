@@ -25,6 +25,8 @@ def isolate_live_storage(monkeypatch, tmp_path):
     monkeypatch.setattr(connections, "_prefs", {})  # per-person settings cache: fresh per test
     monkeypatch.setattr(usage, "_own_keys", {})  # own-Gemini-key cache: fresh per test
     monkeypatch.setattr(connections, "_github", {})  # GitHub account cache: fresh per test
+    monkeypatch.setattr(connections, "_github_locks", {})
+    monkeypatch.setattr(connections, "_github_refresh_failed", set())
     monkeypatch.setattr(gemini, "_clients", {})  # Gemini clients and resting keys/models: fresh per test
     monkeypatch.setattr(gemini, "_resting", {})
     monkeypatch.setattr(gemini, "_last_good", None)

@@ -354,5 +354,8 @@ def test_sdk_accepts_all_calendar_tool_contracts():
     from google.genai import types
     from koe import agent
     declarations = [types.FunctionDeclaration.model_validate(d) for d in agent.declarations()]
-    assert len(declarations) == 23
+    names = {declaration.name for declaration in declarations}
+    assert names == set(agent.TOOLS)
+    assert {'calendar_list', 'calendar_find_free', 'calendar_get_event',
+            'calendar_upsert_event', 'calendar_cancel_event'} <= names
     assert all(d.model_dump_json() for d in declarations)

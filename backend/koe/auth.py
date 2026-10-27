@@ -132,7 +132,6 @@ async def connect(request: Request, next: str = "/#settings", docs: bool = False
     user = await signed_in_user(request)
     if not user:
         raise HTTPException(401, "Sign in to Koe first.")
-    _owner_only(user)
     extra = {"access_type": "offline", "prompt": "consent", "include_granted_scopes": "true", "login_hint": user["email"]}
     scopes = connections.GOOGLE_SCOPES + ([connections.DOCS_SCOPE, connections.DRIVE_FILE_SCOPE] if docs else [])
     try:
@@ -296,15 +295,8 @@ def _access_token_ok(supplied: str) -> bool:
     return bool(settings.koe_access_token) and hmac.compare_digest(supplied.encode(), settings.koe_access_token.encode())
 
 
-def _owner_only(user: dict) -> str:
-    # Connecting Google/GitHub is still owner-only, pending the owner's decision to let friends connect their own.
-    if not user["is_admin"]:
-        raise HTTPException(403, "Koe isn't ready for friends yet. The owner will tell you when it is.")
-    return user["id"]
-
-
 async def http_owner(request: Request) -> str:
-    """Who is calling an /api endpoint: the signed-in owner (cookie), or anyone holding KOE_ACCESS_TOKEN."""
+    """Who is calling an /api endpoint: the signed-in person (cookie), or the owner via KOE_ACCESS_TOKEN."""
     user = await signed_in_user(request)
     if user:  # an invited friend acts as themselves: their own chat, approvals, hub and connected accounts
         identity.OWNER.set(user["id"])
@@ -373,7 +365,6 @@ async def github_connect(request: Request, next: str = "/#settings"):
     user = await signed_in_user(request)
     if not user:
         raise HTTPException(401, "Sign in to Koe first.")
-    _owner_only(user)
     state, verifier = secrets.token_urlsafe(32), secrets.token_urlsafe(48)
     query = {"client_id": settings.github_client_id, "redirect_uri": f"{site(request)}/auth/github/callback",
              "scope": GITHUB_SCOPES, "state": state, "allow_signup": "false",
@@ -412,6 +403,10 @@ async def github_callback(request: Request, code: str = "", state: str = "", err
                                                                    "Accept": "application/vnd.github+json"})
     if me.status_code != 200:
         return back(_with_query(flow["next"], "connect=github-failed"))
+    try:
+        credentials = connections.github_token_data(reply.json())
+    except connections.ConnectionError_:
+        return back(_with_query(flow["next"], "connect=github-failed"))
     scopes = [x.strip() for x in str(reply.json().get("scope", "")).split(",") if x.strip()]
     try:
         old = await asyncio.to_thread(connections.load, user['id'], 'github')
@@ -420,7 +415,7 @@ async def github_callback(request: Request, code: str = "", state: str = "", err
     if not old or old['account'] != me.json()['login']:
         await connections.set_pref('github_repos', '[]', user['id'])
         await connections.set_pref('github_repo_mode', 'selected', user['id'])
-    await asyncio.to_thread(connections.save, user["id"], "github", me.json()["login"], scopes, {"access_token": token})
+    await asyncio.to_thread(connections.save, user["id"], "github", me.json()["login"], scopes, credentials)
     await connections.set_pref('github_disconnected', 'false', user['id'])
     connections.forget_github(user["id"])
     return back(_with_query(flow["next"], "connected=github"))
