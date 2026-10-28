@@ -7,7 +7,7 @@ import { SESSION } from '../session'
 // Settings → Connections (ACCOUNTS_SPEC.md): link your own Google Calendar + Sheets, GitHub (Notion next).
 // Connect is a full-page trip to the provider's consent screen and back (/auth/<provider>/connect, backend auth.py);
 // tokens stay on the server, encrypted (connections.py). The page only ever sees provider + account email.
-type Connection = { provider: 'google' | 'github' | 'notion' | 'gemini' | 'spotify'; connected: boolean; account: string }
+type Connection = { provider: 'google' | 'github' | 'notion' | 'gemini' | 'spotify'; connected: boolean; account: string; reconnect_required?: boolean }
 const NAMES = { google: 'Google Calendar & Sheets', github: 'GitHub', notion: 'Notion', gemini: 'Your Gemini key', spotify: 'Spotify' }
 const ICONS = { google: CalendarIcon, github: GitHubIcon, notion: NotionIcon, gemini: GeminiIcon, spotify: SpotifyIcon }
 const NOTICES: Record<string, string> = {
@@ -69,6 +69,7 @@ export function ConnectionsSection() {
   const [geminiKey, setGeminiKey] = useState('')
   const [keyError, setKeyError] = useState('')
   const [busy, setBusy] = useState('')
+  const [googleHealth, setGoogleHealth] = useState<{ ready: boolean; reconnect_required: boolean; message?: string } | null>(null)
   const [notice] = useState(() => NOTICES[location.search.slice(1)] ?? '')
 
   async function load() {
@@ -91,8 +92,24 @@ export function ConnectionsSection() {
   }
   useEffect(() => {
     if (location.search) history.replaceState(null, '', location.pathname + location.hash) // a notice shows once
-    if (signedIn) void load()
+    let active = true
+    if (signedIn) void Promise.resolve().then(() => { if (active) void load() })
+    return () => { active = false }
   }, [signedIn])
+
+  async function checkGoogle() {
+    setBusy('google-check')
+    try {
+      const response = await fetch(httpUrl('/api/connections/google/health'), { cache: 'no-store' })
+      if (!response.ok) throw Error('Google could not be checked. Try the check again shortly.')
+      const health = await response.json()
+      setGoogleHealth({ ...health, message: health.message ?? (health.ready ? 'Google Calendar and Sheets are ready.' : 'Connect Google to use Calendar and Sheets.') })
+      if (health.reconnect_required) setDocsReady(false)
+      else if (health.ready) await load()
+    } catch (error) {
+      setGoogleHealth({ ready: false, reconnect_required: false, message: error instanceof Error ? error.message : 'Google could not be checked.' })
+    } finally { setBusy('') }
+  }
 
   async function createTimesheet() {
     setBusy('timesheet')
@@ -178,7 +195,7 @@ export function ConnectionsSection() {
       {!signedIn ? <p className="set-empty">Sign in with Google to connect your own accounts.</p>
         : !ready ? <p className="set-empty">The server needs KOE_SECRET_KEY before it can store connections.</p>
         : list === null ? <p className="set-empty">Loading your connections…</p>
-        : list.filter((c) => c.provider !== 'gemini' && NAMES[c.provider]).map(({ provider, connected, account }) => {
+        : list.filter((c) => c.provider !== 'gemini' && NAMES[c.provider]).map(({ provider, connected, account, reconnect_required }) => {
           if (provider === 'spotify') return <SettingRow key={provider} icon={SpotifyIcon} title="Spotify" on={connected}
             status={connected ? 'Connected. Music only: Koe never hears or sees it.' : 'Optional. For your playlist on the Music page.'}
             action={<a className="soft" href="/app/music">{connected ? 'Manage' : 'Set up'}</a>} />
@@ -187,11 +204,12 @@ export function ConnectionsSection() {
             action={<a className="soft" href="/app/notion">Open workspace</a>} />
           const canConnect = CONNECT[provider] && (provider !== 'github' || githubReady || connected)
           return <Fragment key={provider}>
-            <SettingRow icon={ICONS[provider]} title={NAMES[provider]} on={connected}
-              status={connected ? (sources[provider] === 'server' ? 'Owner connection available. Choose repositories below or connect your own account.' : `Connected as ${account}`) : provider === 'github' && !githubReady ? 'Connect your GitHub account with a personal access token.' : 'Not connected'}
+            <SettingRow icon={ICONS[provider]} title={NAMES[provider]} on={connected && !(provider === 'google' && (reconnect_required || googleHealth?.reconnect_required))}
+              status={provider === 'google' && (googleHealth?.message || reconnect_required) ? googleHealth?.message ?? 'Google access expired or was revoked. Reconnect to restore Calendar and Sheets.' : connected ? (sources[provider] === 'server' ? 'Owner connection available. Choose repositories below or connect your own account.' : `Connected as ${account}`) : provider === 'github' && !githubReady ? 'Connect your GitHub account with a personal access token.' : 'Not connected'}
               action={<>{canConnect && (connected
                 ? <button className="ghost" disabled={busy === provider} onClick={() => void disconnect(provider)}>{busy === provider ? 'Disconnecting…' : 'Disconnect'}</button>
                 : <a className="soft" href={httpUrl(CONNECT[provider])}>Connect</a>)}
+                {provider === 'google' && connected && <><button className="ghost" disabled={busy === 'google-check'} onClick={() => void checkGoogle()}>{busy === 'google-check' ? 'Checking…' : 'Check connection'}</button><a className="soft" href={httpUrl(CONNECT.google)}>Reconnect</a></>}
                 {provider === 'github' && tokenReady && <button className="soft" onClick={() => setShowGitHubToken(!showGitHubToken)}>{connected ? 'Change account' : 'Use a token'}</button>}</>}>
               {provider === 'github' && !githubReady && !tokenReady && <p role="status">The deployed backend does not offer account setup here yet. Update the backend to enable GitHub connections.</p>}
               {provider === 'github' && githubError && <p role="alert">{githubError}</p>}

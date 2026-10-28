@@ -1,0 +1,26 @@
+{
+  "origin": "http://127.0.0.1:5173",
+  "checks": [
+    "Landing renders",
+    "Scheduling demo switches",
+    "Demo approval disables duplicate confirmation",
+    "Capture demo switches",
+    "All six integration dialogs open and close",
+    "Kami, Mei, Kobashi artwork switches",
+    "Kami, Mei, Kobashi 3D previews load",
+    "FAQ expands",
+    "Guide, privacy, terms render",
+    "Sign-in gate renders"
+  ],
+  "consoleErrors": [],
+  "limitations": [
+    "Authenticated application UI requires Google sign-in",
+    "Separate synthetic test origin was denied; no workaround attempted",
+    "Viewport override did not change innerWidth (1280); mobile acceptance not verified"
+  ],
+  "observations": [
+    "Mei 3D accessibility label says Miku",
+    "Landing services count is 05 while six services are listed",
+    "Guide describes five pages and Notion consent/database creation, which do not match current implementation"
+  ]
+}

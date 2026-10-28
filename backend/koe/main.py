@@ -3,6 +3,8 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+import psycopg
 
 from koe import app_channel, auth, backend_status, connections, dashboard, github_hooks, voice_call, whatsapp, notion_api, people, store
 from koe.config import settings  # import = fail fast on missing config
@@ -19,6 +21,13 @@ async def lifespan(app):
 
 
 app = FastAPI(title="Koe", lifespan=lifespan)
+
+
+@app.exception_handler(psycopg.Error)
+@app.exception_handler(store.StoreError)
+async def unavailable_storage(request, exc):
+    return JSONResponse(status_code=503, headers={'Retry-After': '5', 'Cache-Control': 'no-store'},
+        content={'detail': 'Saved data is temporarily unavailable. Retry reads later. If you submitted a change, check its status before trying again.'})
 # The frontend on Vercel is another origin: allow only the configured ones, Bearer token in a header (no cookies).
 # https://fastapi.tiangolo.com/tutorial/cors/
 origins = [o.strip().rstrip("/") for o in settings.frontend_origins.split(",") if o.strip()]

@@ -34,8 +34,10 @@ export function InstallPage({ model }: { model: MascotId }) {
     }
   }
   useEffect(() => {
-    void pushState().then(setPush)
-    if (savedToken()) void connect(savedToken()) // eslint-disable-line react-hooks/exhaustive-deps -- once, on open
+    let active = true
+    void pushState().then(state => { if (active) setPush(state) })
+    void Promise.resolve().then(() => { const initial = savedToken(); if (active && initial) void connect(initial) })
+    return () => { active = false }
   }, [])
 
   async function turnOnPush() {

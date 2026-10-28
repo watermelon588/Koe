@@ -54,12 +54,13 @@ export function Guide() {
       </Section>
 
       <Section id="around" title="Find your way around">
-        <p>The bar at the top of the app has five pages, plus the <b>?</b> button for this guide and the sun or moon button for the light and dark theme. On a phone the pages show as icons only.</p>
+        <p>The bar at the top of the app has six pages, plus the <b>?</b> button for this guide and the sun or moon button for the light and dark theme. On a phone the pages show as icons only.</p>
         <ul>
           <li><b>Home:</b> your companion, the <b>Call Koe</b> button and a short <b>Today</b> summary: your next events and anything waiting on you. <b>Open dashboard</b> takes you to the full view.</li>
           <li><b>Dashboard:</b> your whole day in panels: Today’s calendar, Approvals, pull requests waiting for your review, your own pull requests with their CI, GitHub stats (yesterday’s activity loads automatically; ask Koe for other date ranges or contribution streaks), and Activity (what Koe did, and how fast it answered). It updates live.</li>
           <li><b>Chat:</b> text and voice notes with Koe.</li>
           <li><b>Notion:</b> your Notion workspace (see below).</li>
+          <li><b>Music:</b> your Spotify playlist, playback controls and a compact companion for calls. Spotify requires separate account setup and an eligible playlist and device.</li>
           <li><b>Settings:</b> choose your companion at the top. Below it: <b>Account</b> (sign out), <b>Connections</b> (Google, GitHub, Notion, plus your timesheet and repositories), <b>Your Gemini key</b>, <b>People</b> (only the owner sees it: who may sign in), and <b>This device</b> (install the app, notifications).</li>
         </ul>
         <p>The footer at the bottom of Home, Dashboard, Notion and Settings links to this guide, the Install page, the privacy policy and the terms.</p>
@@ -70,9 +71,9 @@ export function Guide() {
         <ul>
           <li><b>Google Calendar and Sheets:</b> Google shows a consent screen listing exactly what Koe may do: view and edit events, and edit spreadsheets it is given. Koe can create the timesheet for you.</li>
           <li><b>GitHub:</b> GitHub asks you to authorise Koe, then you choose which repositories Koe should look at.</li>
-          <li><b>Notion:</b> Notion lets you pick the pages Koe may use. Koe can create a “Koe Daily Log” database there.</li>
+          <li><b>Notion:</b> the owner configures an internal integration and shares an existing database with it. Koe uses that owner workspace for tasks, notes and daily logs; individual Notion account consent is not available.</li>
         </ul>
-        <p className="doc-note"><b>How:</b> open <b>Settings</b> and scroll to <b>Connections</b>. Press <b>Connect</b> next to Google; Google asks for Calendar and Sheets together, so leave both ticked. Once Google is connected, a <b>Timesheet</b> row appears under it: <b>Create my timesheet</b>, or <b>Open</b> it. For <b>GitHub</b>, press Connect, approve on GitHub, then press <b>Choose</b> on the <b>Repositories</b> row under it to pick the repositories Koe reads. Notion is next. <b>Disconnect</b> deletes Koe’s copy of the access and revokes it at Google. Under <b>Your Gemini key</b> you can paste your own free key to remove the shared daily limit.</p>
+        <p className="doc-note"><b>How:</b> open <b>Settings</b> and scroll to <b>Connections</b>. Press <b>Connect</b> next to Google; Google asks for Calendar and Sheets together, so leave both ticked. Use <b>Check connection</b> if access stops working and <b>Reconnect</b> if Google access expired or was revoked. Choose <b>Enable Docs</b> separately for document permissions. Once Google is connected, a <b>Timesheet</b> row appears under it: <b>Create my timesheet</b>, or <b>Open</b> it. For <b>GitHub</b>, connect with OAuth when configured, or use a personal access token, then choose the repositories Koe may read. Notion uses the owner's configured workspace. <b>Disconnect</b> deletes Koe’s copy of the access and revokes it at Google. Under <b>Your Gemini key</b> you can paste your own key to remove the shared daily limit.</p>
         <p>Google may show “Google hasn’t verified this app”, because Koe is a small personal project. Choose <b>Advanced</b> → <b>Go to Koe</b> only if you trust the person who invited you.</p>
       </Section>
 

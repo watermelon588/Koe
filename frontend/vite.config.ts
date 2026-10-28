@@ -12,6 +12,15 @@ export default defineConfig({
   plugins: [react(), ...(simulatedSpotify ? [{ name: 'koe-local-spotify-fixture', apply: 'serve' as const,
     transformIndexHtml: () => [{ tag: 'script', attrs: { src: '/__e2e/player.js' }, injectTo: 'head' as const }],
   }] : [])],
+  build: {
+    rolldownOptions: {
+      output: { codeSplitting: { groups: [
+        { name: 'three-core', test: /node_modules[\\/]three[\\/]build[\\/]three\.core\.js$/, priority: 20 },
+        { name: 'three-renderer', test: /node_modules[\\/]three[\\/]/, priority: 10 },
+        { name: 'vrm', test: /node_modules[\\/]@pixiv[\\/]/ },
+      ] } },
+    },
+  },
   server: {
     proxy: {
       ...(simulatedSpotify ? { '/__e2e': { target: backend } } : {}),

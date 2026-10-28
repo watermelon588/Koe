@@ -1,7 +1,7 @@
 // Only runtime-ready models belong here; source VRoid projects stay in assets/.
 export const MASCOTS = [
   { id: 'kami', name: 'Kami', portrait: '/mascot/portraits/kami.jpg' },
-  { id: 'miku', name: 'Miku', portrait: '/mascot/portraits/miku.jpg' },
+  { id: 'miku', name: 'Mei', portrait: '/mascot/portraits/miku.jpg' },
   { id: 'aoi', name: 'Aoi', portrait: '/mascot/portraits/aoi.jpg' },
   { id: 'kobashi', name: 'Kobashi', portrait: '/mascot/portraits/kobashi.jpg' },
 ] as const

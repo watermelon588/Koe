@@ -1,0 +1,22 @@
+[
+  {
+    "mode": "original",
+    "query": true,
+    "elapsed_ms": 3143
+  },
+  {
+    "mode": "ssl_only",
+    "query": true,
+    "elapsed_ms": 3217
+  },
+  {
+    "mode": "direct_tls",
+    "query": true,
+    "elapsed_ms": 2164
+  },
+  {
+    "mode": "direct_ssl_only",
+    "query": true,
+    "elapsed_ms": 2432
+  }
+]

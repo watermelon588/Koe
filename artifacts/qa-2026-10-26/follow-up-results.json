@@ -1,0 +1,36 @@
+[
+  {
+    "name": "Database tables",
+    "exception_type": "ConnectionTimeout",
+    "sqlstate": null,
+    "elapsed_ms": 49644
+  },
+  {
+    "name": "Google Calendar credentials",
+    "exception_type": "GoogleAuthError",
+    "safe_message": "Google refresh failed. Reconnect Google in Settings \u2192 Connections."
+  },
+  {
+    "name": "Stored Google grant",
+    "exists": true,
+    "calendar_scope": true,
+    "sheets_scope": true,
+    "docs_scope": false,
+    "drive_file_scope": false
+  },
+  {
+    "name": "Direct Google refresh",
+    "exception_type": "RefreshError",
+    "provider_error": "invalid_grant",
+    "safe_message": null
+  },
+  {
+    "name": "Timesheet destination",
+    "configured": true
+  },
+  {
+    "name": "Chat history sequential retry",
+    "exception_type": "ConnectError",
+    "elapsed_ms": 2435
+  }
+]

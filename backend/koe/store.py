@@ -60,12 +60,15 @@ IDLE_RECONNECT = 240  # Neon suspends idle compute after ~5 min: reconnect first
 _con: psycopg.Connection | None = None
 _con_used = 0.0
 _con_lock = threading.Lock()
+LOCK_SECONDS = 5
 
 
 @contextmanager
 def _connection(options: dict):
     global _con, _con_used
-    with _con_lock:
+    if not _con_lock.acquire(timeout=LOCK_SECONDS):
+        raise StoreError('Database is busy. No new operation was sent. Try again later.')
+    try:
         if _con is None or _con.closed or _con.broken or time.monotonic() - _con_used > IDLE_RECONNECT:
             if _con is not None:
                 _con.close()
@@ -79,6 +82,8 @@ def _connection(options: dict):
             raise
         finally:
             _con_used = time.monotonic()
+    finally:
+        _con_lock.release()
 
 
 async def rpc(name: str, **params):

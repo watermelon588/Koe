@@ -117,3 +117,11 @@ The unchecked items require real provider/audio acceptance; automated fixture ch
 - [x] Shared chat/voice tools and desktop/mobile live workspace with original Docs logo and exact previews.
 - [x] Automated OAuth → chat tool → confirmation → provider → receipt/readback, voice, failure/replay and responsive browser checks.
 - [ ] Operator enables Google Docs/Drive APIs and consent scopes; user grants Docs permission, then verifies a real document and speech on desktop/phone. See docs/GOOGLE_DOCS.md.
+
+## Invited reviewer and hosted GitHub repair — 2026-10-26
+
+- [x] Reproduce the invited-user Connect rejection and remove the obsolete Google/GitHub admin-only guard; verify per-person encrypted storage, callback identity binding and signed-out rejection.
+- [x] Read-only diagnosis: Render runs 192407a while main is 3355795; OAuth is not configured and only Walkthru is selected. Verify October 25 Koe commit 3355795 via GitHub and the current history tool with an explicit diagnostic scope.
+- [ ] Publish/deploy the reviewed repair and verify the running backend revision. Inspect Render Events and auto-deploy configuration; GitHub reports successful Vercel deployment but no Actions/check runs. Do not infer the Render setting without checking it.
+- [ ] Configure GitHub OAuth for a no-token-copy reviewer flow (or deliberately use the current backend's personal-token alternative); select Koe alongside any existing tracked repositories.
+- [ ] With an actual invited test account, complete Google/GitHub consent and verify chat and call against that account's own data. Add the reviewer to Google test users when applicable. Owner-only Notion/Music are separate limitations.

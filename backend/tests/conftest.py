@@ -23,10 +23,11 @@ def isolate_live_storage(monkeypatch, tmp_path):
     monkeypatch.setattr(settings, "google_web_client_id", "")  # sign-in off unless a test turns it on
     monkeypatch.setattr(settings, "koe_secret_key", "")  # connections off unless a test turns them on
     monkeypatch.setattr(connections, "_prefs", {})  # per-person settings cache: fresh per test
+    monkeypatch.setattr(connections, '_google_reconnect', set())
     monkeypatch.setattr(usage, "_own_keys", {})  # own-Gemini-key cache: fresh per test
     monkeypatch.setattr(connections, "_github", {})  # GitHub account cache: fresh per test
-    monkeypatch.setattr(connections, "_github_locks", {})
-    monkeypatch.setattr(connections, "_github_refresh_failed", set())
+    monkeypatch.setattr(connections, '_github_locks', {})
+    monkeypatch.setattr(connections, '_github_refresh_failed', set())
     monkeypatch.setattr(gemini, "_clients", {})  # Gemini clients and resting keys/models: fresh per test
     monkeypatch.setattr(gemini, "_resting", {})
     monkeypatch.setattr(gemini, "_last_good", None)

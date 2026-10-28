@@ -1,0 +1,32 @@
+[
+  {
+    "name": "Authenticated live call",
+    "audio_bytes": 174720,
+    "event_types": [
+      "latency",
+      "transcript",
+      "turn_complete"
+    ],
+    "elapsed_ms": 15933,
+    "passed": true
+  },
+  {
+    "name": "Authenticated dashboard socket",
+    "snapshot": true,
+    "panels": {
+      "calendar": {
+        "error": true
+      },
+      "prs": {
+        "error": false
+      },
+      "reviews": {
+        "error": false
+      },
+      "github_yesterday": {
+        "error": false
+      }
+    },
+    "elapsed_ms": 6160
+  }
+]

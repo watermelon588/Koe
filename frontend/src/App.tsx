@@ -40,8 +40,8 @@ function savedTheme(): Theme {
   }
 }
 
-function greeting() {
-  const h = new Date().getHours()
+function greeting(now: Date) {
+  const h = now.getHours()
   return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'
 }
 
@@ -51,6 +51,11 @@ export default function App() {
   const [theme, setTheme] = useState<Theme>(savedTheme)
   const [wide, setWide] = useState(() => matchMedia(WIDE).matches)
   const [accessToken, setAccessToken] = useState(savedToken)
+  const [now, setNow] = useState(() => new Date())
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 60_000)
+    return () => clearInterval(timer)
+  }, [])
   const mascot = useRef<MascotController | null>(null)
   const call = useCall(mascot)
   const inCall = call.state !== 'idle'
@@ -179,8 +184,8 @@ export default function App() {
       </DashboardPage> : <>
       <main className="home" id="main-content" tabIndex={-1} inert={inCall}>
         <section className="hello">
-          <p className="date">{new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })}</p>
-          <h1>{greeting()}, Rohit.</h1>
+          <p className="date">{now.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })}</p>
+          <h1>{greeting(now)}, Rohit.</h1>
           <p className="sub">Ask about your day, your pull requests or your calendar.</p>
           <div className="actions">
             <button className="primary" onClick={() => { dashboard.connect(accessToken); call.start(accessToken) }}>

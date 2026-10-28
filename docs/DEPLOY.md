@@ -94,6 +94,22 @@ Koe asks for `repo read:user` (to read PRs and CI, and to post the PR comments y
 ## Updating
 Push to `main`, and both Render and Vercel rebuild by themselves. The URLs stay the same.
 
+### Recruiter access and GitHub recovery (verified 2026-10-26)
+
+Inviting an email grants a Koe session. It does not grant access to another person's provider accounts. After this repair is deployed, invited users can connect their own Google and GitHub accounts without admin rights. They can use the shared Gemini key within the per-person daily quota. Notion's server workspace and Music remain owner-only; do not advertise those as personal connections for an invited reviewer.
+
+If Google's consent app is in Testing, add the reviewer to its test-user list **as well as** Koe's invite list before they connect Calendar/Sheets/Docs. Google decides whether to allow the requested provider permissions separately from Koe's invite check.
+
+Read-only checks on October 26 found:
+
+- GitHub `main`: `33557953fc5196c3a2a7723855e2c5b4476f782b`; Render backend: `192407a42d8d81378426c966216d43666fb1a2f6`. The running backend lacks subsequent Docs/GitHub connection repairs.
+- Hosted `/api/connections` reports `github_ready=false`: GitHub OAuth is unavailable. Configure the existing OAuth application's client ID/secret and keep `KOE_SECRET_KEY` stable. A current backend also supports a personal token in Settings; it does not require an OAuth client for that alternative.
+- Hosted GitHub repository selection contains only `watermelon588/Walkthru`. The API lists `watermelon588/Koe` as available, but it is not selected. A read of Walkthru cannot answer what was committed to Koe.
+- GitHub returned Koe commit `3355795`, authored by `watermelon588` on October 25 at 21:37:32 IST. The current local GitHub history tool returned the same commit using October 25 midnight through October 26 midnight in Asia/Kolkata, scanning the default and named branches with no partial coverage for this explicit diagnostic scope. Saved repository preferences were not changed.
+- GitHub reports a successful Vercel deployment for `3355795`, zero check runs on that commit, and zero Actions workflow runs for this repository. Render's revision is independently stale; these observations do not establish its auto-deploy setting.
+
+To restore the hosted workflow, publish the reviewed repair, deploy that revision to Render and verify `/api/backend/status`. Inspect Render's Events/Deploys and Git branch/auto-deploy settings if it remains behind GitHub; a restart alone does not update the revision. In Settings → Connections → GitHub, choose Koe alongside any existing repositories you still want and save. Then ask “What did I commit on October 25, 2026?” and compare its source link with the verified commit. Verify a real invited user's Google/GitHub consent and chat/call separately before sending a demo link. These checks identified the stale deployment; they did not establish which Render setting or failed build caused it.
+
 ### Verify which backend is actually running
 
 `/health` still returns `{"ok":true}`. New backend builds add `X-Koe-Revision`, using Render's `RENDER_GIT_COMMIT`, and `Cache-Control: no-store`. Read it without model calls:

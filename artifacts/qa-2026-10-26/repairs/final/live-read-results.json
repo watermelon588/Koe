@@ -1,0 +1,320 @@
+{
+  "mode": "live-read-only; no messages, bookings, documents, rows or playlist edits",
+  "checks": [
+    {
+      "name": "HTTP sign-in status",
+      "status": "PASS",
+      "result": {
+        "keys": [
+          "google",
+          "user"
+        ],
+        "google": true
+      },
+      "elapsed_ms": 3232
+    },
+    {
+      "name": "HTTP configuration diagnostics",
+      "status": "PASS",
+      "result": {
+        "keys": [
+          "audit_pending",
+          "configuration",
+          "limits",
+          "note",
+          "revision"
+        ]
+      },
+      "elapsed_ms": 3679
+    },
+    {
+      "name": "HTTP health",
+      "status": "PASS",
+      "result": {
+        "keys": [
+          "ok"
+        ]
+      },
+      "elapsed_ms": 7446
+    },
+    {
+      "name": "HTTP provider connections",
+      "status": "PASS",
+      "result": {
+        "keys": [
+          "connections",
+          "docs_ready",
+          "features",
+          "github_ready",
+          "github_repo_mode",
+          "github_token_ready",
+          "ready",
+          "sources",
+          "timesheet"
+        ],
+        "docs_ready": false,
+        "ready": true,
+        "github_ready": false,
+        "github_token_ready": true,
+        "providers": [
+          {
+            "provider": "google",
+            "connected": true
+          },
+          {
+            "provider": "github",
+            "connected": true
+          },
+          {
+            "provider": "notion",
+            "connected": true
+          },
+          {
+            "provider": "gemini",
+            "connected": false
+          },
+          {
+            "provider": "spotify",
+            "connected": true
+          }
+        ]
+      },
+      "elapsed_ms": 4934
+    },
+    {
+      "name": "HTTP chat history",
+      "status": "PASS",
+      "result": {
+        "keys": [
+          "messages",
+          "workspace"
+        ],
+        "messages_count": 38
+      },
+      "elapsed_ms": 11263
+    },
+    {
+      "name": "HTTP Notion readiness",
+      "status": "PASS",
+      "result": {
+        "keys": [
+          "connected",
+          "database_url",
+          "missing_properties",
+          "name",
+          "schema",
+          "source_id",
+          "title_property",
+          "workflow_ready"
+        ],
+        "connected": true,
+        "workflow_ready": true
+      },
+      "elapsed_ms": 10760
+    },
+    {
+      "name": "HTTP Notion records",
+      "status": "PASS",
+      "result": {
+        "keys": [
+          "has_more",
+          "next_cursor",
+          "pages"
+        ],
+        "pages_count": 2
+      },
+      "elapsed_ms": 9444
+    },
+    {
+      "name": "HTTP Notion schema",
+      "status": "PASS",
+      "result": {
+        "keys": [
+          "editable",
+          "note",
+          "partial",
+          "read_only_or_reserved",
+          "source_id"
+        ],
+        "editable_count": 0,
+        "partial": false
+      },
+      "elapsed_ms": 8392
+    },
+    {
+      "name": "Calendar today",
+      "status": "FAIL",
+      "result": {
+        "error": {
+          "code": "google_not_connected",
+          "message": "Google access expired or was revoked. Reconnect Google in Settings \u2192 Connections.",
+          "hint": "Clarify the request and try again."
+        }
+      },
+      "elapsed_ms": 6272
+    },
+    {
+      "name": "Calendar free slots",
+      "status": "FAIL",
+      "result": {
+        "error": {
+          "code": "google_not_connected",
+          "message": "Google access expired or was revoked. Reconnect Google in Settings \u2192 Connections.",
+          "hint": "Clarify the request and try again."
+        }
+      },
+      "elapsed_ms": 6630
+    },
+    {
+      "name": "Neon storage read",
+      "status": "PASS",
+      "result": {
+        "keys": [
+          "reachable"
+        ]
+      },
+      "elapsed_ms": 7772
+    },
+    {
+      "name": "Docs app-accessible discovery",
+      "status": "FAIL",
+      "result": {
+        "error": {
+          "code": "docs_failed",
+          "message": "Google Docs access is missing or expired. Enable Docs in Settings \u2192 Connections.",
+          "hint": "For writes, inspect the document before proposing again. No automatic retry."
+        }
+      },
+      "elapsed_ms": 1217
+    },
+    {
+      "name": "Sheets configured headers",
+      "status": "FAIL",
+      "result": {
+        "error": {
+          "code": "sheets_schema",
+          "message": "The configured timesheet headers could not be validated.",
+          "hint": "Check the connected sheet and its unique headers."
+        }
+      },
+      "elapsed_ms": 9049
+    },
+    {
+      "name": "GitHub review queue",
+      "status": "PASS",
+      "result": {
+        "keys": [
+          "count",
+          "prs"
+        ],
+        "prs_count": 0
+      },
+      "elapsed_ms": 11556
+    },
+    {
+      "name": "GitHub own PRs",
+      "status": "PASS",
+      "result": {
+        "keys": [
+          "count",
+          "prs"
+        ],
+        "prs_count": 0
+      },
+      "elapsed_ms": 11537
+    },
+    {
+      "name": "GitHub 30-day contributions",
+      "status": "PASS",
+      "result": {
+        "keys": [
+          "active_days",
+          "as_of",
+          "calendar_day_basis",
+          "current_streak",
+          "current_streak_may_extend_before_window",
+          "longest_streak_in_window",
+          "note",
+          "streak_ends_on",
+          "total_contributions",
+          "window_end",
+          "window_start"
+        ]
+      },
+      "elapsed_ms": 10862
+    },
+    {
+      "name": "WhatsApp sending health (no send)",
+      "status": "FAIL",
+      "result": {
+        "error": {
+          "code": "sending_blocked",
+          "message": "Meta reports sending blocked",
+          "hint": null
+        }
+      },
+      "elapsed_ms": 2708
+    },
+    {
+      "name": "GitHub yesterday activity",
+      "status": "PASS",
+      "result": {
+        "keys": [
+          "as_of",
+          "author_login",
+          "branch_coverage",
+          "by_repository",
+          "commits",
+          "end_exclusive",
+          "lines",
+          "partial",
+          "prs",
+          "repositories",
+          "repository_mode",
+          "scope",
+          "since",
+          "timezone",
+          "totals",
+          "totals_are_complete",
+          "unavailable_repositories",
+          "until"
+        ],
+        "prs_count": 0,
+        "commits_count": 0,
+        "partial": false,
+        "totals_are_complete": true
+      },
+      "elapsed_ms": 20540
+    },
+    {
+      "name": "Gemini Live audio generation",
+      "status": "PASS",
+      "result": {
+        "keys": [
+          "audio_bytes"
+        ]
+      },
+      "elapsed_ms": 11445
+    },
+    {
+      "name": "Spotify selected playlist read",
+      "status": "PASS",
+      "result": {
+        "keys": [
+          "connected",
+          "items"
+        ],
+        "items_count": 5,
+        "connected": true
+      },
+      "elapsed_ms": 24327
+    },
+    {
+      "name": "Gemini text generation",
+      "status": "FAIL",
+      "exception_type": "APIError",
+      "error_code": 503,
+      "elapsed_ms": 30016
+    }
+  ]
+}

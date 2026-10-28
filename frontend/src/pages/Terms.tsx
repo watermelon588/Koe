@@ -13,7 +13,7 @@ export function Terms() {
         <ul>
           <li>Only invited people may use Koe. Don’t share your access token or sign-in with anyone.</li>
           <li>The owner can remove access at any time, for example if Koe is misused or its free limits run out.</li>
-          <li>There may be a daily limit on conversations. Adding your own Gemini key (coming soon) removes it.</li>
+          <li>There may be a daily limit on conversations. Adding your own Gemini key in Settings removes Koe’s shared daily limit; your key remains subject to its provider’s quota.</li>
         </ul>
       </Section>
 

@@ -1,0 +1,44 @@
+[
+  {
+    "address_index": 0,
+    "family": 23,
+    "tcp": true,
+    "exception_type": "ConnectionTimeout",
+    "elapsed_ms": 3237
+  },
+  {
+    "address_index": 1,
+    "family": 23,
+    "tcp": true,
+    "exception_type": "ConnectionTimeout",
+    "elapsed_ms": 3236
+  },
+  {
+    "address_index": 2,
+    "family": 23,
+    "tcp": true,
+    "exception_type": "ConnectionTimeout",
+    "elapsed_ms": 3250
+  },
+  {
+    "address_index": 3,
+    "family": 2,
+    "tcp": true,
+    "exception_type": "ConnectionTimeout",
+    "elapsed_ms": 3250
+  },
+  {
+    "address_index": 4,
+    "family": 2,
+    "tcp": true,
+    "exception_type": "ConnectionTimeout",
+    "elapsed_ms": 4051
+  },
+  {
+    "address_index": 5,
+    "family": 2,
+    "tcp": true,
+    "exception_type": "ConnectionTimeout",
+    "elapsed_ms": 4051
+  }
+]

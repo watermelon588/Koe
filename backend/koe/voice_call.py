@@ -50,6 +50,7 @@ CONFIG = {
 MAX_TEXT = 2000  # characters per typed message; the browser is untrusted input
 MAX_QUICK_DROPS = 3  # consecutive connections that die within STABLE_SECS before we give up
 STABLE_SECS = 30
+CONNECT_SECONDS = 15
 
 # ponytail: naive energy check to timestamp "user stopped speaking"; only used for the latency
 # metric (Gemini's own VAD drives the conversation). Ceiling: loud background noise counts as speech.
@@ -285,6 +286,7 @@ async def _relay_gemini(ws: WebSocket, mic: asyncio.Queue, state: CallState, cli
     """Keeps one logical conversation alive across Gemini connections using session resumption.
     https://ai.google.dev/gemini-api/docs/live-api/session-management"""
     quick_drops = 0
+    connected_once = False
     while True:
         # handle=None on the first connection still switches on resumption updates.
         config = {**CONFIG, "system_instruction": agent.system_prompt(await agent.connection_status()),
@@ -294,7 +296,10 @@ async def _relay_gemini(ws: WebSocket, mic: asyncio.Queue, state: CallState, cli
             config['system_instruction'] += music_voice.PROMPT
         connected_at = time.monotonic()
         try:
-            async with client.aio.live.connect(model=LIVE_MODEL, config=config) as session:
+            async with contextlib.AsyncExitStack() as connection:
+                async with asyncio.timeout(CONNECT_SECONDS):
+                    session = await connection.enter_async_context(client.aio.live.connect(model=LIVE_MODEL, config=config))
+                connected_once = True
                 # TaskGroup (not a loose task) so the uploader is always finished before we
                 # reconnect or exit, and its errors aren't silently lost.
                 async with asyncio.TaskGroup() as tg:
@@ -303,13 +308,18 @@ async def _relay_gemini(ws: WebSocket, mic: asyncio.Queue, state: CallState, cli
                     upload.cancel()
             quick_drops = 0
         except* (errors.APIError, OSError) as eg:  # dropped connection / network blip
+            permanent, _ = eg.split(lambda exc: isinstance(exc, errors.APIError)
+                                    and exc.code not in {429, 500, 502, 503, 504, 1006, 1011})
             stable = time.monotonic() - connected_at > STABLE_SECS
             quick_drops = 1 if stable else quick_drops + 1
-            if state.resume_handle is None or quick_drops > MAX_QUICK_DROPS:
+            # Before a session opens nothing has been uploaded or executed. After that,
+            # only a provider resume handle may recover the same conversation.
+            if permanent or (connected_once and state.resume_handle is None) or quick_drops > MAX_QUICK_DROPS:
                 raise
             if any(isinstance(e, errors.APIError) and e.code == 429 for e in eg.exceptions):
                 gemini.rest_client(client)  # quota used up: the next call starts on the other key
-            log.warning("Gemini connection lost (%s): resuming, attempt %d", eg.exceptions[0], quick_drops)
+            log.warning("Gemini connection interrupted; %s attempt %d",
+                        'resume' if connected_once else 'startup', quick_drops)
             await asyncio.sleep(0.5 * quick_drops)
 
 
@@ -336,7 +346,11 @@ async def call(ws: WebSocket):
     except usage.OverQuota as exc:
         await ws.close(code=1008, reason=str(exc)[:120])
         return
-    client = gemini.live_client()  # the caller's own key, else a shared key that isn't resting (gemini.py)
+    try:
+        client = await asyncio.wait_for(asyncio.to_thread(gemini.live_client), 10)
+    except Exception:
+        await ws.close(code=1011, reason='Voice access is temporarily unavailable. Check your connections and try again.')
+        return
     state = CallState()
     state.music_session = music_session
     mic: asyncio.Queue[bytes | str] = asyncio.Queue()
@@ -352,7 +366,7 @@ async def call(ws: WebSocket):
     except* Exception as eg:
         log.exception("call failed")
         with contextlib.suppress(Exception):  # the browser may already be gone
-            await ws.close(code=1011, reason=f"Gemini error: {eg.exceptions[0]}"[:120])
+            await ws.close(code=1011, reason="Koe could not connect to its voice service. Please try the call again.")
     finally:
         music_voice.end_session(state.context.session_id)
         log.info("call ended: %s", summarize(state.latencies_ms))

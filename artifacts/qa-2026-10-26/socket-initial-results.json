@@ -1,0 +1,15 @@
+[
+  {
+    "name": "Authenticated live call",
+    "exception_type": "ConnectionClosedError",
+    "audio_bytes": 0,
+    "event_types": [],
+    "elapsed_ms": 42959
+  },
+  {
+    "name": "Authenticated dashboard socket",
+    "snapshot": true,
+    "panels": [],
+    "elapsed_ms": 4
+  }
+]

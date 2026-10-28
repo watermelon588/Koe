@@ -1575,6 +1575,25 @@ Portfolio handoff verification: `npm run build` in Portfolio 2 passed (187 modul
 **Gotchas:** All-access activity is bounded to 100 recently pushed accessible repositories. Existing owner Notion workspace is supported; personal Notion OAuth is still not implemented. Existing mascot chunk-size warning and Starlette/httpx deprecation warning remain.
 **Interview line:** “I repaired capability reporting across OAuth, UI and agent tools, then tested account isolation and bounded GitHub activity evidence.”
 
+## Invited reviewer connections and real GitHub diagnosis — 2026-10-26
+
+**Files:** `backend/koe/auth.py`; new `backend/tests/test_invited_connections.py`; connection and Calendar SDK tests; `docs/SPEC.md`, `docs/DECISIONS.md`, `docs/DEPLOY.md`, `docs/GITHUB_WORKFLOW.md`, `tasks/todo.md`, and this log.
+
+**What it does:** Removes an obsolete admin-only check from the Google and GitHub OAuth start routes so an invited user can connect their own accounts. Leaves sign-in requirements, provider consent, callback user binding, encrypted per-person storage, quotas, approvals and owner-only capabilities intact. Adds six regression cases for invited OAuth completion, cross-user callback rejection and signed-out rejection across both providers. Replaces an outdated hardcoded 23-tool test expectation with SDK parsing, registry coverage and required Calendar tool checks.
+
+**Core concept:** Authentication proves who you are; authorization decides what you can do. Koe accepted invited users at sign-in but incorrectly demanded admin status when they tried to connect their own providers. A connected GitHub credential also needs an explicit repository selection; it cannot find commits in a repository outside that selection.
+
+**How it connects:** Invited Google sign-in → per-person Koe session → Google/GitHub OAuth with that user ID bound to the callback → encrypted connection → existing chat/voice tools using the caller's account. This repair does not turn owner Notion or Spotify into per-person integrations.
+
+**Try it yourself:** After publishing and deploying the reviewed repair, invite a separate test account, sign in and connect Google/GitHub from Settings. While Google consent is in Testing, also add that account to Google's test-user list. Select the intended repositories and ask a dated question. See `docs/DEPLOY.md` for the verified production findings and recovery checklist.
+
+**Measured:** The regression tests reproduced four owner-only 403 failures and two passing signed-out checks before the fix. All 77 focused auth/connection/GitHub/Docs checks passed afterward. A read-only authenticated production request reported Render revision `192407a` while GitHub main is `3355795`; GitHub OAuth readiness was false and only `watermelon588/Walkthru` was selected. GitHub returned actual Koe commit `3355795` from October 25 at 21:37:32 IST. The current history tool returned that same commit with explicit Koe-only diagnostic scope, correct Asia/Kolkata midnight bounds and complete reported branch coverage. Saved preferences were unchanged. GitHub reports a successful Vercel status, zero checks on that commit and zero Actions runs.
+
+**Gotchas:** Local Neon reads timed out, so no local saved-account state was inferred from that failure; hosted owner-authenticated endpoints supplied the saved scope evidence. Local GitHub credentials were verified independently. A first health request also timed out before authenticated hosted probes succeeded. Render's exact reason for remaining behind is not established by these reads. No hosting/OAuth configuration, saved scope, credentials or provider records were changed. Real invited-user consent, hosted chat and microphone acceptance still require the repaired deployment. The broader suite exposed the old 23-versus-29 tool-count assertion, which was corrected without changing the tool registry.
+
+**Interview line:** “I traced a usable-login failure to an authorization check, protected account isolation with regression tests, and distinguished stale deployment and repository scope from actual GitHub data availability.”
+
+**Final verification:** Full backend suite passed: **626 passed** in 151.40 seconds, with the existing Starlette/httpx deprecation warning. Reviewed the auth/test diff for session requirements, callback identity binding and per-person storage; `git diff --check` passed. Frontend source and dependencies were unchanged, so no frontend build was needed for this backend-only repair.
 
 ## GitHub OAuth connection repair — 2026-10-27
 

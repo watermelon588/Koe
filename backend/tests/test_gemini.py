@@ -3,6 +3,7 @@ import asyncio
 from types import SimpleNamespace
 
 import pytest
+import httpx
 from google.genai import errors
 
 from koe import connections, gemini, identity
@@ -115,3 +116,18 @@ def test_cold_credential_lookup_does_not_block_the_event_loop(monkeypatch):
         models=SimpleNamespace(generate_content=generated))))
     response, _ = run()
     assert response.text == 'Synthetic answer' and seen and all(t != main_thread for t in seen)
+
+
+def test_a_transport_failure_tries_the_next_text_model_before_giving_up(monkeypatch):
+    tried = []
+    monkeypatch.setattr(settings, 'gemini_text_model', 'primary')
+    monkeypatch.setattr(settings, 'gemini_fallback_models', 'backup')
+    async def generated(model, **kwargs):
+        tried.append(model)
+        if model == 'primary':
+            raise httpx.ConnectError('synthetic TLS reset')
+        return SimpleNamespace(text='Recovered')
+    fake = SimpleNamespace(aio=SimpleNamespace(models=SimpleNamespace(generate_content=generated)))
+    response, model = run(only=fake)
+    assert response.text == 'Recovered' and model == 'backup'
+    assert tried == ['primary', 'backup']

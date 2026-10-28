@@ -51,24 +51,32 @@ create table if not exists koe_music_mutations (owner_id text not null, connecti
 # psycopg_pool if traffic ever queues.
 _neon: psycopg.Connection | None = None
 _neon_lock = threading.Lock()
+LOCK_SECONDS = 5  # allow a healthy cold handshake while bounding the queued request
+READ_SECONDS = 10
 
 
 def _run_neon(query: str, params: tuple) -> list[dict]:
     global _neon
-    with _neon_lock:
+    if not _neon_lock.acquire(timeout=LOCK_SECONDS):
+        raise psycopg.OperationalError('Database is busy. No new operation was sent.')
+    try:
         for attempt in (1, 2):
             if _neon is None or _neon.closed or _neon.broken:
                 _neon = psycopg.connect(**store.connection_options(), row_factory=dict_row, autocommit=True,
                                         prepare_threshold=None)
             try:
-                cur = _neon.execute(query, params)
-                return cur.fetchall() if cur.description else []
+                with _neon.transaction():
+                    _neon.execute('SET LOCAL statement_timeout = 10000')
+                    cur = _neon.execute(query, params)
+                    return cur.fetchall() if cur.description else []
             except psycopg.OperationalError:
                 _neon.close()  # Neon closes idle connections (compute suspend): reconnect next time
                 _neon = None
                 # Only a read is retried: a write whose commit is uncertain must never run twice (store.py rule).
                 if attempt == 2 or not query.lstrip().lower().startswith("select"):
                     raise
+    finally:
+        _neon_lock.release()
     return []
 
 
@@ -85,4 +93,10 @@ def _run(query: str, params: tuple) -> list[dict]:
 
 async def sql(query: str, *params) -> list[dict]:
     """One statement, off the event loop: a Neon round trip must not stall a call or other requests."""
+    if query.lstrip().lower().startswith('select'):
+        try:
+            return await asyncio.wait_for(asyncio.to_thread(_run, query, params), READ_SECONDS)
+        except TimeoutError:
+            raise psycopg.OperationalError('Database read timed out. Try the read again later.') from None
+    # Never time out and replay a write whose commit may still be in progress.
     return await asyncio.to_thread(_run, query, params)

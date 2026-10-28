@@ -27,6 +27,7 @@ import httpx
 from cryptography.fernet import Fernet, InvalidToken
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from google.auth.transport.requests import Request as GoogleRequest
+from google.auth.exceptions import RefreshError
 from google.oauth2.credentials import Credentials
 from pydantic import BaseModel, Field, SecretStr
 from typing import Literal
@@ -46,6 +47,7 @@ GOOGLE_SCOPES = ["openid", "email", CALENDAR_SCOPE, SHEETS_SCOPE]
 SHEETS_API = "https://sheets.googleapis.com/v4/spreadsheets"
 GEMINI_MODELS = "https://generativelanguage.googleapis.com/v1beta/models"
 TIMESHEET_HEADERS = ["Date", "Client", "Hours", "Note", "Koe action ID"]  # tools/sheets.py checks row 1 against these
+_google_reconnect: set[str] = set()
 
 
 class ConnectionError_(Exception):
@@ -84,6 +86,8 @@ def save(owner: str, provider: str, account: str, scopes: list[str], token: dict
              (owner, provider, account, " ".join(scopes), encrypt(token), now, now))
         if provider == 'github':
             forget_github(owner)
+    if provider == 'google':
+        _google_reconnect.discard(owner)
 
 
 def load(owner: str, provider: str) -> dict | None:
@@ -120,6 +124,8 @@ def google_credentials(required_scopes: list[str], expected_account: str | None 
     """The calling person's Google credentials, refreshed when expired, or None if they haven't connected Google.
     Runs in a worker thread (the tools call google_auth.credentials via asyncio.to_thread)."""
     owner = identity.owner_id()
+    if owner in _google_reconnect:
+        raise ConnectionError_('Google access expired or was revoked. Reconnect Google in Settings → Connections.')
     row = load(owner, "google")
     if not row:
         return None
@@ -135,8 +141,16 @@ def google_credentials(required_scopes: list[str], expected_account: str | None 
     )
     if not creds.valid:
         if not creds.refresh_token:
+            _google_reconnect.add(owner)
             raise ConnectionError_("Google access ended. Reconnect Google in Settings → Connections.")
-        creds.refresh(GoogleRequest())
+        try:
+            creds.refresh(GoogleRequest())
+        except RefreshError as exc:
+            detail = next((arg for arg in exc.args if isinstance(arg, dict)), {})
+            if detail.get('error') == 'invalid_grant':
+                _google_reconnect.add(owner)
+                raise ConnectionError_('Google access expired or was revoked. Reconnect Google in Settings → Connections.') from None
+            raise ConnectionError_('Google could not refresh access. Check the connection again shortly.') from None
         save(owner, "google", row["account"], row["scopes"], {
             **token, "access_token": creds.token,
             "expiry": creds.expiry.replace(tzinfo=timezone.utc).isoformat() if creds.expiry else None})
@@ -145,6 +159,20 @@ def google_credentials(required_scopes: list[str], expected_account: str | None 
 
 # The same gate as the rest of /api: the session cookie (or KOE_ACCESS_TOKEN); it also sets identity.OWNER.
 api = APIRouter(prefix="/api/connections", dependencies=[Depends(auth.http_owner)])
+
+
+@api.get('/google/health')
+async def google_health(response: Response):
+    response.headers['Cache-Control'] = 'no-store'
+    try:
+        creds = await asyncio.wait_for(asyncio.to_thread(google_credentials, [CALENDAR_SCOPE, SHEETS_SCOPE]), 12)
+        if creds:
+            _google_reconnect.discard(identity.owner_id())
+        return {'connected': bool(creds), 'ready': bool(creds and creds.valid), 'reconnect_required': False}
+    except ConnectionError_ as exc:
+        return {'connected': True, 'ready': False, 'reconnect_required': 'Reconnect Google' in str(exc), 'message': str(exc)}
+    except Exception:
+        raise HTTPException(503, 'Google connection could not be checked. Retry the check shortly.') from None
 
 
 @api.get("")
@@ -165,8 +193,9 @@ async def list_connections(response: Response):
             "sources": sources, "github_repo_mode": await asyncio.to_thread(github_repo_mode),
             "features": {'docs': True, 'github_scope': True},
             "timesheet": f"https://docs.google.com/spreadsheets/d/{sheet}/edit" if sheet else "",
-            "docs_ready": any(r["provider"] == "google" and {DOCS_SCOPE, DRIVE_FILE_SCOPE} <= set(r["scopes"].split()) for r in rows),
-            "connections": [{"provider": p, "connected": p in have, "account": have.get(p, "")} for p in PROVIDERS]}
+            "docs_ready": identity.owner_id() not in _google_reconnect and any(r["provider"] == "google" and {DOCS_SCOPE, DRIVE_FILE_SCOPE} <= set(r["scopes"].split()) for r in rows),
+            "connections": [{"provider": p, "connected": p in have, "account": have.get(p, ""),
+                             **({'reconnect_required': True} if p == 'google' and identity.owner_id() in _google_reconnect else {})} for p in PROVIDERS]}
 
 
 @api.post("/google/timesheet")

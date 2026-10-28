@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { existsSync } from 'node:fs'
-import { MASCOTS, savedMascot, saveMascot } from '../src/mascot/catalog.ts'
+import { MASCOTS, mascotProfile, savedMascot, saveMascot } from '../src/mascot/catalog.ts'
+
+test('Mei keeps the deployed model ID and a consistent display name', () => {
+  assert.equal(mascotProfile('miku').name, 'Mei')
+})
 
 test('missing or obsolete profile choices fall back to Kami', () => {
   const previous = Object.getOwnPropertyDescriptor(globalThis, 'localStorage')

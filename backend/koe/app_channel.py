@@ -77,8 +77,9 @@ async def list_messages(after: int = 0, limit: int = 200) -> list[dict]:
     rows = await sql("select * from (select * from koe_app_messages where owner_id = %s and id > %s "
                      "order by id desc limit %s) newest order by id", owner(), after, limit)
     try:
-        previews = await store.action_previews([r['action_id'] for r in rows if r.get('action_id')])
-    except store.StoreError:
+        previews = await asyncio.wait_for(
+            store.action_previews([r['action_id'] for r in rows if r.get('action_id')]), timeout=2)
+    except (store.StoreError, TimeoutError):
         log.warning('Saved approval previews unavailable; full message text retained')
         previews = {}
     pending = chat().context.pending
@@ -155,7 +156,7 @@ async def speak(text: str) -> str:
     config = {"response_modalities": ["AUDIO"], "system_instruction": SPEAK_PROMPT}
     for attempt in range(2):  # a used-up key (429): rest it and read the reply on the other key
         pcm.clear()  # an incomplete first recording must not be prefixed to the replacement
-        live = gemini.live_client()
+        live = await asyncio.to_thread(gemini.live_client)
         try:
             async with live.aio.live.connect(model=voice_call.LIVE_MODEL, config=config) as session:
                 await session.send_realtime_input(text=text)

@@ -1,0 +1,215 @@
+{
+  "mode": "live-read-only; no messages, bookings, documents, rows or playlist edits",
+  "checks": [
+    {
+      "name": "HTTP sign-in status",
+      "status": "PASS",
+      "result": {
+        "keys": [
+          "google",
+          "user"
+        ],
+        "google": true
+      },
+      "elapsed_ms": 3756
+    },
+    {
+      "name": "HTTP configuration diagnostics",
+      "status": "PASS",
+      "result": {
+        "keys": [
+          "audit_pending",
+          "configuration",
+          "limits",
+          "note",
+          "revision"
+        ]
+      },
+      "elapsed_ms": 2139
+    },
+    {
+      "name": "HTTP health",
+      "status": "PASS",
+      "result": {
+        "keys": [
+          "ok"
+        ]
+      },
+      "elapsed_ms": 7564
+    },
+    {
+      "name": "HTTP provider connections",
+      "status": "FAIL",
+      "result": {
+        "error": {
+          "code": 503,
+          "message": "Saved data is temporarily unavailable. Retry reads later. If you submitted a change, check its status before trying again.",
+          "hint": null
+        }
+      },
+      "elapsed_ms": 5399
+    },
+    {
+      "name": "HTTP chat history",
+      "status": "FAIL",
+      "result": {
+        "error": {
+          "code": 503,
+          "message": "Saved data is temporarily unavailable. Retry reads later. If you submitted a change, check its status before trying again.",
+          "hint": null
+        }
+      },
+      "elapsed_ms": 9765
+    },
+    {
+      "name": "HTTP Notion readiness",
+      "status": "PASS",
+      "result": {
+        "keys": [
+          "connected",
+          "database_url",
+          "missing_properties",
+          "name",
+          "schema",
+          "source_id",
+          "title_property",
+          "workflow_ready"
+        ],
+        "connected": true,
+        "workflow_ready": true
+      },
+      "elapsed_ms": 15106
+    },
+    {
+      "name": "HTTP Notion schema",
+      "status": "PASS",
+      "result": {
+        "keys": [
+          "editable",
+          "note",
+          "partial",
+          "read_only_or_reserved",
+          "source_id"
+        ],
+        "editable_count": 0,
+        "partial": false
+      },
+      "elapsed_ms": 12026
+    },
+    {
+      "name": "HTTP Notion records",
+      "status": "PASS",
+      "result": {
+        "keys": [
+          "has_more",
+          "next_cursor",
+          "pages"
+        ],
+        "pages_count": 2
+      },
+      "elapsed_ms": 15335
+    },
+    {
+      "name": "Sheets configured headers",
+      "status": "FAIL",
+      "exception_type": "OperationalError",
+      "elapsed_ms": 2014
+    },
+    {
+      "name": "Calendar free slots",
+      "status": "FAIL",
+      "result": {
+        "error": {
+          "code": "google_not_connected",
+          "message": "Google refresh failed. Reconnect Google in Settings \u2192 Connections.",
+          "hint": "Clarify the request and try again."
+        }
+      },
+      "elapsed_ms": 3381
+    },
+    {
+      "name": "Docs app-accessible discovery",
+      "status": "FAIL",
+      "result": {
+        "error": {
+          "code": "docs_failed",
+          "message": "Google Docs access is missing or expired. Enable Docs in Settings \u2192 Connections.",
+          "hint": "For writes, inspect the document before proposing again. No automatic retry."
+        }
+      },
+      "elapsed_ms": 2005
+    },
+    {
+      "name": "GitHub review queue",
+      "status": "FAIL",
+      "exception_type": "OperationalError",
+      "elapsed_ms": 2020
+    },
+    {
+      "name": "GitHub own PRs",
+      "status": "FAIL",
+      "exception_type": "OperationalError",
+      "elapsed_ms": 2009
+    },
+    {
+      "name": "GitHub yesterday activity",
+      "status": "FAIL",
+      "exception_type": "OperationalError",
+      "elapsed_ms": 2010
+    },
+    {
+      "name": "GitHub 30-day contributions",
+      "status": "FAIL",
+      "exception_type": "OperationalError",
+      "elapsed_ms": 2003
+    },
+    {
+      "name": "Spotify selected playlist read",
+      "status": "FAIL",
+      "exception_type": "OperationalError",
+      "elapsed_ms": 2323
+    },
+    {
+      "name": "Gemini text generation",
+      "status": "FAIL",
+      "exception_type": "OperationalError",
+      "elapsed_ms": 2002
+    },
+    {
+      "name": "Gemini Live audio generation",
+      "status": "FAIL",
+      "exception_type": "OperationalError",
+      "elapsed_ms": 2053
+    },
+    {
+      "name": "WhatsApp sending health (no send)",
+      "status": "FAIL",
+      "result": {
+        "error": {
+          "code": "sending_blocked",
+          "message": "Meta reports sending blocked",
+          "hint": null
+        }
+      },
+      "elapsed_ms": 8993
+    },
+    {
+      "name": "Calendar today",
+      "status": "FAIL",
+      "result": {
+        "error": {
+          "code": "calendar_timeout",
+          "message": "Calendar operation timed out; no mutation was retried.",
+          "hint": "Check Calendar before proposing another write."
+        }
+      },
+      "elapsed_ms": 30011
+    },
+    {
+      "name": "Neon storage read",
+      "status": "FAIL",
+      "exception_type": "StoreError",
+      "elapsed_ms": 60104
+    }
+  ]
+}

@@ -14,7 +14,7 @@ import './interactions.css'
 
 gsap.registerPlugin(useGSAP, ScrollTrigger)
 
-const HOME_MASCOTS = MASCOTS.filter(item => item.id !== 'aoi').map(item => ({ ...item, name: item.id === 'miku' ? 'Mei' : item.name }))
+const HOME_MASCOTS = MASCOTS.filter(item => item.id !== 'aoi')
 
 const INTEGRATIONS: { id: Brand; name: string; category: string; description: string; planned?: boolean; features: string[] }[] = [
   { id: 'github', name: 'GitHub', category: 'DEVELOPMENT', description: 'Know what needs your review, why CI failed, and what you shipped.', features: ['Your review queue and pull request status', 'Plain-English diff summaries with risk notes', 'Comments proposed for your approval'] },
@@ -178,7 +178,7 @@ export function Homepage() {
         <div className="hp-workflow hp-reveal"><div><span>01</span><h3>Start with a thought.</h3><p>Say it, type it, or leave a voice note. No special commands to remember.</p></div><div><span>02</span><h3>Let Koe do the finding.</h3><p>The right pull request, a free slot, that note. Your tools become one workspace.</p></div><div><span>03</span><h3>Give it your OK.</h3><p>Review the important changes before they happen. A little help, with you in control.</p></div></div>
       </section>
 
-      <section className="hp-numbers hp-container hp-reveal" aria-label="Koe in numbers"><div><span>05<span> / services</span></span><p>Your everyday tools, brought together.</p></div><div><span>03<span> / ways to ask</span></span><p>Live voice, typed chat, or a voice note.</p></div><div><span>03<span> / companions</span></span><p>A familiar face that feels like you.</p></div><div><span>01<span> / final say</span></span><p>Yours. For every consequential change.</p></div></section>
+      <section className="hp-numbers hp-container hp-reveal" aria-label="Koe in numbers"><div><span>{String(INTEGRATIONS.length).padStart(2, '0')}<span> / services</span></span><p>Your everyday tools, brought together.</p></div><div><span>03<span> / ways to ask</span></span><p>Live voice, typed chat, or a voice note.</p></div><div><span>03<span> / companions</span></span><p>A familiar face that feels like you.</p></div><div><span>01<span> / final say</span></span><p>Yours. For every consequential change.</p></div></section>
 
       <section className="hp-section hp-container" id="connections" aria-labelledby="hp-connections-title">
         <div className="hp-section-heading hp-reveal"><div><p className="hp-eyebrow"><span className="hp-section-number">02 /</span> YOUR TOOLS, ON SPEAKING TERMS</p><h2 id="hp-connections-title">Same tools.<br /><span>A lot less switching.</span></h2></div><p>Keep the setup you’ve made your own. Connect what you need, and let the small things take care of themselves.</p></div>

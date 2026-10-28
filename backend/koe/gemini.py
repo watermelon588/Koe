@@ -120,8 +120,8 @@ async def _generate(*, contents, config=None, models: list[str] | None = None, o
                     rest("model", model, MODEL_REST)
                     break  # next model
                 raise
-            except httpx.TimeoutException as exc:
-                log.info("%s on %s: timeout in %.1fs", model, which, time.perf_counter() - started)
+            except httpx.TransportError as exc:
+                log.info("%s on %s: transport unavailable in %.1fs", model, which, time.perf_counter() - started)
                 last = exc
                 rest("model", model, MODEL_REST)
                 break

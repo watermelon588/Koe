@@ -207,6 +207,7 @@ async def _github_shipped(since, now, until):
             raise ValueError('Invalid GITHUB_LOGIN.')
         # Fixed endpoint pagination; never follow an absolute Link URL with auth headers.
         semaphore = asyncio.Semaphore(4)
+        branch_gate = asyncio.Semaphore(4)
         branch_coverage = {}
         async def read(repo):
             async with semaphore:
@@ -232,24 +233,31 @@ async def _github_shipped(since, now, until):
                 except GitHubError:
                     partial = True
                     missing_branches.append('branch listing')
-                # Always include the default branch, then named branches; deduplicate SHAs below.
-                for branch in [None, *branches]:
-                    try:
-                        for page in range(1, 11):
-                            r = await request('GET', f'/repos/{repo}/commits', params={
-                                'author': login, 'since': start.isoformat(), 'until': query_end.isoformat(),
-                                'per_page': 100, 'page': page, **({'sha': branch} if branch else {})})
-                            commits.extend({'repo': repo, 'sha': c['sha'], 'title': c['commit']['message'].split('\n')[0],
-                                            'url': c['html_url'], 'date': (c['commit'].get('committer') or
-                                                                                    c['commit'].get('author') or {}).get('date')}
-                                           for c in r.json())
-                            more = 'next' in r.links
-                            if not more:
-                                break
-                        partial |= more
-                    except GitHubError:
-                        partial = True
-                        missing_branches.append(branch or 'default branch')
+                # Pagination stays ordered within a branch. Independent branches share
+                # four read slots across all repositories, avoiding serial network waits.
+                async def read_branch(branch):
+                    found = []
+                    async with branch_gate:
+                        try:
+                            for page in range(1, 11):
+                                r = await request('GET', f'/repos/{repo}/commits', params={
+                                    'author': login, 'since': start.isoformat(), 'until': query_end.isoformat(),
+                                    'per_page': 100, 'page': page, **({'sha': branch} if branch else {})})
+                                found.extend({'repo': repo, 'sha': c['sha'], 'title': c['commit']['message'].split('\n')[0],
+                                              'url': c['html_url'], 'date': (c['commit'].get('committer') or
+                                                                                      c['commit'].get('author') or {}).get('date')}
+                                             for c in r.json())
+                                more = 'next' in r.links
+                                if not more:
+                                    break
+                            return found, more, None
+                        except GitHubError:
+                            return found, True, branch or 'default branch'
+                for found, incomplete, missing in await asyncio.gather(*(read_branch(branch) for branch in [None, *branches])):
+                    commits.extend(found)
+                    partial |= incomplete
+                    if missing:
+                        missing_branches.append(missing)
                 branch_coverage[repo] = {'named_branches_scanned': branches, 'unavailable': missing_branches}
                 # Defensive boundary filtering and identity deduplication; never count a page twice.
                 prs = list({p['number']: p for p in prs if _in_window(p['merged_at'], start, end)}.values())

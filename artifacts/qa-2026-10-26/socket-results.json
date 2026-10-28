@@ -1,0 +1,30 @@
+[
+  {
+    "name": "Authenticated live call",
+    "exception_type": "ConnectionClosedError",
+    "audio_bytes": 0,
+    "event_types": [],
+    "received_close_code": 1011,
+    "sent_close_code": 1011,
+    "elapsed_ms": 12588
+  },
+  {
+    "name": "Authenticated dashboard socket",
+    "snapshot": true,
+    "panels": {
+      "reviews": {
+        "error": false
+      },
+      "prs": {
+        "error": false
+      },
+      "calendar": {
+        "error": true
+      },
+      "github_yesterday": {
+        "error": false
+      }
+    },
+    "elapsed_ms": 15283
+  }
+]

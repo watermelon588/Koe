@@ -71,7 +71,11 @@ export function ChatPage({ model }: { model: MascotId }) {
     }
   }, [fail, absorb])
 
-  useEffect(() => { void load(0); resendPush().catch(() => {}) }, [load])
+  useEffect(() => {
+    let active = true
+    void Promise.resolve().then(() => { if (active) { void load(0); resendPush().catch(() => {}) } })
+    return () => { active = false }
+  }, [load])
   // New messages while the app is open: the service worker pings us on push; also re-check on return to the app.
   useEffect(() => {
     const onPush = (e: MessageEvent) => { if (e.data?.type === 'koe-refresh') void load(lastId) }
