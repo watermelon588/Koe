@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
-import { ArrowDown, ArrowRight, ArrowUpRight, Check, CheckCircle, Clock, Cube, Image,
+import { ArrowDown, ArrowRight, ArrowUpRight, Check, CheckCircle, Clock, Pause,
   GitPullRequest, HandWaving, Headphones, LockKey, Microphone, Play, ShieldCheck, Sparkle, X } from '@phosphor-icons/react'
 import gsap from 'gsap'
 import { useGSAP } from '@gsap/react'
@@ -8,6 +8,7 @@ import { BrandIcon, type Brand } from '../components/BrandIcon'
 import { MascotView, type MascotController } from '../mascot/MascotView'
 import { MASCOTS } from '../mascot/catalog'
 import { HOMEPAGE_ART, type HomepageMascotId } from './artwork'
+import { HomepageUpdates } from './HomepageUpdates'
 import './fonts.css'
 import './homepage.css'
 import './interactions.css'
@@ -29,6 +30,8 @@ const SCENARIOS = [
   { id: 'morning', label: 'Start my day', prompt: '“What needs my attention today?”', reply: 'You have 2 pull requests waiting for review and a design sync at 11. There’s a clear window before lunch.', service: 'github' as Brand, title: 'A little clarity for your morning.', items: [ ['Review the authentication update', 'GitHub · PR #42 · checks passing'], ['Design sync', 'Google Calendar · 11:00–11:30'], ['A moment to focus', 'Free window · 11:30–13:00'] ], foot: 'Your work, brought into one conversation.' },
   { id: 'meeting', label: 'Find a time', prompt: '“Find 30 minutes for a project catch-up.”', reply: 'There’s a free slot tomorrow at 2 PM. Here’s the proposed event. You can confirm it in your workspace.', service: 'calendar' as Brand, title: 'A meeting, without the back-and-forth.', items: [ ['Project catch-up', 'Google Calendar · proposed event'], ['Tomorrow · 14:00–14:30', 'Asia/Kolkata · 30 minutes'], ['Waiting for your approval', 'Review the exact event before it is booked'] ], foot: 'Nothing is booked until you approve.' },
   { id: 'capture', label: 'Capture a thought', prompt: '“Make a task to tidy up the onboarding flow.”', reply: 'I’ve prepared an onboarding task in Notion. Take a look at the title and details before you save it.', service: 'notion' as Brand, title: 'Good ideas deserve a place to land.', items: [ ['Tidy up the onboarding flow', 'Notion · proposed task'], ['Small details, less friction', 'Review the first-run experience'], ['Ready when you are', 'Confirm to save this task to your workspace'] ], foot: 'A thought becomes a record, with your OK.' },
+  { id: 'documents', label: 'Draft a document', prompt: '“Create a Google Doc for the project handoff.”', reply: 'Here’s a proposed handoff document with the title and text ready to review. Confirm it before I create it in your connected Google account.', service: 'docs' as Brand, title: 'A document, without leaving the conversation.', items: [ ['Project handoff', 'Google Docs · proposed document'], ['Context, decisions and next steps', 'Review the exact text before creation'], ['Your account, your confirmation', 'Enable Docs separately in Settings'] ], foot: 'No document is created until you approve.' },
+  { id: 'timesheet', label: 'Correct an entry', prompt: '“Change yesterday’s Acme entry from 2 hours to 3.”', reply: 'I’ve prepared a correction to the matching timesheet entry. Review the original value and proposed replacement before confirming.', service: 'sheets' as Brand, title: 'Keep the small details accurate.', items: [ ['Acme · API work', 'Google Sheets · existing timesheet entry'], ['2 hours → 3 hours', 'Only the approved values will change'], ['Review before saving', 'A changed or missing entry needs a fresh preview'] ], foot: 'Your timesheet stays unchanged until you approve.' },
 ] as const
 
 const FAQS = [
@@ -38,6 +41,9 @@ const FAQS = [
   ['Which connections are available today?', 'GitHub, Google Calendar, Notion, Google Sheets, and optional Spotify are implemented. Availability depends on provider credentials and account permissions. Google Docs supports creation and text editing after you enable its additional permissions. Drive is used only to find app-accessible Docs.'],
   ['Who can use Koe right now?', 'Koe is a personal project with invite-only access when sign-in is enabled. Open the app to sign in with an invited Google account. There is no public signup or paid plan advertised here.'],
   ['What happens to my accounts and music?', 'Provider credentials stay on the backend. You choose the services to connect and can disconnect them in Settings. Spotify metadata and audio do not enter AI prompts or transcripts. See the Privacy page for the complete data flow.'],
+  ['Can I connect my own Google and GitHub accounts?', 'Yes. Invited users can connect their own accounts in Settings. Google Calendar and Sheets share the initial consent; Docs has a separate Enable Docs step. For GitHub, connect with OAuth when available or use a personal access token, then save your repository selection. Notion uses the owner’s configured workspace.'],
+  ['What if a connection expires or something takes too long?', 'Settings offers Check connection and Reconnect for Google. Eligible GitHub OAuth sessions refresh automatically; if access cannot be restored, reconnect your account. Temporary service failures show an error. A failed or uncertain write is never silently repeated: check its status before proposing another change.'],
+  ['Can I pause the 3D companion?', 'Yes. Use Pause movement below the homepage companion; Resume movement starts it again. Koe follows your system’s reduced-motion setting and stops drawing the hero when it is outside the viewport. Your homepage preview does not change your saved in-app companion; choose and apply that in Settings.'],
 ] as const
 
 const companionName = (id: HomepageMascotId) => HOME_MASCOTS.find(item => item.id === id)!.name
@@ -81,7 +87,7 @@ function DemoWorkspace() {
 
 export function Homepage() {
   const [model, setModel] = useState<HomepageMascotId>('kami')
-  const [livePreview, setLivePreview] = useState(false)
+  const [motionEnabled, setMotionEnabled] = useState(() => !matchMedia('(prefers-reduced-motion: reduce)').matches)
   const [greeted, setGreeted] = useState(false)
   const [mascotReady, setMascotReady] = useState(false)
   const [filter, setFilter] = useState<'all' | 'available' | 'planned'>('all')
@@ -90,6 +96,13 @@ export function Homepage() {
   const root = useRef<HTMLDivElement>(null)
   const dialog = useRef<HTMLDialogElement>(null)
   const scene = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const preference = matchMedia('(prefers-reduced-motion: reduce)')
+    const update = () => setMotionEnabled(!preference.matches)
+    preference.addEventListener('change', update)
+    return () => preference.removeEventListener('change', update)
+  }, [])
 
   useEffect(() => {
     const url = new URL(location.href)
@@ -102,7 +115,7 @@ export function Homepage() {
     return () => { document.documentElement.dataset.theme = previous }
   }, [])
 
-  const { contextSafe } = useGSAP(() => {
+  useGSAP(() => {
     // MatchMedia also removes animations immediately when the OS motion preference changes.
     // https://gsap.com/resources/React/ and https://gsap.com/docs/v3/GSAP/gsap.matchMedia()/
     const media = gsap.matchMedia()
@@ -125,12 +138,7 @@ export function Homepage() {
 
   function greet() {
     setGreeted(true)
-    if (livePreview) mascot.current?.gesture('wave')
-    else if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      contextSafe(() => {
-        gsap.to('.hp-mascot-art', { y: -10, rotation: 2, duration: .22, repeat: 1, yoyo: true, ease: 'power2.out', overwrite: true, clearProps: 'transform' })
-      })()
-    }
+    if (motionEnabled) mascot.current?.gesture('wave')
   }
 
   return <div className="hp" data-look="studio" ref={root}>
@@ -152,20 +160,20 @@ export function Homepage() {
           <p className="hp-hero-fine hp-hero-enter"><ShieldCheck size={14} />Your accounts. Your approval. Your pace.</p>
         </div>
 
-        <div className="hp-scene hp-hero-enter" ref={scene} data-ready={!livePreview || mascotReady} data-live={livePreview} data-mascot={model}>
+        <div className="hp-scene hp-hero-enter" ref={scene} data-ready={mascotReady} data-live="true" data-mascot={model}>
           <span className="hp-scene-index">A COMPANION FOR YOUR EVERYDAY / 01</span>
           <div className="hp-orbit hp-orbit--one" /><div className="hp-orbit hp-orbit--two" />
           <div className="hp-scene-halo" />
           <div className="hp-mascot-frame">
             <img key={HOMEPAGE_ART[model]} className="hp-mascot-art" src={HOMEPAGE_ART[model]} width="944" height="743" fetchPriority="high" decoding="async" alt={`${companionName(model)}, Koe’s anime companion`} />
-            {livePreview && <MascotView model={model} controller={mascot} shot="bust" x={.5} onStatus={status => setMascotReady(status === 'ready')} />}
+            <MascotView key={model} model={model} controller={mascot} shot="bust" x={.5} motion={motionEnabled} onStatus={status => setMascotReady(status === 'ready')} />
           </div>
           <div className="hp-orbit-icon hp-orbit-icon--notion"><BrandIcon brand="notion" size={25} /></div>
           <div className="hp-orbit-icon hp-orbit-icon--github"><BrandIcon brand="github" size={27} /></div>
           <div className="hp-orbit-icon hp-orbit-icon--calendar"><BrandIcon brand="calendar" size={26} /></div>
           <div className="hp-scene-note hp-scene-note--task"><span className="hp-tiny-icon"><Check size={14} /></span><div><span>A little less on your plate.</span><small>Tasks, notes, and plans. Together.</small></div></div>
-          <div className="hp-scene-greeting"><span className="hp-dot" /><span>{greeted ? 'Hey there. Let’s make today lighter.' : 'Hey, I’m ' + companionName(model) + '.'}</span><button aria-label={`Say hello to ${companionName(model)}`} title="Say hello" disabled={livePreview && !mascotReady} onClick={greet}><HandWaving size={18} /></button></div>
-          <div className="hp-scene-bottom"><button className="hp-preview-toggle" aria-pressed={livePreview} onClick={() => { setMascotReady(false); setLivePreview(value => !value) }}>{livePreview ? <Image size={13} /> : <Cube size={13} />}{livePreview ? 'BACK TO ARTWORK' : 'TRY IN 3D'}</button><Waveform small /></div>
+          <div className="hp-scene-greeting"><span className="hp-dot" /><span aria-live="polite">{greeted ? 'Hey there. Let’s make today lighter.' : 'Hey, I’m ' + companionName(model) + '.'}</span><button aria-label={`Say hello to ${companionName(model)}`} title="Say hello" disabled={!mascotReady} onClick={greet}><HandWaving size={18} /></button></div>
+          <div className="hp-scene-bottom"><button className="hp-preview-toggle" aria-label={motionEnabled ? 'Pause companion movement' : 'Resume companion movement'} aria-pressed={!motionEnabled} onClick={() => setMotionEnabled(value => !value)}>{motionEnabled ? <Pause size={13} /> : <Play size={13} />}{motionEnabled ? 'PAUSE MOVEMENT' : 'RESUME MOVEMENT'}</button><Waveform small /></div>
         </div>
         <div className="hp-hero-bottom"><span>A calmer way to get things done.</span><a href="#connections">MADE FOR YOUR WORLD <ArrowDown size={13} /></a><span className="hp-hero-edition">THE EVERYDAY EDITION</span></div>
       </section>
@@ -179,6 +187,8 @@ export function Homepage() {
       </section>
 
       <section className="hp-numbers hp-container hp-reveal" aria-label="Koe in numbers"><div><span>{String(INTEGRATIONS.length).padStart(2, '0')}<span> / services</span></span><p>Your everyday tools, brought together.</p></div><div><span>03<span> / ways to ask</span></span><p>Live voice, typed chat, or a voice note.</p></div><div><span>03<span> / companions</span></span><p>A familiar face that feels like you.</p></div><div><span>01<span> / final say</span></span><p>Yours. For every consequential change.</p></div></section>
+
+      <HomepageUpdates />
 
       <section className="hp-section hp-container" id="connections" aria-labelledby="hp-connections-title">
         <div className="hp-section-heading hp-reveal"><div><p className="hp-eyebrow"><span className="hp-section-number">02 /</span> YOUR TOOLS, ON SPEAKING TERMS</p><h2 id="hp-connections-title">Same tools.<br /><span>A lot less switching.</span></h2></div><p>Keep the setup you’ve made your own. Connect what you need, and let the small things take care of themselves.</p></div>

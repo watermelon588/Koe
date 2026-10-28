@@ -1616,3 +1616,59 @@ Portfolio handoff verification: `npm run build` in Portfolio 2 passed (187 modul
 **Final verification (isolated checkout):** Full backend run: 636 passed and 3 Spotify device-discovery timing failures under the existing four-second deadline. The same three tests passed separately (3 passed in 16.14 seconds); no Spotify runtime or deadline was changed. All GitHub/invited-account regressions passed in the full run. The repaired GitHub history tool, using the actual saved owner scope without overrides, returned Koe commit 3355795 for October 25 with both Walkthru and Koe selected and complete reported branch coverage. Live configuration reports github_ready=true and both selected repositories. Render is configured for main / On Commit.
 
 **Review:** Verified invite/session requirements, callback identity binding, encryption, per-person token selection and refresh serialization. Credentials remain outside Git and source; no provider business writes were sent. git diff --check passed. The primary checkout and its unrelated work were not reset or included in this release.
+
+## Live VRoid homepage companion — 2026-10-28
+
+**Files:** Homepage.tsx and homepage.css; MascotView.tsx and mascot.ts; homepage browser verification scripts; HOMEPAGE, SPEC and DECISIONS documentation.
+
+**What it does:** The selected 3D companion loads immediately in the hero. Eyes/head follow the cursor, the body breathes and blinks with occasional idle gestures, and Say hello triggers a real wave. Gallery selections load Kami, Mei and Kobashi VRMs. Pause/Resume keeps the model visible while stopping movement and GPU redraws. OS reduced-motion changes apply immediately. Offscreen heroes stop rendering. The original image stays visible during download or failure; Retry recovers the model.
+
+**Core concept:** A PNG is one fixed picture. A VRM contains a mesh, textures, bones and expressions. The renderer draws that model repeatedly while updating its bones and eye target. Reusing the existing renderer keeps the homepage and app using the same character behavior. Freezing its animation clock preserves the pose on pause; an IntersectionObserver detects whether drawing would be visible.
+
+**How it connects:** Public homepage -> shared MascotView -> dynamically imported Three.js/VRM renderer -> existing local .vrm. No account or backend access is needed for the character.
+
+**Try it yourself:** Run npm run dev in frontend, open the public root, move the pointer around, click the greeting hand, and try pause/resume. Pick another companion below and return to the hero. On a phone, drag sideways to turn while vertical swipes still scroll.
+
+**Measured:** Production build, lint and all 76 frontend tests passed. Eight isolated Edge 3D checks passed without uncaught errors: automatic model load and ongoing draw calls; cursor/wave screenshot evidence; pause and keyboard resume; zero offscreen draw calls; all three models with one canvas; widths 320/375/768/1024/1440; initial/live reduced motion with no redraws; simulated model failure and successful retry. Inspected desktop/mobile, both cursor directions and wave screenshots in artifacts/homepage-3d.
+
+**Gotchas:** Existing VRMs are approximately 16-18 MB each, so the supplied image remains a useful download fallback. No new model was generated or fetched from a third party. This is a local source change, with no hosting deployment.
+
+**Interview line:** “I reused a VRM animation pipeline for an interactive homepage and verified that pause, reduced motion and viewport visibility stop actual GPU drawing.”
+
+**Homepage regression verification:** The refreshed existing smoke script passed all 15 checks with zero uncaught errors, including shared control feedback, demo approvals, integration details, FAQ, model selection, mobile layout, legacy URLs, reduced motion, sign-in gates and public documentation pages. Updated stale optional-3D assertions and old integration-count/settings-route expectations to the current homepage.
+
+## Additive homepage content and illustrated guide — 2026-10-28
+
+**Files:** Homepage.tsx and new HomepageUpdates.tsx; homepage.css; Guide.tsx, GuideScreenshot.tsx, Layout.tsx and pages.css; four local guide screenshots; capture-guide.mjs and verify-guide-updates.mjs; HOMEPAGE and GUIDE_UPDATES documentation.
+
+**What it does:** Adds recent-improvement stories, two new illustrative workflows (Docs and Sheets), and three FAQs to the homepage. Expands the guide with current connection recovery, invited accounts, GitHub repository scope/token refresh, document editing, timesheet corrections, 3D controls and troubleshooting. Four screenshots show the actual companion, Dashboard, Connections and Notion interface. Workspace examples use clearly labeled sample data. Existing copy and sections remain; all 79 original guide content entries were checked for preservation.
+
+**Core concept:** Product documentation should describe behavior that the code actually supports. Recent commit messages identify candidates; source contracts and rendered UI establish the exact user steps and limitations. Browser-intercepted sample responses let us capture real components without exposing personal records or changing provider data.
+
+**How it connects:** Public homepage feature links lead to matching guide anchors. The guide loads local screenshots without sign-in or backend access. The shared public Layout accepts an optional update date so refreshing the guide does not alter legal-page dates.
+
+**Try it yourself:** Open the homepage, try Draft a document and Correct an entry in the illustrative demo, then follow the recent-improvement links. Open /guide, use its contents, and click a screenshot to read it at full size. Try both themes and a phone-sized viewport.
+
+**Verification:** Build, lint and 76 frontend tests passed. Six grouped browser checks passed: original content preserved; complete ordered contents/anchors; four images decode with alt text, sample labels and full-size links; guide fits 320/375/768/1440px in light/dark; original homepage content remains and both new demos work; homepage deep links/layouts work. Zero uncaught errors and no backend/account requests on the public guide. Screenshot capture used isolated fixtures with zero provider writes. All four source screenshots and rendered desktop/mobile pages were visually inspected.
+
+**Gotchas:** Synthetic account records illustrate the real interface, not a claim about anyone’s connected services. Existing availability/setup limits are retained. Initial capture revealed the animation clock and scroll position could produce a misleading image; the capture now uses the real animation clock, waits for visible content and resets the homepage scroll before saving. Sources and reproducible capture steps are in GUIDE_UPDATES.md. Changes remain local.
+
+**Interview line:** “I refreshed a product’s public docs from commit and code evidence, preserved the original content, and captured the real UI with private data replaced by isolated samples.”
+
+**Final regression check:** The existing homepage/public-page smoke runner passed all 15 checks with zero uncaught browser errors after the additions. Shared control feedback, original illustrative flows, new expanded layout, 3D pause/resume and selection, FAQs, integration dialogs, sign-in gates, legal-page typography and keyboard focus remain verified. Evidence: artifacts/guide-updates/homepage-smoke/verification.json.
+
+## Final scope and GitHub publication — 2026-10-28
+
+**Request:** The user declares the project finished at its current scope, asks to remove Coming later, and authorizes a GitHub push.
+
+**Files:** Guide.tsx removes the future roadmap and its contents link; verify-guide-updates.mjs preserves all remaining original content and checks that no obsolete anchor remains. Previous homepage, live VRoid and screenshot-guide changes are included in this publication.
+
+**Concept:** A user-facing guide describes the finished product. Unavailable services remain accurately qualified in current-feature guidance, without promising future features.
+
+**Try it:** Open /guide; the contents and guide now end with troubleshooting. There is no Coming later section, weekly check-up promise or future WhatsApp promise.
+
+**Verification:** Final build, lint and public browser regression checks are recorded with the push result. Earlier 76 frontend tests, interactive 3D checks and screenshot checks passed. No provider, account or hosting configuration changes.
+
+**Interview line:** “I aligned the public guide with the final product scope and published the verified homepage and documentation updates.”
+
+**Final scope verification:** Build/lint and the guide browser runner were rerun for the final scope. The browser runner passed all six grouped checks with no uncaught errors/backend requests and explicitly verified removal of the obsolete section/link. All 76 remaining original guide content entries are retained. The final review covered loading/error fallback, 3D disposal and rendering suspension, consent/scope wording, local screenshot data, public-page access and unchanged legal-page dates.

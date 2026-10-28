@@ -1,0 +1,20 @@
+{
+  "checks": [
+    "Homepage: 21 controls share typography, timing, hover, elevation and disabled rules; press and keyboard focus verified",
+    "studio: automatic live VRM, original logos, no desktop overflow",
+    "studio: demo approval and reset, integration filters, modal details/Escape/focus, FAQ disclosure",
+    "studio: 375px mobile layout without horizontal overflow",
+    "Live 3D stays mounted while movement is paused and resumed",
+    "Mei and Kobashi selectors update their artwork fallback and live VRM",
+    "Only Kami, Mei and Kobashi appear; companion count is three and the design picker is removed",
+    "Former variation URLs resolve to Studio and remove the obsolete query",
+    "Reduced-motion mode shows content without entrance animations",
+    "Homepage reduced motion: 21 controls share typography, timing, hover, elevation and disabled rules; press and keyboard focus verified",
+    "/app: existing sign-in gate preserved",
+    "/#settings: existing sign-in gate preserved",
+    "/guide: consistent Geist typography and keyboard focus; desktop/mobile fit",
+    "/privacy: consistent Geist typography and keyboard focus; desktop/mobile fit",
+    "/terms: consistent Geist typography and keyboard focus; desktop/mobile fit"
+  ],
+  "errors": []
+}

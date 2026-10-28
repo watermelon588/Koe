@@ -1,0 +1,22 @@
+{
+  "checks": [
+    "Kami VRM loads automatically, replaces fallback and animates",
+    "Cursor tracking and wave captured for visual inspection",
+    "Pause freezes the model; keyboard resume restarts rendering",
+    "Offscreen hero suspends GPU rendering",
+    "All three selectors load corresponding VRMs with one canvas at a time",
+    "3D hero fits 320, 375, 768, 1024 and 1440px layouts",
+    "Live reduced-motion changes and initial reduced-motion load freeze the 3D model",
+    "Failed VRM keeps artwork visible and Retry restores 3D"
+  ],
+  "errors": [],
+  "requests": [
+    "http://127.0.0.1:5173/mascot/kami.vrm",
+    "http://127.0.0.1:5173/mascot/miku.vrm",
+    "http://127.0.0.1:5173/mascot/kobashi.vrm",
+    "http://127.0.0.1:5173/mascot/kami.vrm",
+    "http://127.0.0.1:5173/mascot/kami.vrm",
+    "http://127.0.0.1:5173/mascot/kami.vrm",
+    "http://127.0.0.1:5173/mascot/kami.vrm"
+  ]
+}

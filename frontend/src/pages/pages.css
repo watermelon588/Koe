@@ -36,3 +36,12 @@
 .doc-foot { border-top: 1px solid var(--line); padding-top: 20px; padding-bottom: max(20px, env(safe-area-inset-bottom)); }
 .doc-foot small { color: var(--muted); font-size: 12px; }
 @media (max-width: 520px) { .doc-page h1 { font-size: 28px; } .doc-top nav { gap: 14px; } }
+
+.guide-updated { margin-top: 16px; color: var(--muted); font-size: 13px; }
+.doc-page h3 { margin-top: 24px; margin-bottom: 12px; font-size: 17px; font-weight: 500; }
+.guide-screenshot { margin: 24px 0; }
+.guide-screenshot > a { display: block; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--surface); }
+.guide-screenshot img { display: block; width: 100%; height: auto; }
+.guide-screenshot figcaption { margin-top: 12px; color: var(--muted); font-size: 13px; line-height: 1.7; }
+.guide-screenshot figcaption > span { display: block; margin-bottom: 4px; font-family: var(--mono); font-size: 10px; letter-spacing: .8px; }
+.doc-page { overflow-wrap: anywhere; }

@@ -7,7 +7,7 @@ import './pages.css'
 export const UPDATED = '15 October 2026'
 export const CONTACT_URL = 'https://github.com/watermelon588/Koe/issues' // ponytail: a contact email once Koe has its own domain
 
-export function Layout({ title, intro, children }: { title: string; intro: ReactNode; children: ReactNode }) {
+export function Layout({ title, intro, children, updated = UPDATED }: { title: string; intro: ReactNode; children: ReactNode; updated?: string }) {
   useEffect(() => {
     document.title = `${title} · Koe`
     try {
@@ -37,7 +37,7 @@ export function Layout({ title, intro, children }: { title: string; intro: React
           <a href="/terms">Terms</a>
           <a href={CONTACT_URL} rel="noopener">Contact</a>
         </nav>
-        <small>Koe is a personal, invite-only project. Updated {UPDATED}.</small>
+        <small>Koe is a personal, invite-only project. Updated {updated}.</small>
       </footer>
     </div>
   )

@@ -157,6 +157,12 @@ export function createMascot(canvas: HTMLCanvasElement, url = '/mascot/kami.vrm'
   let inspecting = false
   let zoom = 1
   let spinning = false
+  let motion = true
+  let visible = true
+  let needsRender = true
+  // A homepage visit should stop spending GPU time once its hero scrolls out of view.
+  const visibility = new IntersectionObserver(([entry]) => { visible = entry.isIntersecting })
+  visibility.observe(canvas)
   const loader = new GLTFLoader()
   loader.register((parser) => new VRMLoaderPlugin(parser))
   const ready = loader.loadAsync(url).then((gltf) => {
@@ -195,6 +201,7 @@ export function createMascot(canvas: HTMLCanvasElement, url = '/mascot/kami.vrm'
     from = { ...to }
     Object.assign(now, to)
     shotK = 1
+    needsRender = true
   })
 
   function soften(m: MToonMaterial) {
@@ -241,6 +248,7 @@ export function createMascot(canvas: HTMLCanvasElement, url = '/mascot/kami.vrm'
     from = { ...now }
     Object.assign(to, frames[s], { x })
     shotK = 0
+    needsRender = true
   }
 
   // Interaction: her eyes (and a little of her head) follow the pointer anywhere on the page; a tap on
@@ -258,9 +266,12 @@ export function createMascot(canvas: HTMLCanvasElement, url = '/mascot/kami.vrm'
     return new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1)
   }
   function onMove(e: PointerEvent) {
-    const p = toCanvas(e)
-    pointer.set(THREE.MathUtils.clamp(p.x, -3, 3), THREE.MathUtils.clamp(p.y, -2, 2))
-    lastMove = t
+    if (!motion || !visible) return
+    if (e.pointerType !== 'touch') {
+      const p = toCanvas(e)
+      pointer.set(THREE.MathUtils.clamp(p.x, -3, 3), THREE.MathUtils.clamp(p.y, -2, 2))
+      lastMove = t
+    }
     if (drag && e.pointerId === drag.id) {
       const yaw = turn + (e.clientX - drag.x) * 0.012
       turn = inspecting ? yaw : THREE.MathUtils.clamp(yaw, -0.9, 0.9)
@@ -268,7 +279,7 @@ export function createMascot(canvas: HTMLCanvasElement, url = '/mascot/kami.vrm'
     }
   }
   function onDown(e: PointerEvent) {
-    if (drag || e.button !== 0) return
+    if (!motion || drag || e.button !== 0) return
     drag = { id: e.pointerId, x: e.clientX, startX: e.clientX, startY: e.clientY }
     if (inspecting) canvas.setPointerCapture(e.pointerId)
   }
@@ -306,11 +317,12 @@ export function createMascot(canvas: HTMLCanvasElement, url = '/mascot/kami.vrm'
   }
   canvas.style.touchAction = 'pan-y' // vertical swipes still scroll the page; horizontal ones turn her
   function onKey(e: KeyboardEvent) {
-    if (!inspecting) return
+    if (!motion) return
     if (e.key === 'ArrowLeft') turn -= 0.2
     else if (e.key === 'ArrowRight') turn += 0.2
     else if (e.key === 'Home') turn = 0
     else return
+    if (!inspecting) turn = THREE.MathUtils.clamp(turn, -0.9, 0.9)
     e.preventDefault()
   }
   canvas.addEventListener('keydown', onKey)
@@ -352,16 +364,20 @@ export function createMascot(canvas: HTMLCanvasElement, url = '/mascot/kami.vrm'
   function frame(ms: number) {
     raf = requestAnimationFrame(frame)
     if (ms - last < 1000 / FPS - 2) return
-    const dt = Math.min((ms - last) / 1000, 0.1) // clamp: a long pause shouldn't make a huge jump
+    const dt = motion ? Math.min((ms - last) / 1000, 0.1) : 0 // pausing freezes the pose and gaze
     last = ms
-    t += dt
+    if (!visible || document.hidden) return
 
     const w = canvas.clientWidth, h = canvas.clientHeight
     if (!w || !h) return // hidden or collapsed: nothing to draw
-    if (canvas.width !== Math.round(w * renderer.getPixelRatio()) || canvas.height !== Math.round(h * renderer.getPixelRatio())) {
+    const resized = canvas.width !== Math.round(w * renderer.getPixelRatio()) || canvas.height !== Math.round(h * renderer.getPixelRatio())
+    if (!motion && !needsRender && !resized) return
+    if (resized) {
       renderer.setSize(w, h, false)
       camera.aspect = w / h
     }
+    needsRender = false
+    t += dt
 
     // Camera: ease along the current shot move (ease-in-out: it's movement on screen).
     shotK = Math.min(1, shotK + dt / SHOT_SECS)
@@ -490,12 +506,18 @@ export function createMascot(canvas: HTMLCanvasElement, url = '/mascot/kami.vrm'
   return {
     // The UI waits for the actual VRM to load before enabling preview actions.
     ready,
+    // Keep the 3D model visible while stopping idle motion, gaze tracking and GPU redraws.
+    motion(enabled: boolean) {
+      motion = enabled
+      drag = null
+      needsRender = true
+    },
     inspect(enabled: boolean) {
       inspecting = enabled
       canvas.style.touchAction = enabled ? 'none' : 'pan-y'
       if (vrm) { measure(vrm); setShot(target.shot, target.x) }
     },
-    zoom(value: number) { zoom = THREE.MathUtils.clamp(value, 1, 2.5) },
+    zoom(value: number) { zoom = THREE.MathUtils.clamp(value, 1, 2.5); needsRender = true },
     spin(enabled: boolean) { spinning = enabled },
     // Pass the player's analyser when a call starts, null when it ends.
     listen(a: AnalyserNode | null) {
@@ -513,6 +535,7 @@ export function createMascot(canvas: HTMLCanvasElement, url = '/mascot/kami.vrm'
     dispose() {
       disposed = true
       cancelAnimationFrame(raf)
+      visibility.disconnect()
       removeEventListener('pointermove', onMove)
       canvas.removeEventListener('pointerdown', onDown)
       canvas.removeEventListener('keydown', onKey)

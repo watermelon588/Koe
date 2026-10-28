@@ -1,5 +1,13 @@
 # Public homepage — 2026-10-16
 
+## Live companion update — 2026-10-28
+
+The homepage hero loads the selected VRoid VRM automatically. Reuse the existing renderer for breathing, blinking, idle gestures, eyes/head following the cursor, touch reactions and drag rotation. The greeting triggers a real wave. Replace the artwork toggle with Pause/Resume movement; respect the system reduced-motion preference and suspend rendering while the companion is outside the viewport. Supplied PNGs remain loading/error fallbacks and gallery thumbnails. Kami, Mei and Kobashi selections load their corresponding VRMs. No new assets or dependencies are needed. This supersedes the optional-3D behavior below.
+
+## Additive content and illustrated guide — 2026-10-28
+
+Preserve all current homepage and guide content. Add user-facing details supported by recent commits: invited users' own Google/GitHub connections, Google Check connection/Reconnect and separate Docs consent, saved GitHub repository scope and automatic eligible OAuth refresh, Docs read/create/edit with approval and stale-edit protection, Sheets row corrections/columns, optional approved Spotify voice controls, and the live 3D companion. Add homepage workflow examples, recent improvements and FAQs; extend the guide with practical setup/recovery steps and screenshots of the current UI. Capture screenshots locally using sample API/socket data and label illustrative account/workspace data clearly. Public guide access must require no account or backend requests. Update the guide's date independently of legal pages. No deployment or provider writes.
+
 User request: three premium, minimal homepage variations sharing existing Geist typography and design principles, original provider logos throughout the frontend, the existing mascot, detailed user benefits, and smooth GSAP motion.
 
 ## Scope

@@ -46,10 +46,12 @@
 .hp-mascot-frame { position: absolute; inset: 28px 0 49px; overflow: hidden; border-radius: 16px; mask-image: linear-gradient(#000 87%, transparent); }
 .hp-mascot-frame .mascot-view { position: absolute; inset: 0; width: 100%; height: 100%; }
 .hp-mascot-frame canvas { display: block; width: 100%; height: 100%; }
+.hp-mascot-frame .mascot-view:not([data-load='ready']) canvas { visibility: hidden; }
 .hp-mascot-art { display: block; position: absolute; width: 100%; height: 100%; inset: 0; object-fit: cover; object-position: center top; transform: scale(1.18); transform-origin: center 15%; }
 .hp-scene[data-live='true'][data-ready='true'] .hp-mascot-art { visibility: hidden; }
 .hp-mascot-frame .mascot-loading { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--hp-surface); border: 1px solid var(--hp-line); border-radius: 20px; padding: 7px 14px; font-size: 11px; white-space: nowrap; }
-.hp-mascot-frame .mascot-load-error { position: absolute; inset: auto 30px 10px; font-size: 12px; background: var(--hp-surface); padding: 12px; border-radius: 12px; }
+.hp-mascot-frame .mascot-load-error { position: absolute; inset: auto 20px 65px; transform: none; width: auto; color: var(--hp-text); font-size: 12px; background: var(--hp-surface); padding: 12px; border-radius: 12px; text-align: center; }
+.hp-mascot-frame .mascot-load-error button { margin-top: 8px; padding: 6px 12px; border: 1px solid var(--hp-line); border-radius: 99px; }
 .hp-mascot-frame .mascot-load-error .note { color: var(--hp-muted); font-size: 11px; }
 .hp-orbit-icon { position: absolute; display: grid; place-items: center; width: 50px; height: 50px; background: #fff; border: 1px solid #e0e6dd; border-radius: 14px; box-shadow: 0 5px 15px #33503809; }
 .hp-orbit-icon--notion { top: 116px; left: 30px; transform: rotate(-9deg); }
@@ -85,7 +87,7 @@
 .hp-demo-top { display: flex; justify-content: space-between; align-items: center; padding: 17px 25px; border-bottom: 1px solid var(--hp-line); }
 .hp-demo-top > span:first-child { display: flex; align-items: center; gap: 9px; font-size: 12px; }
 .hp-demo-label { color: var(--hp-muted); font-size: 10px; }
-.hp-demo-tabs { display: flex; gap: 8px; padding: 21px 25px 0; }
+.hp-demo-tabs { display: flex; flex-wrap: wrap; gap: 8px; padding: 21px 25px 0; }
 .hp-demo-tabs button { display: flex; align-items: center; gap: 15px; border: 1px solid var(--hp-line); border-radius: 99px; padding: 8px 14px; font-size: 11px; transition: background .2s; }
 .hp-demo-tabs button[aria-pressed='true'] { color: var(--hp-on-accent); border-color: var(--hp-accent); background: var(--hp-accent); }
 .hp-demo-body { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; padding: 34px 37px 28px; }
@@ -324,4 +326,20 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .hp *, .hp *::before, .hp *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}
+
+/* Recent additions extend the existing homepage without changing its original sections. */
+.hp-updates { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-top: 1px solid var(--hp-line); }
+.hp-updates article { padding: 28px 32px 28px 0; border-bottom: 1px solid var(--hp-line); }
+.hp-updates article:nth-child(even) { padding-left: 32px; border-left: 1px solid var(--hp-line); }
+.hp-updates h3 { margin-top: 12px; font-size: 22px; font-weight: 400; letter-spacing: -.5px; }
+.hp-updates article > p { max-width: 49ch; margin-top: 12px; color: var(--hp-muted); font-size: 14px; line-height: 1.8; }
+.hp-updates .hp-text-link { margin-top: 20px; color: var(--hp-accent); }
+.hp-updates-note { display: flex; align-items: flex-start; gap: 10px; margin-top: 22px; color: var(--hp-muted); font-size: 13px; line-height: 1.8; }
+.hp-updates-note > svg { flex-shrink: 0; margin-top: 4px; color: var(--hp-accent); }
+.hp-updates-note a { color: var(--hp-accent); text-decoration: underline; text-underline-offset: 3px; }
+@media (max-width: 600px) {
+  .hp-updates { grid-template-columns: 1fr; }
+  .hp-updates article, .hp-updates article:nth-child(even) { padding: 24px 0; border-left: 0; }
+  .hp-updates h3 { font-size: 20px; }
 }

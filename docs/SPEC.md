@@ -272,6 +272,8 @@ The homepage never reads accounts or calls provider APIs. Sample approvals only 
 
 **Final homepage selection (2026-10-16):** Studio is now the sole homepage. The design picker and alternate variations are removed. Only Kami, Mint and Kobashi appear in its companion gallery; the count and copy say three. Aoi remains available in the separate application catalog. Earlier variation query links resolve to Studio.
 
+**Live homepage companion (2026-10-28):** Superseding the optional 3D toggle, automatically load the selected VRoid VRM in the hero. Use the shared renderer's idle motion, blinking, cursor-following eyes/head, touch reactions and greeting wave. Offer Pause/Resume movement, follow system reduced-motion changes, and stop GPU rendering while offscreen. Supplied artwork remains the loading/error fallback and gallery thumbnails. Selecting Kami, Mei or Kobashi loads that character's existing VRM. No new dependency or hosting change.
+
 ## 17. Studio design principles throughout the application — 2026-10-16
 
 The user requests Studio's typography, spacing, composition and restrained surfaces throughout the frontend, with a small font-size increase. Preserve every existing dark/light background, surface, text and mascot accent token: this is a structural and typographic redesign, not a palette change. Use shared original provider logos wherever a service is represented, including navigation, dashboard, connection settings, page headings and live work views; action icons remain Phosphor.

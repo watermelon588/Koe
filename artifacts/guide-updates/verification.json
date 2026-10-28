@@ -1,0 +1,12 @@
+{
+  "checks": [
+    "All 76 original guide paragraphs, list entries, troubleshooting entries and section headings preserved",
+    "Guide update date, complete ordered contents and unique section anchors verified",
+    "Four local screenshots decode at 1280×900 with descriptive alt text, full-size links and sample-data captions",
+    "Guide screenshots and text fit 320/375/768/1440px in dark and light themes",
+    "Existing homepage sections, integrations, companions and three scenarios remain; both new demos work locally",
+    "Recent-improvement links target real guide sections; expanded demo and updates fit mobile/tablet/desktop"
+  ],
+  "errors": [],
+  "backendRequests": []
+}

@@ -15,15 +15,16 @@ type Props = {
   inspection?: boolean
   zoom?: number
   spinning?: boolean
+  motion?: boolean
 }
 
 // Both pages share loading, retry and disposal. Only the visible page owns a canvas.
-export function MascotView({ model, controller, shot = 'bust', x = 0.5, onStatus, onReady, inspection = false, zoom = 1, spinning = false }: Props) {
+export function MascotView({ model, controller, shot = 'bust', x = 0.5, onStatus, onReady, inspection = false, zoom = 1, spinning = false, motion = true }: Props) {
   const canvas = useRef<HTMLCanvasElement>(null)
   const [status, setStatus] = useState<LoadState>('loading')
   const [attempt, setAttempt] = useState(0)
-  const latest = useRef({ shot, x, onStatus, onReady, inspection, zoom, spinning })
-  useLayoutEffect(() => { latest.current = { shot, x, onStatus, onReady, inspection, zoom, spinning } })
+  const latest = useRef({ shot, x, onStatus, onReady, inspection, zoom, spinning, motion })
+  useLayoutEffect(() => { latest.current = { shot, x, onStatus, onReady, inspection, zoom, spinning, motion } })
 
   useEffect(() => {
     let gone = false
@@ -37,6 +38,7 @@ export function MascotView({ model, controller, shot = 'bust', x = 0.5, onStatus
     import('./mascot').then(({ createMascot }) => {
       if (gone) return
       instance = createMascot(canvas.current!, `/mascot/${model}.vrm`)
+      instance.motion(latest.current.motion)
       instance.inspect(latest.current.inspection)
       instance.zoom(latest.current.zoom)
       instance.spin(latest.current.spinning)
@@ -63,11 +65,12 @@ export function MascotView({ model, controller, shot = 'bust', x = 0.5, onStatus
   useEffect(() => { controller.current?.shot(shot, x) }, [shot, x, controller])
   useEffect(() => { controller.current?.zoom(zoom) }, [zoom, controller])
   useEffect(() => { controller.current?.spin(spinning) }, [spinning, controller])
+  useEffect(() => { controller.current?.motion(motion) }, [motion, controller])
 
   const name = mascotProfile(model).name
   return (
-    <div className="mascot-view" data-load={status}>
-      <canvas ref={canvas} tabIndex={inspection ? 0 : undefined} aria-label={`${name}, interactive 3D mascot. ${inspection ? 'Drag sideways to rotate. Left and right arrow keys rotate; Home resets rotation.' : 'Drag sideways to turn; tap hair, face or hands for a reaction.'}`} />
+    <div className="mascot-view" data-load={status} data-motion={motion}>
+      <canvas ref={canvas} tabIndex={0} aria-label={`${name}, interactive 3D mascot. Follows your cursor. Drag sideways or use left and right arrow keys to turn; Home resets rotation. Tap hair, face or hands for a reaction.`} />
       {status === 'loading' && <p className="mascot-loading" role="status">Loading {name}<span aria-hidden="true"> · · ·</span></p>}
       {status === 'error' && <div className="mascot-load-error" role="alert">
         <p>We couldn’t load {name}.</p>
